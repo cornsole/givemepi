@@ -1,0 +1,153 @@
+# CHECKLIST
+
+## Foundation
+
+[ ] CMake
+
+[ ] Logger
+
+[ ] Config
+
+[ ] CLI
+
+[x] Project directory structure
+
+[x] Initial scheduler module skeleton
+
+-----------------
+
+## Platform
+
+[ ] CPUID
+
+[ ] AVX Detect
+
+[ ] AVX2 Detect
+
+[ ] AVX512 Detect
+
+[ ] Huge Pages
+
+[ ] NUMA
+
+-----------------
+
+## Memory
+
+[ ] Arena
+
+[ ] Pool
+
+[ ] Alignment
+
+[ ] Scratch Buffer
+
+-----------------
+
+## Scheduler
+
+[ ] ThreadPool
+
+[ ] Lock-Free Queue
+
+[ ] Work Stealing
+
+-----------------
+
+## Big Integer
+
+[ ] GMP
+
+[ ] FFT
+
+-----------------
+
+## Binary Splitting
+
+[ ] Node
+
+[ ] Merge
+
+[ ] Parallel Merge
+
+-----------------
+
+## Chudnovsky
+
+[ ] Formula
+
+[ ] Precision Control
+
+-----------------
+
+## Storage
+
+[ ] Compression
+
+[ ] Chunk Index
+
+[ ] Reload
+
+-----------------
+
+## Checkpoint
+
+[ ] Save
+
+[ ] Resume
+
+[ ] CRC
+
+-----------------
+
+## Progress
+
+[ ] ETA
+
+[ ] Speed
+
+[ ] Memory
+
+[ ] Chunk
+
+-----------------
+
+## Verification
+
+[ ] Hash
+
+[ ] BBP
+
+[ ] Known Digits
+
+-----------------
+
+## SIMD
+
+[ ] AVX2
+
+[ ] AVX512
+
+-----------------
+
+## ASM
+
+[ ] CPUID
+
+[ ] memcpy
+
+[ ] Prefetch
+
+[ ] rdtsc
+
+-----------------
+
+## Benchmark
+
+[ ] Single Thread
+
+[ ] Multi Thread
+
+[ ] Memory
+
+[ ] Storage
