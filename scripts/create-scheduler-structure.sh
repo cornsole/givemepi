@@ -2,46 +2,27 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "==> Creating scheduler structure"
+mkdir -p \
+    "$PROJECT_ROOT/include/scheduler" \
+    "$PROJECT_ROOT/src/scheduler" \
+    "$PROJECT_ROOT/tests/scheduler"
 
-mkdir -p "${ROOT_DIR}/include/scheduler"
-mkdir -p "${ROOT_DIR}/src/scheduler"
-mkdir -p "${ROOT_DIR}/tests/scheduler"
+touch \
+    "$PROJECT_ROOT/include/scheduler/ThreadPool.hpp" \
+    "$PROJECT_ROOT/src/scheduler/ThreadPool.cpp" \
+    "$PROJECT_ROOT/include/scheduler/Task.hpp" \
+    "$PROJECT_ROOT/src/scheduler/Task.cpp" \
+    "$PROJECT_ROOT/include/scheduler/Worker.hpp" \
+    "$PROJECT_ROOT/src/scheduler/Worker.cpp" \
+    "$PROJECT_ROOT/include/scheduler/Scheduler.hpp" \
+    "$PROJECT_ROOT/src/scheduler/Scheduler.cpp" \
+    "$PROJECT_ROOT/include/scheduler/IQueue.hpp" \
+    "$PROJECT_ROOT/include/scheduler/ReferenceQueue.hpp" \
+    "$PROJECT_ROOT/src/scheduler/ReferenceQueue.cpp" \
+    "$PROJECT_ROOT/include/scheduler/LockFreeQueue.hpp" \
+    "$PROJECT_ROOT/src/scheduler/LockFreeQueue.cpp" \
+    "$PROJECT_ROOT/tests/scheduler/SchedulerTest.cpp"
 
-
-touch "${ROOT_DIR}/include/scheduler/Task.hpp"
-touch "${ROOT_DIR}/include/scheduler/LockFreeQueue.hpp"
-touch "${ROOT_DIR}/include/scheduler/Worker.hpp"
-touch "${ROOT_DIR}/include/scheduler/Scheduler.hpp"
-
-
-touch "${ROOT_DIR}/src/scheduler/Task.cpp"
-touch "${ROOT_DIR}/src/scheduler/LockFreeQueue.cpp"
-touch "${ROOT_DIR}/src/scheduler/Worker.cpp"
-touch "${ROOT_DIR}/src/scheduler/Scheduler.cpp"
-
-
-touch "${ROOT_DIR}/tests/scheduler/SchedulerTest.cpp"
-
-
-echo "==> Scheduler structure created"
-
-echo
-echo "Created:"
-echo
-echo "include/scheduler/"
-echo "  Task.hpp"
-echo "  LockFreeQueue.hpp"
-echo "  Worker.hpp"
-echo "  Scheduler.hpp"
-echo
-echo "src/scheduler/"
-echo "  Task.cpp"
-echo "  LockFreeQueue.cpp"
-echo "  Worker.cpp"
-echo "  Scheduler.cpp"
-echo
-echo "tests/scheduler/"
-echo "  SchedulerTest.cpp"
+echo "Scheduler structure created successfully."

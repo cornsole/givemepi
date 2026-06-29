@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scheduler/Task.hpp"
+#include "scheduler/IQueue.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -12,7 +12,7 @@
 namespace pi::scheduler
 {
 
-class LockFreeQueue
+class LockFreeQueue final : public IQueue
 {
 public:
 
@@ -36,18 +36,21 @@ public:
     LockFreeQueue& operator=(const LockFreeQueue&) = delete;
 
 
-    bool push(Task task);
+    bool push(
+        Task task
+    ) override;
 
 
-    std::optional<Task> pop();
+    std::optional<Task> pop() override;
 
 
     [[nodiscard]]
-    bool empty() const noexcept;
+    bool empty() const noexcept override;
 
 
     [[nodiscard]]
-    std::size_t capacity() const noexcept;
+    std::size_t capacity() const noexcept override;
+
 
 
 private:

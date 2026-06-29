@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scheduler/LockFreeQueue.hpp"
+#include "scheduler/IQueue.hpp"
 #include "scheduler/Task.hpp"
 
 #include <atomic>
@@ -17,7 +17,7 @@ public:
 
     Worker(
         std::size_t id,
-        LockFreeQueue* queue
+        IQueue* queue
     );
 
 
@@ -56,7 +56,7 @@ private:
     std::size_t id_ = 0;
 
 
-    LockFreeQueue* queue_ = nullptr;
+    IQueue* queue_ = nullptr;
 
 
     std::thread thread_;

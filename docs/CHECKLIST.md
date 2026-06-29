@@ -56,7 +56,7 @@
 
 [x] Reference Queue
 
-[ ] Lock-Free Queue
+[x] Lock-Free Queue
 
 [ ] Work Stealing
 

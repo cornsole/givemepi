@@ -1,4 +1,5 @@
 #include "scheduler/Scheduler.hpp"
+#include "scheduler/ReferenceQueue.hpp"
 
 #include <utility>
 
@@ -13,12 +14,36 @@ Scheduler::Scheduler(
 {
     queue_ =
         std::make_unique<
-            LockFreeQueue
+            ReferenceQueue
         >(
             queueCapacity
         );
 
 
+    workers_.reserve(
+        workerCount
+    );
+
+
+    for (std::size_t i = 0; i < workerCount; ++i)
+    {
+        workers_.push_back(
+            std::make_unique<Worker>(
+                i,
+                queue_.get()
+            )
+        );
+    }
+}
+
+Scheduler::Scheduler(
+    std::unique_ptr<IQueue> queue,
+    std::size_t workerCount
+)
+    : queue_(
+        std::move(queue)
+    )
+{
     workers_.reserve(
         workerCount
     );

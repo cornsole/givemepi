@@ -459,3 +459,98 @@ Scheduler development proceeds using a reference queue implementation.
 Lock-free queue development becomes an independent implementation phase.
 
 Existing Scheduler tests will be reused to verify correctness after replacing the queue implementation.
+
+--
+
+## ADR-0015
+
+Date
+
+2026-06-29
+
+Status
+
+Accepted
+
+Title
+
+Retain Reference Queue for Validation
+
+Decision
+
+Keep the Reference Queue implementation alongside the Lock-Free Queue during development.
+
+The Scheduler will depend on an IQueue interface rather than a concrete queue implementation.
+
+Reason
+
+Maintaining a reference implementation allows:
+
+- Correctness verification
+- Regression testing
+- Performance benchmarking against a known baseline
+- Easier debugging of lock-free behavior
+
+Alternatives
+
+- Replace the Reference Queue immediately after implementing the Lock-Free Queue
+
+Consequence
+
+The project will maintain two queue implementations during development:
+
+- ReferenceQueue
+- LockFreeQueue
+
+Production Scheduler code will depend only on the IQueue abstraction.
+
+---
+
+## ADR-0016
+
+Date
+
+2026-06-30
+
+Status
+
+Accepted
+
+Title
+
+Scheduler Queue Abstraction
+
+Decision
+
+Scheduler uses a queue abstraction layer.
+
+The Scheduler and Worker components do not depend on a specific queue implementation.
+
+Queue implementations provide the same interface and can be replaced independently.
+
+Current implementations:
+
+- ReferenceQueue
+- LockFreeQueue
+
+
+Reason
+
+Scheduler architecture needs to be validated independently from queue performance optimization.
+
+A reference implementation allows correctness testing before introducing complex concurrent data structures.
+
+The lock-free queue can be evaluated and replaced without modifying Scheduler or Worker.
+
+
+Alternatives
+
+- Couple Scheduler directly with LockFreeQueue.
+- Delay Scheduler implementation until LockFreeQueue is production-ready.
+
+
+Consequence
+
+Scheduler development can continue with interchangeable queue backends.
+
+Future queue optimization will not require Scheduler architecture changes.

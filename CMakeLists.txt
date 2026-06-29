@@ -55,6 +55,7 @@ set(PI_ENGINE_SOURCES
     src/scheduler/LockFreeQueue.cpp
     src/scheduler/Worker.cpp
     src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
 
     src/platform/CPUFeatures.cpp
     src/platform/CPUInfo.cpp
@@ -182,6 +183,7 @@ add_executable(scheduler-test
     src/scheduler/LockFreeQueue.cpp
     src/scheduler/Worker.cpp
     src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
 )
 
 target_include_directories(scheduler-test

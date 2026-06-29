@@ -9,7 +9,7 @@ namespace pi::scheduler
 
 Worker::Worker(
     std::size_t id,
-    LockFreeQueue* queue
+    IQueue* queue
 )
     : id_(id),
       queue_(queue)

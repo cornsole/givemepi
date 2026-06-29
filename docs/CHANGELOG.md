@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.0] - PR-0006
+
+### Added
+
+- Added scheduler queue abstraction.
+- Added queue interface layer.
+- Added ReferenceQueue implementation.
+- Added LockFreeQueue implementation.
+
+### Changed
+
+- Updated Scheduler to support interchangeable queue backends.
+- Updated Worker to operate with scheduler queue implementations.
+- Separated scheduler architecture validation from queue optimization.
+
+### Fixed
+
+- Fixed LockFreeQueue enqueue position handling.
+- Fixed LockFreeQueue dequeue position handling.
+- Fixed scheduler queue replacement test coverage.
+
 ## [0.4.0] - PR-0005
 
 ### Added

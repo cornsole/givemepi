@@ -10,36 +10,59 @@ bool LockFreeQueue::push(
 )
 {
     std::size_t position =
-        enqueuePos_.fetch_add(
-            1,
+        enqueuePos_.load(
             std::memory_order_relaxed
         );
 
-    Cell& cell =
-        buffer_[
-            position % capacity_
-        ];
 
-    std::size_t sequence =
-        cell.sequence.load(
-            std::memory_order_acquire
-        );
+    Cell* target = nullptr;
 
-    std::size_t expected =
-        position;
 
-    if (sequence != expected)
+    while (true)
     {
+        Cell& cell =
+            buffer_[
+                position % capacity_
+            ];
+
+
+        std::size_t sequence =
+            cell.sequence.load(
+                std::memory_order_acquire
+            );
+
+
+        if (sequence == position)
+        {
+            if (
+                enqueuePos_.compare_exchange_weak(
+                    position,
+                    position + 1,
+                    std::memory_order_relaxed
+                )
+            )
+            {
+                target = &cell;
+                break;
+            }
+
+            continue;
+        }
+
+
         return false;
     }
 
-    cell.data =
+
+    target->data =
         std::move(task);
 
-    cell.sequence.store(
+
+    target->sequence.store(
         position + 1,
         std::memory_order_release
     );
+
 
     return true;
 }
@@ -48,42 +71,68 @@ bool LockFreeQueue::push(
 std::optional<Task> LockFreeQueue::pop()
 {
     std::size_t position =
-        dequeuePos_.fetch_add(
-            1,
+        dequeuePos_.load(
             std::memory_order_relaxed
         );
 
-    Cell& cell =
-        buffer_[
-            position % capacity_
-        ];
 
-    std::size_t sequence =
-        cell.sequence.load(
-            std::memory_order_acquire
-        );
+    Cell* target = nullptr;
 
-    std::size_t expected =
-        position + 1;
 
-    if (sequence != expected)
+    while (true)
     {
+        Cell& cell =
+            buffer_[
+                position % capacity_
+            ];
+
+
+        std::size_t sequence =
+            cell.sequence.load(
+                std::memory_order_acquire
+            );
+
+
+        std::size_t expected =
+            position + 1;
+
+
+        if (sequence == expected)
+        {
+            if (
+                dequeuePos_.compare_exchange_weak(
+                    position,
+                    position + 1,
+                    std::memory_order_relaxed
+                )
+            )
+            {
+                target = &cell;
+                break;
+            }
+
+            continue;
+        }
+
+
         return std::nullopt;
     }
 
+
     Task task =
         std::move(
-            cell.data
+            target->data
         );
 
-    cell.sequence.store(
+
+    target->sequence.store(
         position + capacity_,
         std::memory_order_release
     );
 
+
     return task;
 }
-
 
 bool LockFreeQueue::empty() const noexcept
 {
@@ -102,4 +151,4 @@ std::size_t LockFreeQueue::capacity() const noexcept
     return capacity_;
 }
 
-} // namespace pi::scheduler
+} // namespace pi::scheduler청소 안한지 9년된 커피 머신 열었다가 기절할 뻔했습니다 (시청 주의)

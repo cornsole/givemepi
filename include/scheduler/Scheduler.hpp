@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scheduler/LockFreeQueue.hpp"
+#include "scheduler/IQueue.hpp"
 #include "scheduler/Task.hpp"
 #include "scheduler/Worker.hpp"
 
@@ -19,6 +19,11 @@ public:
     Scheduler(
         std::size_t workerCount,
         std::size_t queueCapacity
+    );
+
+    Scheduler(
+        std::unique_ptr<IQueue> queue,
+        std::size_t workerCount
     );
 
 
@@ -54,9 +59,7 @@ public:
 
 private:
 
-    std::unique_ptr<
-        LockFreeQueue
-    > queue_;
+    std::unique_ptr<IQueue> queue_;
 
 
     std::vector<
