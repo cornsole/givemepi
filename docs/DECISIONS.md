@@ -326,3 +326,9 @@ Versioned changelog entries improve:
 Consequence
 
 PR completion requires documentation updates.
+
+---
+
+### ADR-0011
+
+Runtime CPU Feature Detection

@@ -20,13 +20,23 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ---------------------------------------------------------------------------
 
 if(MSVC)
+
     add_compile_options(/W4)
+
 else()
+
     add_compile_options(
         -Wall
         -Wextra
         -Wpedantic
     )
+
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
+        add_compile_options(
+            -march=native
+        )
+    endif()
+
 endif()
 
 # ---------------------------------------------------------------------------
@@ -41,6 +51,9 @@ set(PI_ENGINE_SOURCES
     src/config/CommandLine.cpp
 
     src/scheduler/ThreadPool.cpp
+
+    src/platform/CPUFeatures.cpp
+    src/platform/CPUInfo.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -49,6 +62,27 @@ set(PI_ENGINE_SOURCES
 
 add_executable(pi-engine
     ${PI_ENGINE_SOURCES}
+)
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+add_executable(cpu-features-test
+    tests/platform/CPUFeaturesTest.cpp
+
+    src/platform/CPUFeatures.cpp
+    src/platform/CPUInfo.cpp
+)
+
+target_include_directories(cpu-features-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(cpu-features-test
+    PRIVATE
+        Threads::Threads
 )
 
 # ---------------------------------------------------------------------------

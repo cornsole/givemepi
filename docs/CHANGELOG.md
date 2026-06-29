@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0] - PR-0003
+
+### Added
+
+- Added runtime CPU feature detection.
+- Added CPUID detection.
+- Added AVX, AVX2, AVX512 detection.
+- Added CPU information reporting.
+- Added platform detection tests.
+
+### Changed
+
+- Extended CMake build system with platform test target.
+
 ## [0.1.0] - PR-0002-1
 
 ### Added

@@ -18,13 +18,13 @@
 
 ## Platform
 
-[ ] CPUID
+[x] CPUID
 
-[ ] AVX Detect
+[x] AVX Detect
 
-[ ] AVX2 Detect
+[x] AVX2 Detect
 
-[ ] AVX512 Detect
+[x] AVX512 Detect
 
 [ ] Huge Pages
 

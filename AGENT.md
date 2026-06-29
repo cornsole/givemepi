@@ -278,18 +278,61 @@ Never provide partial snippets unless explicitly requested.
 
 --------------------------------------------------
 
-## Documentation
+## Development Instruction Rule
 
-Whenever implementation completes,
+When modifying existing files, provide exact modification instructions.
 
-update:
+Required format:
 
-- CHECKLIST.md
-- CHANGELOG.md
-- DECISIONS.md (if the implementation changes architecture or design decisions)
-- ROADMAP.md (if project direction or milestones change)
+Existing:
 
-Documentation updates are part of the implementation.
+```text
+original content
+```
+
+Replace:
+
+```text
+new content
+```
+
+The developer must be able to apply changes without guessing.
+
+For partial modifications, always specify:
+
+* file path
+* exact location
+* existing code
+* replacement code
+
+## Command Execution Rule
+
+Whenever a command must be executed, specify the required working directory.
+
+Every command instruction must include:
+
+* execution path
+* command
+* expected result
+
+Example:
+
+Project root:
+
+```bash
+cd /path/to/project
+```
+
+Run:
+
+```bash
+cmake -S . -B build
+cmake --build build
+```
+
+Do not provide commands without telling where they should be executed.
+
+--------------------------------------------------
 
 
 ## Changelog Versioning Rule
@@ -300,7 +343,7 @@ Version format:
 
 ```md
 ## [VERSION] - PR-ID
-````
+```
 
 Rules:
 
