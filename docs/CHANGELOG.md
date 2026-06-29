@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0] - PR-0005
+
+### Added
+
+- Added Scheduler foundation.
+- Added Task abstraction.
+- Added Worker implementation.
+- Added Scheduler implementation.
+- Added Reference Queue implementation.
+- Added scheduler subsystem tests.
+
+### Changed
+
+- Extended CMake build system with scheduler sources.
+- Added scheduler-test target.
+- Split Scheduler development into Reference Queue and Lock-Free Queue phases.
+
+### Fixed
+
+- Fixed scheduler build integration.
+- Fixed queue implementation architecture for staged development.
+
 ## [0.3.0] - PR-0004
 
 ### Added

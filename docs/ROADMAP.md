@@ -34,7 +34,8 @@ Phase 3
 Scheduler
 
 - Thread Pool
-- Queue
+- Queue (Reference Implementation)
+- Lock-Free Queue
 - Work Stealing
 
 ----------------------

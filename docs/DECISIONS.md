@@ -377,3 +377,85 @@ Consequence
 Future computation modules should use the memory layer for temporary and high-frequency allocations.
 
 Binary Splitting and Big Integer integration will use these components where appropriate.
+
+---
+
+## ADR-0013
+
+Date
+
+2026-06-29
+
+Status
+
+Accepted
+
+Title
+
+Template Implementation Separation
+
+Decision
+
+Template-based scheduler components keep declarations in header files and implementations in separate .inl files.
+
+Reason
+
+Scheduler components such as Lock-Free Queue require templates while maintaining readable interfaces.
+
+Keeping all implementation inside headers increases file size and reduces maintainability.
+
+Consequence
+
+Template scheduler components will use:
+
+include/scheduler/*.hpp
+include/scheduler/*.inl
+
+instead of placing implementation in .cpp files.
+
+---
+
+## ADR-0014
+
+Date
+
+2026-06-29
+
+Status
+
+Accepted
+
+Title
+
+Reference Queue Before Lock-Free Queue
+
+Decision
+
+Implement the Scheduler using a reference queue implementation before introducing a lock-free queue.
+
+The reference queue will use standard library synchronization primitives and keep the Scheduler API independent from the queue implementation.
+
+The lock-free queue will replace the reference implementation in a later development phase without changing the Scheduler or Worker interfaces.
+
+Reason
+
+The primary goal of the current phase is to validate the scheduler architecture.
+
+A production-quality lock-free MPMC queue is significantly more complex and would increase the scope of the current PR.
+
+Separating architecture verification from performance optimization keeps each PR small, independently buildable, and fully testable.
+
+This decision supersedes ADR-0013 for the current Scheduler implementation phase.
+
+Alternatives
+
+- Implement the lock-free queue immediately.
+- Delay Scheduler implementation until the lock-free queue is complete.
+
+Consequence
+
+Scheduler development proceeds using a reference queue implementation.
+
+Lock-free queue development becomes an independent implementation phase.
+
+Existing Scheduler tests will be reused to verify correctness after replacing the queue implementation.

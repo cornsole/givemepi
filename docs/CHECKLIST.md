@@ -46,7 +46,15 @@
 
 ## Scheduler
 
+[x] Task
+
+[x] Worker
+
+[x] Scheduler
+
 [ ] ThreadPool
+
+[x] Reference Queue
 
 [ ] Lock-Free Queue
 

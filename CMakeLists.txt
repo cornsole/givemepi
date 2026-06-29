@@ -51,6 +51,10 @@ set(PI_ENGINE_SOURCES
     src/config/CommandLine.cpp
 
     src/scheduler/ThreadPool.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
 
     src/platform/CPUFeatures.cpp
     src/platform/CPUInfo.cpp
@@ -168,6 +172,24 @@ target_compile_definitions(pi-engine
 find_package(Threads REQUIRED)
 
 target_link_libraries(pi-engine
+    PRIVATE
+        Threads::Threads
+)
+
+add_executable(scheduler-test
+    tests/scheduler/SchedulerTest.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+)
+
+target_include_directories(scheduler-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(scheduler-test
     PRIVATE
         Threads::Threads
 )
