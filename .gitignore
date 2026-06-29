@@ -39,10 +39,28 @@
 *.out
 *.app
 
+# Runtime output
+pi.txt
+
+# Config local override
+config.toml
+
+# Checkpoint data (추후 사용)
+checkpoint/
+*.checkpoint
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
 # Build directories
 build/
 Build/
 build-*/
+cmake-build-*/
 
 # CMake generated files
 CMakeFiles/

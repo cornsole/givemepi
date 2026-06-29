@@ -282,14 +282,85 @@ Never provide partial snippets unless explicitly requested.
 
 Whenever implementation completes,
 
-update
+update:
 
 - CHECKLIST.md
 - CHANGELOG.md
-- DECISIONS.md (if required)
-- ROADMAP.md (if required)
+- DECISIONS.md (if the implementation changes architecture or design decisions)
+- ROADMAP.md (if project direction or milestones change)
 
 Documentation updates are part of the implementation.
+
+
+## Changelog Versioning Rule
+
+Every completed PR must update `docs/CHANGELOG.md`.
+
+Version format:
+
+```md
+## [VERSION] - PR-ID
+````
+
+Rules:
+
+* Each completed PR gets a unique version entry.
+* PR version must be recorded before marking the PR as completed.
+* Do not rewrite previous changelog history.
+* New PR entries are appended above previous entries.
+* Keep existing entries unchanged unless fixing an actual mistake.
+
+Version progression:
+
+### Patch version
+
+Use when:
+
+* Documentation changes
+* Build fixes
+* Bug fixes
+* Small feature additions
+
+Example:
+
+* PR-0002-1 → [0.1.0]
+* PR-0002-2 → [0.1.1]
+
+### Minor version
+
+Use when:
+
+* New subsystem added
+* Architecture expanded
+* Major feature completed
+
+Example:
+
+* PR-0003 → [0.2.0]
+
+### Major version
+
+Use when:
+
+* Public API redesign
+* Project architecture rewrite
+* Breaking changes
+
+The changelog entry must include:
+
+### Added
+
+New files, modules, features.
+
+### Changed
+
+Modified behavior, architecture, build system.
+
+### Fixed
+
+Bug fixes or corrected implementation issues.
+
+Never mark a PR complete while CHANGELOG.md is outdated.
 
 --------------------------------------------------
 

@@ -208,3 +208,121 @@ CHANGELOG.md
 DECISIONS.md (if required)
 
 ROADMAP.md (if required)
+
+---
+
+## ADR-0008
+
+Date
+
+2026-06-29
+
+Status
+
+Accepted
+
+Title
+
+Use toml++ for Configuration Parsing
+
+Decision
+
+Use toml++ as the TOML configuration parser.
+
+Reason
+
+The project requires a lightweight configuration system with:
+
+- Human readable configuration files
+- Type-safe value loading
+- Header-only integration
+- Simple dependency management
+
+Alternatives
+
+- Manual parser implementation
+- Other TOML libraries
+
+Consequence
+
+ConfigLoader depends on toml++.
+
+Third-party dependency is managed through:
+
+scripts/install-tomlpp.sh
+
+---
+
+## ADR-0009
+
+Date
+
+2026-06-29
+
+Status
+
+Accepted
+
+Title
+
+Configuration Priority Order
+
+Decision
+
+Configuration values are applied in this order:
+
+Default Values
+
+↓
+
+config.toml
+
+↓
+
+Command Line Arguments
+
+Reason
+
+Provides safe defaults while allowing persistent configuration and runtime overrides.
+
+Consequence
+
+ConfigLoader and CommandLine must preserve this priority order.
+
+---
+
+## ADR-0010
+
+Date
+
+2026-06-29
+
+Status
+
+Accepted
+
+Title
+
+PR Based Changelog Versioning
+
+Decision
+
+Every completed PR must create a version entry in CHANGELOG.md.
+
+Format:
+
+## [VERSION] - PR-ID
+
+Reason
+
+Multiple agents work on the project.
+
+Versioned changelog entries improve:
+
+- Change tracking
+- Release management
+- Collaboration
+
+Consequence
+
+PR completion requires documentation updates.

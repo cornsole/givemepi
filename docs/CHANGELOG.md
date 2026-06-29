@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.0] - PR-0002-1
 
 ### Added
 
@@ -10,3 +10,52 @@
 - Added `src/scheduler/ThreadPool.cpp`.
 - Established namespace `pi::scheduler`.
 - Added initial non-copyable/non-movable `ThreadPool` class skeleton for future implementation.
+
+- Added configuration system foundation.
+- Added `include/config/Defaults.hpp`.
+- Added `include/config/Config.hpp`.
+- Added `src/config/Config.cpp`.
+- Added `include/config/ConfigLoader.hpp`.
+- Added `src/config/ConfigLoader.cpp`.
+- Added `include/config/CommandLine.hpp`.
+- Added `src/config/CommandLine.cpp`.
+- Added default configuration values.
+- Added command-line configuration override support.
+- Added `config.toml.example`.
+
+- Added toml++ integration.
+- Added `scripts/install-tomlpp.sh`.
+- Added third-party dependency setup workflow for toml++.
+- Added TOML configuration parsing support.
+- Added configuration validation.
+
+
+### Changed
+
+- Updated CMake build configuration.
+- Added toml++ include path.
+- Enabled header-only toml++ usage.
+- Updated ConfigLoader from stub implementation to TOML-based implementation.
+
+
+### Fixed
+
+- Fixed ConfigLoader temporary runtime failure state.
+- Fixed missing TOML include integration after dependency installation.
+- Fixed configuration loading workflow.
+
+
+---
+
+## [Unreleased]
+
+### Added
+
+- Logger system.
+- Platform detection.
+- Memory subsystem.
+- Lock-free scheduler.
+- Work stealing scheduler.
+- Big integer backend.
+- Binary splitting engine.
+- Chudnovsky calculation core.

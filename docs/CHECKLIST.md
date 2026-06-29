@@ -2,13 +2,13 @@
 
 ## Foundation
 
-[ ] CMake
+[x] CMake
 
 [ ] Logger
 
-[ ] Config
+[x] Config
 
-[ ] CLI
+[x] CLI
 
 [x] Project directory structure
 

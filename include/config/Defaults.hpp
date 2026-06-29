@@ -1,0 +1,36 @@
+#pragma once
+
+#include <cstdint>
+#include <string_view>
+
+namespace pi::config::defaults
+{
+
+// Precision
+inline constexpr std::uint64_t DIGITS = 1'000'000;
+
+// Threading
+// 0 = Auto (use all available hardware threads)
+inline constexpr std::uint32_t THREADS = 0;
+
+// Checkpoint
+inline constexpr bool CHECKPOINT_ENABLED = true;
+inline constexpr std::uint32_t CHECKPOINT_INTERVAL_SECONDS = 300;
+
+// Memory
+inline constexpr bool HUGE_PAGES_ENABLED = true;
+
+// Out-of-Core Storage
+inline constexpr bool OUT_OF_CORE_ENABLED = true;
+inline constexpr std::string_view COMPRESSION = "lz4";
+
+// Progress
+inline constexpr std::uint32_t PROGRESS_INTERVAL_MS = 500;
+
+// Output
+inline constexpr std::string_view OUTPUT_FILE = "pi.txt";
+
+// Resume
+inline constexpr bool RESUME_ENABLED = true;
+
+} // namespace pi::config::defaults
