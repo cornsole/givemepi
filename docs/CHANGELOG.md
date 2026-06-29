@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0] - PR-0004
+
+### Added
+
+- Added Memory Layer foundation.
+- Added Arena allocator.
+- Added Memory Pool allocator.
+- Added Alignment utility.
+- Added Scratch Buffer.
+- Added memory subsystem tests.
+
+### Changed
+
+- Extended CMake build system with memory sources.
+- Added memory-test target.
+
+### Fixed
+
+- N/A
+
 ## [0.2.0] - PR-0003
 
 ### Added

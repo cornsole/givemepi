@@ -332,3 +332,48 @@ PR completion requires documentation updates.
 ### ADR-0011
 
 Runtime CPU Feature Detection
+
+---
+
+## ADR-0012
+
+Date
+
+2026-06-29
+
+Status
+
+Accepted
+
+Title
+
+Memory Layer Design
+
+Decision
+
+Use dedicated memory management components instead of relying only on general heap allocation.
+
+Components:
+
+- Arena Allocator
+- Memory Pool
+- Alignment Manager
+- Scratch Buffer
+
+
+Reason
+
+Large π computations require predictable memory allocation patterns.
+
+Frequent heap allocations can cause:
+
+- fragmentation
+- allocation overhead
+- cache inefficiency
+
+
+Consequence
+
+Future computation modules should use the memory layer for temporary and high-frequency allocations.
+
+Binary Splitting and Big Integer integration will use these components where appropriate.

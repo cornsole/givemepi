@@ -34,13 +34,13 @@
 
 ## Memory
 
-[ ] Arena
+[x] Arena
 
-[ ] Pool
+[x] Pool
 
-[ ] Alignment
+[x] Alignment
 
-[ ] Scratch Buffer
+[x] Scratch Buffer
 
 -----------------
 

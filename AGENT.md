@@ -248,6 +248,39 @@ Before considering a feature complete verify
 
 ✓ Decision log updated if required
 
+✓ Commit created
+
+✓ Commit pushed
+
+---
+
+# Commit / Push Rule
+
+When a PR is completed:
+
+1. Verify build.
+2. Verify tests.
+3. Update documentation.
+4. Create a git commit.
+5. Push the commit.
+
+PR completion requires the commit to exist remotely.
+
+Commit message format:
+
+PR-ID: short description
+
+Example:
+
+PR-0004: Add memory layer
+
+Rules:
+
+- One completed PR must have one corresponding commit.
+- Do not combine multiple PR completions into a single commit.
+- Do not mark a PR complete before commit and push.
+- Keep commit history aligned with CHANGELOG history.
+
 # AI Collaboration Rules
 
 ## Directory / File Creation

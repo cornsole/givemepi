@@ -54,6 +54,11 @@ set(PI_ENGINE_SOURCES
 
     src/platform/CPUFeatures.cpp
     src/platform/CPUInfo.cpp
+
+    src/memory/Arena.cpp
+    src/memory/MemoryPool.cpp
+    src/memory/Alignment.cpp
+    src/memory/ScratchBuffer.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -81,6 +86,31 @@ target_include_directories(cpu-features-test
 )
 
 target_link_libraries(cpu-features-test
+    PRIVATE
+        Threads::Threads
+)
+
+# ---------------------------------------------------------------------------
+# Memory tests
+# ---------------------------------------------------------------------------
+
+add_executable(memory-test
+    tests/memory/MemoryTest.cpp
+
+    src/memory/Arena.cpp
+    src/memory/MemoryPool.cpp
+    src/memory/Alignment.cpp
+    src/memory/ScratchBuffer.cpp
+)
+
+
+target_include_directories(memory-test
+    PRIVATE
+        include
+)
+
+
+target_link_libraries(memory-test
     PRIVATE
         Threads::Threads
 )
