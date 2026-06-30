@@ -38,6 +38,7 @@ jobs:
               cmake \
               g++ \
               libgmp-dev \
+              libtomlplusplus-dev \
               clang-format \
               clang-tidy
           else
@@ -46,6 +47,7 @@ jobs:
               clang \
               clang++ \
               libgmp-dev \
+              libtomlplusplus-dev \
               clang-format \
               clang-tidy
           fi
