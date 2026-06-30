@@ -1,4 +1,6 @@
 #include "scheduler/Scheduler.hpp"
+
+#include "scheduler/LockFreeQueue.hpp"
 #include "scheduler/ReferenceQueue.hpp"
 
 #include <utility>
@@ -12,52 +14,26 @@ Scheduler::Scheduler(
     std::size_t queueCapacity
 )
 {
-    queue_ =
-        std::make_unique<
-            ReferenceQueue
-        >(
-            queueCapacity
+    pool_ =
+        std::make_unique<ThreadPool>(
+            std::make_unique<LockFreeQueue>(
+                queueCapacity
+            ),
+            workerCount
         );
-
-
-    workers_.reserve(
-        workerCount
-    );
-
-
-    for (std::size_t i = 0; i < workerCount; ++i)
-    {
-        workers_.push_back(
-            std::make_unique<Worker>(
-                i,
-                queue_.get()
-            )
-        );
-    }
 }
+
 
 Scheduler::Scheduler(
     std::unique_ptr<IQueue> queue,
     std::size_t workerCount
 )
-    : queue_(
-        std::move(queue)
-    )
 {
-    workers_.reserve(
-        workerCount
-    );
-
-
-    for (std::size_t i = 0; i < workerCount; ++i)
-    {
-        workers_.push_back(
-            std::make_unique<Worker>(
-                i,
-                queue_.get()
-            )
+    pool_ =
+        std::make_unique<ThreadPool>(
+            std::move(queue),
+            workerCount
         );
-    }
 }
 
 
@@ -69,37 +45,13 @@ Scheduler::~Scheduler()
 
 void Scheduler::start()
 {
-    if (running_)
-    {
-        return;
-    }
-
-
-    running_ = true;
-
-
-    for (auto& worker : workers_)
-    {
-        worker->start();
-    }
+    pool_->start();
 }
 
 
 void Scheduler::stop()
 {
-    if (!running_)
-    {
-        return;
-    }
-
-
-    for (auto& worker : workers_)
-    {
-        worker->stop();
-    }
-
-
-    running_ = false;
+    pool_->stop();
 }
 
 
@@ -107,13 +59,7 @@ bool Scheduler::submit(
     Task task
 )
 {
-    if (!running_)
-    {
-        return false;
-    }
-
-
-    return queue_->push(
+    return pool_->submit(
         std::move(task)
     );
 }
@@ -121,13 +67,13 @@ bool Scheduler::submit(
 
 std::size_t Scheduler::workerCount() const noexcept
 {
-    return workers_.size();
+    return pool_->workerCount();
 }
 
 
 bool Scheduler::running() const noexcept
 {
-    return running_;
+    return pool_->running();
 }
 
 

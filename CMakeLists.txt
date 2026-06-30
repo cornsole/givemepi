@@ -179,11 +179,34 @@ target_link_libraries(pi-engine
 
 add_executable(scheduler-test
     tests/scheduler/SchedulerTest.cpp
+    
     src/scheduler/Task.cpp
+    src/scheduler/ThreadPool.cpp
     src/scheduler/LockFreeQueue.cpp
     src/scheduler/Worker.cpp
     src/scheduler/Scheduler.cpp
     src/scheduler/ReferenceQueue.cpp
+)
+
+add_executable(threadpool-test
+    tests/scheduler/ThreadPoolTest.cpp
+
+    src/scheduler/Task.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/Worker.cpp
+)
+
+
+target_include_directories(threadpool-test
+    PRIVATE
+        include
+)
+
+
+target_link_libraries(threadpool-test
+    PRIVATE
+        Threads::Threads
 )
 
 target_include_directories(scheduler-test

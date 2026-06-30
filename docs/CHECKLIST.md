@@ -52,7 +52,7 @@
 
 [x] Scheduler
 
-[ ] ThreadPool
+[x] ThreadPool
 
 [x] Reference Queue
 

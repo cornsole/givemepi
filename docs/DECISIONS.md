@@ -554,3 +554,46 @@ Consequence
 Scheduler development can continue with interchangeable queue backends.
 
 Future queue optimization will not require Scheduler architecture changes.
+
+---
+
+## ADR-0017
+
+Date
+
+2026-06-30
+
+Status
+
+Accepted
+
+Title
+
+ThreadPool Owns Worker Lifecycle
+
+Decision
+
+ThreadPool manages Worker creation, execution, and shutdown.
+
+Scheduler delegates worker management responsibilities to ThreadPool.
+
+Reason
+
+Scheduler should coordinate task execution rather than directly manage worker threads.
+
+Separating responsibilities keeps queue abstraction, worker management, and scheduling logic independent.
+
+Alternatives
+
+- Keep Worker management inside Scheduler.
+- Create threads directly inside Scheduler.
+
+Consequence
+
+ThreadPool becomes the owner of:
+
+- Worker instances
+- Worker lifecycle
+- Task submission routing
+
+Scheduler only controls high-level scheduling operations.

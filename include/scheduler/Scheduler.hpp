@@ -1,12 +1,10 @@
 #pragma once
 
-#include "scheduler/IQueue.hpp"
 #include "scheduler/Task.hpp"
-#include "scheduler/Worker.hpp"
+#include "scheduler/ThreadPool.hpp"
 
 #include <cstddef>
 #include <memory>
-#include <vector>
 
 
 namespace pi::scheduler
@@ -59,16 +57,7 @@ public:
 
 private:
 
-    std::unique_ptr<IQueue> queue_;
-
-
-    std::vector<
-        std::unique_ptr<Worker>
-    > workers_;
-
-
-    bool running_ = false;
-
+    std::unique_ptr<ThreadPool> pool_;
 
 };
 

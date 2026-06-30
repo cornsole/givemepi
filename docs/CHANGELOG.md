@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0] - PR-0007
+
+### Added
+
+- Added ThreadPool implementation.
+- Added ThreadPool worker lifecycle management.
+- Added ThreadPool tests.
+
+### Changed
+
+- Scheduler now delegates worker management to ThreadPool.
+- Scheduler no longer manages Worker instances directly.
+- Scheduler execution flow now uses ThreadPool abstraction.
+
+### Fixed
+
+- Fixed scheduler ownership separation between Scheduler and Worker layers.
+
 ## [0.4.0] - PR-0006
 
 ### Added
