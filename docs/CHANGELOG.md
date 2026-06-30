@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.0] - PR-0014
+
+### Added
+
+* Added GitHub Actions CI pipeline.
+* Added automated build and test verification on pull requests and main branch updates.
+* Added GCC and Clang build matrix testing.
+* Added clang-format validation.
+* Added clang-tidy static analysis.
+* Added AddressSanitizer and UndefinedBehaviorSanitizer checks.
+* Added CI artifact upload for build output and test results.
+
+### Changed
+
+* Improved project build verification workflow.
+* Updated CMake integration for automated testing support.
+* Added CI-based validation path for contributors.
+
+### Notes
+
+* New contributors can now verify builds and tests automatically through GitHub Actions.
+* Local build and test workflow is mirrored in CI environment.
+
+### Fixed
+
+* N/A
+
 ## [0.5.1] - PR-0013
 
 ### Added

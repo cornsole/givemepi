@@ -22,6 +22,29 @@
 
 [x] GitHub Actions CI
 
+[x] Automated Build
+
+[x] Automated Test
+
+[x] GCC Build Matrix
+
+[x] Clang Build Matrix
+
+[x] clang-format Check
+
+[x] clang-tidy Static Analysis
+
+[x] AddressSanitizer
+
+[x] UBSan
+
+[x] Artifact Upload
+
+[ ] Benchmark Workflow
+
+[ ] Release Workflow
+
+
 -----------------
 
 

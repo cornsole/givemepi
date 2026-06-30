@@ -2,11 +2,15 @@
 
 Phase 0
 
-- Project
-- CMake
-- Logger
-- Config
-- CI Automation
+[x] Project
+
+[x] CMake
+
+[ ] Logger
+
+[x] Config
+
+[x] CI Automation
 
 ----------------------
 
