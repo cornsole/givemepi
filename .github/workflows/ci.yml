@@ -29,7 +29,8 @@ jobs:
           sudo apt install -y \
             cmake \
             g++ \
-            libgmp-dev
+            libgmp-dev \
+            libtomlplusplus-dev
 
 
       - name: Configure
