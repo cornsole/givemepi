@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0] - PR-0008
+
+### Added
+
+- Added WorkStealingQueue scheduler component.
+- Added worker local queue execution path.
+- Added worker stealing support.
+- Added WorkStealingTest.
+
+### Changed
+
+- Extended Worker execution model with local queue processing.
+- Updated ThreadPool worker coordination for work stealing.
+- Extended scheduler execution flow for distributed task processing.
+
+### Fixed
+
+- Fixed missing work stealing scheduler validation coverage.
+
 ## [0.4.0] - PR-0007
 
 ### Added

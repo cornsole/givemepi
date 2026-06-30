@@ -45,12 +45,22 @@ public:
     );
 
 
+    void submitLocal(
+        Task task
+    );
+
+
     [[nodiscard]]
     std::size_t workerCount() const noexcept;
 
 
     [[nodiscard]]
     bool running() const noexcept;
+
+
+    Worker* workerAt(
+        std::size_t index
+    );
 
 
 private:
@@ -61,6 +71,11 @@ private:
     std::vector<
         std::unique_ptr<Worker>
     > workers_;
+
+
+    std::atomic<std::size_t> nextWorker_{
+        0
+    };
 
 
     std::atomic<bool> running_{

@@ -24,7 +24,8 @@ ThreadPool::ThreadPool(
         workers_.push_back(
             std::make_unique<Worker>(
                 i,
-                queue_.get()
+                queue_.get(),
+                &workers_
             )
         );
     }
@@ -83,9 +84,27 @@ bool ThreadPool::submit(
     }
 
 
-    return queue_->push(
+    if (workers_.empty())
+    {
+        return false;
+    }
+
+
+    auto index =
+        nextWorker_.fetch_add(
+            1,
+            std::memory_order_relaxed
+        )
+        %
+        workers_.size();
+
+
+    workers_[index]->push(
         std::move(task)
     );
+
+
+    return true;
 }
 
 
@@ -94,6 +113,21 @@ std::size_t ThreadPool::workerCount() const noexcept
     return workers_.size();
 }
 
+Worker*
+ThreadPool::workerAt(
+    std::size_t index
+)
+{
+    if (workers_.empty())
+    {
+        return nullptr;
+    }
+
+
+    return workers_[
+        index % workers_.size()
+    ].get();
+}
 
 bool ThreadPool::running() const noexcept
 {

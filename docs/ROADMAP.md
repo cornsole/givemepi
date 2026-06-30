@@ -36,7 +36,7 @@ Scheduler
 [x] Thread Pool
 [x] Queue (Reference Implementation)
 [x] Lock-Free Queue
-- Work Stealing
+[x] Work Stealing
 
 ----------------------
 

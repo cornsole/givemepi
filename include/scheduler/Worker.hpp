@@ -2,10 +2,13 @@
 
 #include "scheduler/IQueue.hpp"
 #include "scheduler/Task.hpp"
+#include "scheduler/WorkStealingQueue.hpp"
 
 #include <atomic>
 #include <cstddef>
 #include <thread>
+#include <optional>
+#include <vector>
 
 
 namespace pi::scheduler
@@ -17,7 +20,8 @@ public:
 
     Worker(
         std::size_t id,
-        IQueue* queue
+        IQueue* queue,
+        std::vector<std::unique_ptr<Worker>>* workers
     );
 
 
@@ -45,18 +49,33 @@ public:
     [[nodiscard]]
     std::size_t id() const noexcept;
 
+    void push(
+        Task task
+    );
+
+
+    std::optional<Task> steal();
+
 
 private:
 
     void run();
 
 
+    std::optional<Task> trySteal();
+
 private:
 
     std::size_t id_ = 0;
 
 
-    IQueue* queue_ = nullptr;
+    IQueue* globalQueue_ = nullptr;
+
+
+    std::vector<std::unique_ptr<Worker>>* workers_ = nullptr;
+
+
+    WorkStealingQueue localQueue_;
 
 
     std::thread thread_;

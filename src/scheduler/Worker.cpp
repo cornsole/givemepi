@@ -2,6 +2,9 @@
 
 #include <chrono>
 #include <thread>
+#include <utility>
+#include <vector>
+#include <memory>
 
 
 namespace pi::scheduler
@@ -9,10 +12,12 @@ namespace pi::scheduler
 
 Worker::Worker(
     std::size_t id,
-    IQueue* queue
+    IQueue* queue,
+    std::vector<std::unique_ptr<Worker>>* workers
 )
     : id_(id),
-      queue_(queue)
+      globalQueue_(queue),
+      workers_(workers)
 {
 }
 
@@ -78,12 +83,44 @@ std::size_t Worker::id() const noexcept
 }
 
 
+void Worker::push(
+    Task task
+)
+{
+    localQueue_.push(
+        std::move(task)
+    );
+}
+
+
 void Worker::run()
 {
     while (!stopRequested_)
     {
         auto task =
-            queue_->pop();
+            localQueue_.pop();
+
+
+        if (task.has_value())
+        {
+            task->execute();
+            continue;
+        }
+
+
+        task =
+            globalQueue_->pop();
+
+
+        if (task.has_value())
+        {
+            task->execute();
+            continue;
+        }
+
+
+        task =
+            steal();
 
 
         if (task.has_value())
@@ -97,5 +134,35 @@ void Worker::run()
     }
 }
 
+std::optional<Task>
+Worker::steal()
+{
+    if (workers_ == nullptr)
+    {
+        return std::nullopt;
+    }
+
+
+    for (auto& worker : *workers_)
+    {
+        if (worker.get() == this)
+        {
+            continue;
+        }
+
+
+        auto task =
+            worker->localQueue_.steal();
+
+
+        if (task.has_value())
+        {
+            return task;
+        }
+    }
+
+
+    return std::nullopt;
+}
 
 } // namespace pi::scheduler

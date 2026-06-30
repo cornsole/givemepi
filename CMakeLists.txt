@@ -53,6 +53,7 @@ set(PI_ENGINE_SOURCES
     src/scheduler/ThreadPool.cpp
     src/scheduler/Task.cpp
     src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
     src/scheduler/Worker.cpp
     src/scheduler/Scheduler.cpp
     src/scheduler/ReferenceQueue.cpp
@@ -183,6 +184,7 @@ add_executable(scheduler-test
     src/scheduler/Task.cpp
     src/scheduler/ThreadPool.cpp
     src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
     src/scheduler/Worker.cpp
     src/scheduler/Scheduler.cpp
     src/scheduler/ReferenceQueue.cpp
@@ -194,7 +196,33 @@ add_executable(threadpool-test
     src/scheduler/Task.cpp
     src/scheduler/ThreadPool.cpp
     src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
     src/scheduler/Worker.cpp
+)
+
+
+add_executable(workstealing-test
+    tests/scheduler/WorkStealingTest.cpp
+
+    src/scheduler/Task.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
+)
+
+
+target_include_directories(workstealing-test
+    PRIVATE
+        include
+)
+
+
+target_link_libraries(workstealing-test
+    PRIVATE
+        Threads::Threads
 )
 
 

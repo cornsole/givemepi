@@ -58,7 +58,7 @@
 
 [x] Lock-Free Queue
 
-[ ] Work Stealing
+[x] Work Stealing
 
 -----------------
 
