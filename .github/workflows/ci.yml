@@ -46,7 +46,6 @@ jobs:
             sudo apt install -y \
               cmake \
               clang \
-              clang++ \
               libgmp-dev \
               libtomlplusplus-dev \
               clang-format \
