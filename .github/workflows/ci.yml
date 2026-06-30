@@ -1,4 +1,4 @@
-name: PiEngine CI
+name: PiEngine CI (${{ matrix.compiler }})
 
 on:
   push:
@@ -13,6 +13,12 @@ on:
 jobs:
 
   build-test:
+  
+    strategy:
+      matrix:
+        compiler:
+          - gcc
+          - clang
 
     runs-on: ubuntu-latest
 
@@ -26,21 +32,59 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y \
-            cmake \
-            g++ \
-            libgmp-dev
+
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            sudo apt install -y \
+              cmake \
+              g++ \
+              libgmp-dev \
+              clang-format \
+              clang-tidy
+          else
+            sudo apt install -y \
+              cmake \
+              clang \
+              clang++ \
+              libgmp-dev \
+              clang-format \
+              clang-tidy
+          fi
 
 
       - name: Configure
         run: |
-          cmake -S . -B build
+
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+
+            export CXX=g++
+
+          else
+
+            export CXX=clang++
+
+          fi
+
+
+          cmake -S . -B build \
+            -DENABLE_ASAN=ON \
+            -DENABLE_UBSAN=ON
 
 
       - name: Build
         run: |
           cmake --build build
 
+      - name: Format Check
+        run: |
+          clang-format --dry-run --Werror \
+            $(find include src tests \
+            \( -name '*.cpp' -o -name '*.hpp' \))
+
+      - name: Static Analysis
+        run: |
+          clang-tidy \
+            -p build \
+            $(find src -name '*.cpp')
 
       - name: Test
         run: |

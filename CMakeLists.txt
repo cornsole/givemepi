@@ -9,6 +9,7 @@ project(
 
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------------------------------------------------------
 # C++
@@ -39,6 +40,38 @@ else()
             -march=native
         )
     endif()
+
+endif()
+
+option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
+
+option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+
+
+if(ENABLE_ASAN)
+
+    add_compile_options(
+        -fsanitize=address
+        -fno-omit-frame-pointer
+    )
+
+    add_link_options(
+        -fsanitize=address
+    )
+
+endif()
+
+
+if(ENABLE_UBSAN)
+
+    add_compile_options(
+        -fsanitize=undefined
+        -fno-omit-frame-pointer
+    )
+
+    add_link_options(
+        -fsanitize=undefined
+    )
 
 endif()
 
