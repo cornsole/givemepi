@@ -70,6 +70,17 @@ BinaryNode BinarySplitter::split(
     std::size_t end
 )
 {
+    return splitSequential(
+        start,
+        end
+    );
+}
+
+BinaryNode BinarySplitter::splitSequential(
+    std::size_t start,
+    std::size_t end
+)
+{
     if (end - start == 1)
     {
         BinaryNode node(
@@ -88,14 +99,13 @@ BinaryNode BinarySplitter::split(
 
 
     BinaryNode left =
-        split(
+        splitSequential(
             start,
             mid
         );
 
-
     BinaryNode right =
-        split(
+        splitSequential(
             mid,
             end
         );
@@ -104,6 +114,21 @@ BinaryNode BinarySplitter::split(
     return merge(
         left,
         right
+    );
+}
+
+BinaryNode BinarySplitter::splitParallel(
+    std::size_t start,
+    std::size_t end
+)
+{
+    // Placeholder.
+    // Scheduler-based parallel execution will be introduced
+    // after task synchronization support is available.
+
+    return splitSequential(
+        start,
+        end
     );
 }
 

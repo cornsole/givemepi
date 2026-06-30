@@ -127,6 +127,69 @@ int main()
 
     std::cout
         << "Recursive Split OK\n"; 
-       
+    
+
+    
+    BinaryNode sequentialResult =
+        BinarySplitter::splitSequential(
+            0,
+            8
+        );
+
+    BinaryNode parallelResult =
+        BinarySplitter::splitParallel(
+            0,
+            8
+        );
+
+
+    if (sequentialResult.start() != parallelResult.start())
+    {
+        std::cerr
+            << "Parallel start mismatch\n";
+
+        return 1;
+    }
+
+
+    if (sequentialResult.end() != parallelResult.end())
+    {
+        std::cerr
+            << "Parallel end mismatch\n";
+
+        return 1;
+    }
+
+
+    if (sequentialResult.P().toString() != parallelResult.P().toString())
+    {
+        std::cerr
+            << "Parallel P mismatch\n";
+
+        return 1;
+    }
+
+
+    if (sequentialResult.Q().toString() != parallelResult.Q().toString())
+    {
+        std::cerr
+            << "Parallel Q mismatch\n";
+
+        return 1;
+    }
+
+
+    if (sequentialResult.T().toString() != parallelResult.T().toString())
+    {
+        std::cerr
+            << "Parallel T mismatch\n";
+
+        return 1;
+    }
+
+
+    std::cout
+        << "Parallel API OK\n";
+    
     return 0;
 }

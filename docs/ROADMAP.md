@@ -60,6 +60,7 @@ Binary Splitting
 [x] Node
 [x] Merge
 [x] Recursive Split
+[ ] Parallel API Refactoring
 [ ] Parallel Merge
 
 ----------------------

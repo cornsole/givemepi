@@ -597,3 +597,48 @@ ThreadPool becomes the owner of:
 - Task submission routing
 
 Scheduler only controls high-level scheduling operations.
+
+---
+
+## ADR-0018
+
+Date
+
+2026-06-30
+
+Status
+
+Accepted
+
+Title
+
+Stage Parallel Binary Splitting Implementation
+
+Decision
+
+Implement Binary Splitting parallelization in two stages.
+
+Stage 1 introduces a parallel-ready API while preserving the current sequential implementation.
+
+Stage 2 integrates Scheduler synchronization primitives to execute recursive Binary Splitting tasks in parallel.
+
+Reason
+
+The current Scheduler executes fire-and-forget tasks but does not provide task synchronization or result aggregation.
+
+Binary Splitting requires joining recursive computations before merging intermediate results.
+
+Separating API preparation from Scheduler synchronization keeps each PR independently buildable, testable, and easier to review.
+
+Alternatives
+
+- Implement Parallel Merge immediately with temporary synchronization.
+- Delay all Binary Splitting changes until Scheduler synchronization is complete.
+
+Consequence
+
+BinarySplitter will expose both sequential and parallel-ready execution paths.
+
+Actual parallel execution will be implemented after Scheduler gains task synchronization support (Future/TaskGroup/Join mechanism).
+
+This keeps the BinarySplitter interface stable while allowing Scheduler improvements to be integrated later.

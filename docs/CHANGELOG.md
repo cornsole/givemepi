@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.1] - PR-0015
+
+### Added
+
+- Added `BinarySplitter::splitSequential()` API.
+- Added `BinarySplitter::splitParallel()` API as the future scheduler integration entry point.
+- Added validation tests to verify sequential and parallel split interfaces produce identical results.
+
+### Changed
+
+- Refactored recursive binary splitting into a dedicated sequential implementation.
+- Updated `BinarySplitter::split()` to delegate to the sequential implementation.
+- Prepared BinarySplitter architecture for future scheduler-based parallel execution.
+
+### Fixed
+
+- N/A
+
 ## [0.6.0] - PR-0014
 
 ### Added
