@@ -7,6 +7,9 @@ project(
     LANGUAGES CXX
 )
 
+enable_testing()
+set(CTEST_OUTPUT_ON_FAILURE ON)
+
 # ---------------------------------------------------------------------------
 # C++
 # ---------------------------------------------------------------------------
@@ -91,6 +94,11 @@ add_executable(cpu-features-test
     src/platform/CPUInfo.cpp
 )
 
+add_test(
+    NAME CPUFeaturesTest
+    COMMAND cpu-features-test
+)
+
 target_include_directories(cpu-features-test
     PRIVATE
         include
@@ -112,6 +120,11 @@ add_executable(memory-test
     src/memory/MemoryPool.cpp
     src/memory/Alignment.cpp
     src/memory/ScratchBuffer.cpp
+)
+
+add_test(
+    NAME MemoryTest
+    COMMAND memory-test
 )
 
 
@@ -197,6 +210,11 @@ add_executable(scheduler-test
     src/scheduler/ReferenceQueue.cpp
 )
 
+add_test(
+    NAME SchedulerTest
+    COMMAND scheduler-test
+)
+
 add_executable(threadpool-test
     tests/scheduler/ThreadPoolTest.cpp
 
@@ -207,6 +225,11 @@ add_executable(threadpool-test
     src/scheduler/Worker.cpp
 )
 
+add_test(
+    NAME ThreadPoolTest
+    COMMAND threadpool-test
+)
+
 
 add_executable(gmp-test
     tests/bigint/GMPIntegerTest.cpp
@@ -214,6 +237,10 @@ add_executable(gmp-test
     src/bigint/GMPInteger.cpp
 )
 
+add_test(
+    NAME GMPIntegerTest
+    COMMAND gmp-test
+)
 
 add_executable(binary-test
     tests/binary/BinarySplittingTest.cpp
@@ -224,6 +251,10 @@ add_executable(binary-test
     src/bigint/GMPInteger.cpp
 )
 
+add_test(
+    NAME BinarySplittingTest
+    COMMAND binary-test
+)
 
 target_include_directories(binary-test
     PRIVATE
@@ -261,6 +292,10 @@ add_executable(workstealing-test
     src/scheduler/ReferenceQueue.cpp
 )
 
+add_test(
+    NAME WorkStealingTest
+    COMMAND workstealing-test
+)
 
 target_include_directories(workstealing-test
     PRIVATE

@@ -6,6 +6,7 @@ Phase 0
 - CMake
 - Logger
 - Config
+- CI Automation
 
 ----------------------
 

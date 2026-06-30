@@ -1,18 +1,16 @@
 # Changelog
 
-## [0.5.0] - PR-0012
+## [0.5.1] - PR-0013
 
 ### Added
 
-- Added BinaryNode data structure.
-- Added BinarySplitter recursive split implementation.
-- Added BinarySplitting merge operation.
-- Added BinarySplitting tests.
+- Added GitHub Actions CI workflow.
+- Added automated build and test verification.
 
 ### Changed
 
-- Extended project architecture with Binary Splitting subsystem.
-- Added binary calculation layer foundation using GMPInteger.
+- Integrated CTest workflow into CMake test system.
+- Improved project validation process.
 
 ### Fixed
 

@@ -1,0 +1,47 @@
+name: PiEngine CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+
+jobs:
+
+  build-test:
+
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            cmake \
+            g++ \
+            libgmp-dev
+
+
+      - name: Configure
+        run: |
+          cmake -S . -B build
+
+
+      - name: Build
+        run: |
+          cmake --build build
+
+
+      - name: Test
+        run: |
+          ctest --test-dir build --output-on-failure

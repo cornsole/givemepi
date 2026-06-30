@@ -16,6 +16,15 @@
 
 -----------------
 
+## Automation
+
+[x] CTest
+
+[x] GitHub Actions CI
+
+-----------------
+
+
 ## Platform
 
 [x] CPUID
