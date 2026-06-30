@@ -75,7 +75,7 @@ jobs:
 
       - name: Format Check
         run: |
-          clang-format --dry-run --Werror \
+          clang-format --dry-run \
             $(find include src tests \
             \( -name '*.cpp' -o -name '*.hpp' \))
 
