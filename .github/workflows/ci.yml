@@ -12,15 +12,22 @@ on:
 
 jobs:
 
-  build-test:
-  
     strategy:
       matrix:
-        compiler:
-          - gcc
-          - clang
 
-    runs-on: ubuntu-latest
+        include:
+
+          - os: ubuntu-latest
+            compiler: gcc
+
+          - os: ubuntu-latest
+            compiler: clang
+
+          - os: windows-latest
+            compiler: msvc
+
+
+    runs-on: ${{ matrix.os }}
 
 
     steps:
@@ -30,46 +37,70 @@ jobs:
 
 
       - name: Install Dependencies
+        shell: bash
         run: |
-          sudo apt update
 
-          if [ "${{ matrix.compiler }}" = "gcc" ]; then
-            sudo apt install -y \
-              cmake \
-              g++ \
-              libgmp-dev \
-              libtomlplusplus-dev \
-              clang-format \
-              clang-tidy
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+
+            sudo apt update
+
+            if [ "${{ matrix.compiler }}" = "gcc" ]; then
+
+              sudo apt install -y \
+                cmake \
+                g++ \
+                libgmp-dev \
+                libtomlplusplus-dev \
+                clang-format \
+                clang-tidy
+
+            else
+
+              sudo apt install -y \
+                cmake \
+                clang \
+                clang++ \
+                libgmp-dev \
+                libtomlplusplus-dev \
+                clang-format \
+                clang-tidy
+
+            fi
+
+
           else
-            sudo apt install -y \
-              cmake \
-              clang \
-              clang++ \
-              libgmp-dev \
-              libtomlplusplus-dev \
-              clang-format \
-              clang-tidy
-          fi
 
+            choco install -y cmake
+            choco install -y llvm
+
+          fi
 
       - name: Configure
+        shell: bash
         run: |
 
-          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
 
-            export CXX=g++
+            cmake -S . -B build
 
           else
 
-            export CXX=clang++
+            if [ "${{ matrix.compiler }}" = "gcc" ]; then
+
+              export CXX=g++
+
+            else
+
+              export CXX=clang++
+
+            fi
+
+
+            cmake -S . -B build \
+              -DENABLE_ASAN=ON \
+              -DENABLE_UBSAN=ON
 
           fi
-
-
-          cmake -S . -B build \
-            -DENABLE_ASAN=ON \
-            -DENABLE_UBSAN=ON
 
 
       - name: Build
@@ -77,13 +108,17 @@ jobs:
           cmake --build build
 
       - name: Format Check
+        shell: bash
         run: |
+
           clang-format --dry-run --Werror \
             $(find include src tests \
             \( -name '*.cpp' -o -name '*.hpp' \))
 
       - name: Static Analysis
+        if: matrix.compiler != 'msvc'
         run: |
+
           clang-tidy \
             -p build \
             $(find src -name '*.cpp')
