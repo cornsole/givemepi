@@ -12,117 +12,120 @@ on:
 
 jobs:
 
-    strategy:
-      matrix:
+  build-test:
 
-        include:
+      strategy:
 
-          - os: ubuntu-latest
-            compiler: gcc
+        matrix:
 
-          - os: ubuntu-latest
-            compiler: clang
+          include:
 
-          - os: windows-latest
-            compiler: msvc
+            - os: ubuntu-latest
+              compiler: gcc
 
+            - os: ubuntu-latest
+              compiler: clang
 
-    runs-on: ${{ matrix.os }}
-
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
+            - os: windows-latest
+              compiler: msvc
 
 
-      - name: Install Dependencies
-        shell: bash
-        run: |
+  runs-on: ${{ matrix.os }}
 
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
 
-            sudo apt update
+  steps:
 
-            if [ "${{ matrix.compiler }}" = "gcc" ]; then
+    - name: Checkout
+      uses: actions/checkout@v4
 
-              sudo apt install -y \
-                cmake \
-                g++ \
-                libgmp-dev \
-                libtomlplusplus-dev \
-                clang-format \
-                clang-tidy
 
-            else
+    - name: Install Dependencies
+      shell: bash
+      run: |
 
-              sudo apt install -y \
-                cmake \
-                clang \
-                clang++ \
-                libgmp-dev \
-                libtomlplusplus-dev \
-                clang-format \
-                clang-tidy
+        if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
 
-            fi
+          sudo apt update
 
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+
+            sudo apt install -y \
+              cmake \
+              g++ \
+              libgmp-dev \
+              libtomlplusplus-dev \
+              clang-format \
+              clang-tidy
 
           else
 
-            choco install -y cmake
-            choco install -y llvm
-
-          fi
-
-      - name: Configure
-        shell: bash
-        run: |
-
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-
-            cmake -S . -B build
-
-          else
-
-            if [ "${{ matrix.compiler }}" = "gcc" ]; then
-
-              export CXX=g++
-
-            else
-
-              export CXX=clang++
-
-            fi
-
-
-            cmake -S . -B build \
-              -DENABLE_ASAN=ON \
-              -DENABLE_UBSAN=ON
+            sudo apt install -y \
+              cmake \
+              clang \
+              clang++ \
+              libgmp-dev \
+              libtomlplusplus-dev \
+              clang-format \
+              clang-tidy
 
           fi
 
 
-      - name: Build
-        run: |
-          cmake --build build
+        else
 
-      - name: Format Check
-        shell: bash
-        run: |
+          choco install -y cmake
+          choco install -y llvm
 
-          clang-format --dry-run --Werror \
-            $(find include src tests \
-            \( -name '*.cpp' -o -name '*.hpp' \))
+        fi
 
-      - name: Static Analysis
-        if: matrix.compiler != 'msvc'
-        run: |
+    - name: Configure
+      shell: bash
+      run: |
 
-          clang-tidy \
-            -p build \
-            $(find src -name '*.cpp')
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
 
-      - name: Test
-        run: |
-          ctest --test-dir build --output-on-failure
+          cmake -S . -B build
+
+        else
+
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+
+            export CXX=g++
+
+          else
+
+            export CXX=clang++
+
+          fi
+
+
+          cmake -S . -B build \
+            -DENABLE_ASAN=ON \
+            -DENABLE_UBSAN=ON
+
+        fi
+
+
+    - name: Build
+      run: |
+        cmake --build build
+
+    - name: Format Check
+      shell: bash
+      run: |
+
+        clang-format --dry-run --Werror \
+          $(find include src tests \
+          \( -name '*.cpp' -o -name '*.hpp' \))
+
+    - name: Static Analysis
+      if: ${{ matrix.compiler != 'msvc' }}
+      run: |
+
+        clang-tidy \
+          -p build \
+          $(find src -name '*.cpp')
+
+    - name: Test
+      run: |
+        ctest --test-dir build --output-on-failure
