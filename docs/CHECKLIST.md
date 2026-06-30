@@ -72,9 +72,9 @@
 
 ## Binary Splitting
 
-[ ] Node
+[x] Node
 
-[ ] Merge
+[x] Merge
 
 [ ] Parallel Merge
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0] - PR-0011
+
+### Added
+
+- Added BinaryNode data structure.
+- Added BinarySplitting merge operation.
+- Added BinarySplitting test coverage.
+
+### Changed
+
+- Extended CMake build system with binary test target.
+- Added binary splitting foundation layer.
+
+### Fixed
+
+- N/A
+
 ## [0.5.0] - PR-0010
 
 ### Added

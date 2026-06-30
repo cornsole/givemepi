@@ -52,6 +52,10 @@ Phase 5
 
 Binary Splitting
 
+[x] Node
+[x] Merge
+[ ] Parallel Merge
+
 ----------------------
 
 Phase 6

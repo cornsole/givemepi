@@ -67,6 +67,9 @@ set(PI_ENGINE_SOURCES
     src/memory/ScratchBuffer.cpp
 
     src/bigint/GMPInteger.cpp
+
+    src/binary/BinaryNode.cpp
+    src/binary/BinarySplitter.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -209,6 +212,28 @@ add_executable(gmp-test
     tests/bigint/GMPIntegerTest.cpp
 
     src/bigint/GMPInteger.cpp
+)
+
+
+add_executable(binary-test
+    tests/binary/BinarySplittingTest.cpp
+
+    src/binary/BinaryNode.cpp
+    src/binary/BinarySplitter.cpp
+
+    src/bigint/GMPInteger.cpp
+)
+
+
+target_include_directories(binary-test
+    PRIVATE
+        include
+)
+
+
+target_link_libraries(binary-test
+    PRIVATE
+        gmp
 )
 
 
