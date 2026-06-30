@@ -127,6 +127,47 @@ void GMPInteger::mul(
 }
 
 
+void GMPInteger::set(
+    const GMPInteger& other
+)
+{
+    mpz_set(
+        value_,
+        *other.raw()
+    );
+}
+
+
+int GMPInteger::compare(
+    const GMPInteger& other
+) const noexcept
+{
+    return mpz_cmp(
+        value_,
+        *other.raw()
+    );
+}
+
+
+void GMPInteger::swap(
+    GMPInteger& other
+) noexcept
+{
+    mpz_swap(
+        value_,
+        *other.raw()
+    );
+}
+
+
+bool GMPInteger::isZero() const noexcept
+{
+    return mpz_sgn(
+        value_
+    ) == 0;
+}
+
+
 std::string GMPInteger::toString() const
 {
     char* result =

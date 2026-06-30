@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.0] - PR-0010
+
+### Added
+
+- Added GMPInteger wrapper.
+- Added GMP based big integer abstraction.
+- Added GMPInteger copy and move support.
+- Added GMPInteger arithmetic operations.
+- Added GMPInteger tests.
+
+### Changed
+
+- Extended bigint module foundation.
+- Added GMP integration to build system.
+
+### Fixed
+
+- N/A
+
 ## [0.5.0] - PR-0009
 
 ### Added

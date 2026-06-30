@@ -57,6 +57,25 @@ public:
         const GMPInteger& other
     );
 
+    void set(
+        const GMPInteger& other
+    );
+
+
+    [[nodiscard]]
+    int compare(
+        const GMPInteger& other
+    ) const noexcept;
+
+
+    void swap(
+        GMPInteger& other
+    ) noexcept;
+
+
+    [[nodiscard]]
+    bool isZero() const noexcept;
+
 
     [[nodiscard]]
     std::string toString() const;

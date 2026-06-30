@@ -1,6 +1,7 @@
 #include "bigint/GMPInteger.hpp"
 
 #include <iostream>
+#include <utility>
 
 
 using pi::bigint::GMPInteger;
@@ -58,7 +59,73 @@ int main()
 
         return 1;
     }
+    
+    GMPInteger setTarget(
+        0
+    );
 
+
+    setTarget.set(
+        a
+    );
+
+
+    if (setTarget.toString() != "5000")
+    {
+        std::cerr
+            << "Set failed\n";
+
+        return 1;
+    }
+
+
+    if (setTarget.compare(a) != 0)
+    {
+        std::cerr
+            << "Compare equal failed\n";
+
+        return 1;
+    }
+
+
+    GMPInteger bigger(
+        9000
+    );
+
+
+    if (bigger.compare(setTarget) <= 0)
+    {
+        std::cerr
+            << "Compare greater failed\n";
+
+        return 1;
+    }
+
+
+    GMPInteger zero;
+
+
+    if (!zero.isZero())
+    {
+        std::cerr
+            << "Zero check failed\n";
+
+        return 1;
+    }
+
+
+    zero.swap(
+        setTarget
+    );
+
+
+    if (zero.toString() != "5000")
+    {
+        std::cerr
+            << "Swap failed\n";
+
+        return 1;
+    }
 
     GMPInteger copy(
         a

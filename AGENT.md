@@ -283,6 +283,73 @@ Rules:
 
 # AI Collaboration Rules
 
+## PR Work Sequence Rule
+
+At the start of every PR implementation:
+
+Always write the planned work sequence before modifying code.
+
+Example:
+
+```
+1. File check
+   include/bigint/GMPInteger.hpp
+        |
+        v
+
+2. File check
+   src/bigint/GMPInteger.cpp
+        |
+        v
+
+3. Big Integer API design
+        |
+        v
+
+4. Add required operations
+        |
+        v
+
+5. Extend GMPIntegerTest
+        |
+        v
+
+6. Check CMake
+```
+
+The sequence must reflect the actual implementation order.
+
+Do not start implementation before the affected files and modification order are identified.
+
+## Modification Safety Rule
+
+When modifying existing files:
+
+Prefer partial modifications over full file replacement.
+
+Do not replace the entire file unless:
+
+* The file is newly created.
+* The file has no existing implementation.
+* Full replacement is explicitly required.
+
+Partial modifications must always specify:
+
+* File path
+* Existing content
+* Replacement content
+* Modification location
+
+## Commit Message Rule
+
+During normal development:
+
+Do not create commit commands unless requested.
+
+Only provide the recommended commit message.
+
+The developer decides when and how to commit.
+
 ## Directory / File Creation
 
 If new directories or files are required:
