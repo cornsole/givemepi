@@ -65,5 +65,46 @@ BinaryNode BinarySplitter::merge(
     return result;
 }
 
+BinaryNode BinarySplitter::split(
+    std::size_t start,
+    std::size_t end
+)
+{
+    if (end - start == 1)
+    {
+        BinaryNode node(
+            start,
+            end
+        );
+
+        // leaf 계산 예정
+
+        return node;
+    }
+
+
+    std::size_t mid =
+        start + (end - start) / 2;
+
+
+    BinaryNode left =
+        split(
+            start,
+            mid
+        );
+
+
+    BinaryNode right =
+        split(
+            mid,
+            end
+        );
+
+
+    return merge(
+        left,
+        right
+    );
+}
 
 } // namespace pi::binary

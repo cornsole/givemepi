@@ -9,6 +9,10 @@ namespace pi::binary
 class BinarySplitter
 {
 public:
+    static BinaryNode split(
+        std::size_t start,
+        std::size_t end
+    );
 
     static BinaryNode merge(
         const BinaryNode& left,

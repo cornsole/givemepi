@@ -76,6 +76,8 @@
 
 [x] Merge
 
+[x] Recursive Split
+
 [ ] Parallel Merge
 
 -----------------

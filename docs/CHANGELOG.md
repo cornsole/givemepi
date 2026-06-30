@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.0] - PR-0012
+
+### Added
+
+- Added BinaryNode data structure.
+- Added BinarySplitter recursive split implementation.
+- Added BinarySplitting merge operation.
+- Added BinarySplitting tests.
+
+### Changed
+
+- Extended project architecture with Binary Splitting subsystem.
+- Added binary calculation layer foundation using GMPInteger.
+
+### Fixed
+
+- N/A
+
 ## [0.5.0] - PR-0011
 
 ### Added

@@ -100,5 +100,33 @@ int main()
         << '\n';
 
 
+    BinaryNode splitResult =
+        BinarySplitter::split(
+            0,
+            8
+        );
+
+
+    if (splitResult.start() != 0)
+    {
+        std::cerr
+            << "Split start failed\n";
+
+        return 1;
+    }
+
+
+    if (splitResult.end() != 8)
+    {
+        std::cerr
+            << "Split end failed\n";
+
+        return 1;
+    }
+
+
+    std::cout
+        << "Recursive Split OK\n"; 
+       
     return 0;
 }

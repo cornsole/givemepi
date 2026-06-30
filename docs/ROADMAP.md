@@ -54,6 +54,7 @@ Binary Splitting
 
 [x] Node
 [x] Merge
+[x] Recursive Split
 [ ] Parallel Merge
 
 ----------------------
