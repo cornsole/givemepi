@@ -32,16 +32,16 @@ jobs:
       - name: Cache apt
         uses: actions/cache@v4
         with:
-        path: |
-          /var/cache/apt
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
+          path: |
+            /var/cache/apt
+            key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/ci.yml') }}
+            restore-keys: |
+              ${{ runner.os }}-apt-
 
       - name: Cache CMake
         uses: actions/cache@v4
         with:
-          path: | 
+          path: |
             build
           key: ${{ runner.os }}-${{ matrix.compiler }}-cmake-${{ hashFiles('CMakeLists.txt') }}
           restore-keys: |
