@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0] - PR-0009
+
+### Added
+
+- Added GMPInteger wrapper.
+- Added GMP based Big Integer foundation.
+- Added GMPInteger tests.
+
+### Changed
+
+- Added GMP build integration.
+- Extended build system with bigint sources.
+
+### Fixed
+
+- N/A
+
 ## [0.4.0] - PR-0008
 
 ### Added

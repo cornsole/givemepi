@@ -65,6 +65,8 @@ set(PI_ENGINE_SOURCES
     src/memory/MemoryPool.cpp
     src/memory/Alignment.cpp
     src/memory/ScratchBuffer.cpp
+
+    src/bigint/GMPInteger.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -162,8 +164,10 @@ target_compile_definitions(pi-engine
 # Will be integrated in a later PR.
 # ---------------------------------------------------------------------------
 
-# find_package(GMP REQUIRED)
-# target_link_libraries(pi-engine PRIVATE GMP::gmp)
+target_link_libraries(pi-engine
+    PRIVATE
+        gmp
+)
 
 # ---------------------------------------------------------------------------
 # Threads
@@ -198,6 +202,25 @@ add_executable(threadpool-test
     src/scheduler/LockFreeQueue.cpp
     src/scheduler/WorkStealingQueue.cpp
     src/scheduler/Worker.cpp
+)
+
+
+add_executable(gmp-test
+    tests/bigint/GMPIntegerTest.cpp
+
+    src/bigint/GMPInteger.cpp
+)
+
+
+target_include_directories(gmp-test
+    PRIVATE
+        include
+)
+
+
+target_link_libraries(gmp-test
+    PRIVATE
+        gmp
 )
 
 

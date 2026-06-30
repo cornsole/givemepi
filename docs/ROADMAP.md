@@ -44,7 +44,7 @@ Phase 4
 
 Big Integer
 
-- GMP Wrapper
+[x] GMP Wrapper
 
 ----------------------
 

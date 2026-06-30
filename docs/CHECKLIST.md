@@ -64,7 +64,7 @@
 
 ## Big Integer
 
-[ ] GMP
+[x] GMP
 
 [ ] FFT
 
