@@ -2,6 +2,7 @@
 
 #include "scheduler/IQueue.hpp"
 #include "scheduler/Task.hpp"
+#include "scheduler/TaskHandle.hpp"
 #include "scheduler/Worker.hpp"
 
 #include <atomic>
@@ -40,12 +41,10 @@ public:
     void stop();
 
 
-    bool submit(
-        Task task
-    );
-
-
-    void submitLocal(
+    /// Submit one task and return a handle when the task is accepted.
+    /// Returns an invalid handle when the pool cannot accept the task.
+    [[nodiscard]]
+    TaskHandle submit(
         Task task
     );
 

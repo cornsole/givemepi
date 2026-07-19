@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.7.0] - PR-0016
+
+### Added
+
+- Added a shared task completion state for scheduler task lifecycle tracking.
+- Added move-only `TaskHandle` support for validity, waiting, completion, and
+  failure observation.
+- Added captured exception propagation through `TaskHandle` without allowing
+  task exceptions to escape worker threads.
+- Added direct inspection of a captured `exception_ptr` through `TaskHandle`.
+- Added synchronization, rejection, failure, and multi-handle join tests.
+- Added direct task lifecycle tests covering every state transition, waiter
+  notification, exception isolation, and duplicate execution prevention.
+
+### Changed
+
+- Changed `ThreadPool::submit()` and `Scheduler::submit()` to return
+  `TaskHandle`.
+- Replaced scheduler test polling loops with explicit handle waits.
+- Clarified `TaskHandle` shared-state ownership and added compile-time checks
+  for its move-only contract.
+- Removed the unimplemented `ThreadPool::submitLocal()` declaration so the
+  public submission surface consistently uses `TaskHandle submit(Task)`.
+- Reorganized scheduler synchronization tests into focused lifecycle, join,
+  failure, rejection, custom-queue, and load scenarios.
+
+### Fixed
+
+- Fixed the incomplete TaskHandle integration that prevented scheduler targets
+  from building.
+- Fixed task failure handling so one throwing task does not terminate its worker
+  thread.
+
 ## [0.6.1] - PR-0015
 
 ### Added

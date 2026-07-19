@@ -1,37 +1,60 @@
-#include "scheduler/ThreadPool.hpp"
 #include "scheduler/LockFreeQueue.hpp"
+#include "scheduler/ThreadPool.hpp"
 
 #include <atomic>
 #include <cassert>
-#include <chrono>
 #include <iostream>
-#include <thread>
+#include <memory>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 
-int main()
+static_assert(
+    std::is_same_v<
+        decltype(
+            std::declval<pi::scheduler::ThreadPool&>().submit(
+                std::declval<pi::scheduler::Task>()
+            )
+        ),
+        pi::scheduler::TaskHandle
+    >
+);
+
+
+namespace
 {
-    using namespace pi::scheduler;
+
+using pi::scheduler::LockFreeQueue;
+using pi::scheduler::Task;
+using pi::scheduler::TaskHandle;
+using pi::scheduler::ThreadPool;
+
+constexpr int taskCount = 100;
 
 
+void testAcceptedTasksCanBeJoined()
+{
     std::atomic<int> counter{
         0
     };
 
-
     ThreadPool pool(
-        std::make_unique<LockFreeQueue>(
-            128
-        ),
+        std::make_unique<LockFreeQueue>(128),
         4
     );
-
 
     pool.start();
 
 
-    for (int i = 0; i < 100; ++i)
+    std::vector<TaskHandle> handles;
+
+    handles.reserve(taskCount);
+
+
+    for (int i = 0; i < taskCount; ++i)
     {
-        bool submitted =
+        TaskHandle submitted =
             pool.submit(
                 Task(
                     [&counter]()
@@ -44,46 +67,106 @@ int main()
                 )
             );
 
+        assert(submitted.valid());
 
-        assert(submitted);
+        handles.push_back(
+            std::move(submitted)
+        );
     }
 
 
-    auto start =
-        std::chrono::steady_clock::now();
-
-
-    while (counter.load() != 100)
+    for (auto& handle : handles)
     {
-        if (
-            std::chrono::steady_clock::now() - start
-            >
-            std::chrono::seconds(2)
-        )
-        {
-            break;
-        }
+        handle.wait();
 
-        std::this_thread::yield();
+        assert(handle.isReady());
+        assert(handle.isCompleted());
+        assert(!handle.isFailed());
     }
-
 
     pool.stop();
 
 
-    assert(
-        counter.load() == 100
+    assert(counter.load(std::memory_order_relaxed) == taskCount);
+}
+
+
+void testRejectedSubmissionsReturnInvalidHandles()
+{
+    ThreadPool pool(
+        std::make_unique<LockFreeQueue>(16),
+        2
     );
 
 
-    std::cout
-        << "ThreadPool OK\n";
+    TaskHandle beforeStart =
+        pool.submit(
+            Task(
+                []()
+                {
+                }
+            )
+        );
+
+    assert(!beforeStart.valid());
+
+
+    pool.start();
+
+    TaskHandle invalidTask =
+        pool.submit(
+            Task{}
+        );
+
+    assert(!invalidTask.valid());
+
+    pool.stop();
+
+
+    TaskHandle afterStop =
+        pool.submit(
+            Task(
+                []()
+                {
+                }
+            )
+        );
+
+    assert(!afterStop.valid());
+
+
+    ThreadPool noWorkers(
+        std::make_unique<LockFreeQueue>(16),
+        0
+    );
+
+    noWorkers.start();
+
+    TaskHandle noWorkerHandle =
+        noWorkers.submit(
+            Task(
+                []()
+                {
+                }
+            )
+        );
+
+    assert(!noWorkerHandle.valid());
+
+    noWorkers.stop();
+}
+
+} // namespace
+
+
+int main()
+{
+    testAcceptedTasksCanBeJoined();
+    testRejectedSubmissionsReturnInvalidHandles();
 
 
     std::cout
-        << "Executed tasks: "
-        << counter.load()
-        << "\n";
+        << "ThreadPool submission OK\n";
 
 
     return 0;

@@ -88,6 +88,7 @@ set(PI_ENGINE_SOURCES
 
     src/scheduler/ThreadPool.cpp
     src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
     src/scheduler/LockFreeQueue.cpp
     src/scheduler/WorkStealingQueue.cpp
     src/scheduler/Worker.cpp
@@ -231,10 +232,33 @@ target_link_libraries(pi-engine
         Threads::Threads
 )
 
+add_executable(task-test
+    tests/scheduler/TaskTest.cpp
+
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+)
+
+add_test(
+    NAME TaskTest
+    COMMAND task-test
+)
+
+target_include_directories(task-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(task-test
+    PRIVATE
+        Threads::Threads
+)
+
 add_executable(scheduler-test
     tests/scheduler/SchedulerTest.cpp
     
     src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
     src/scheduler/ThreadPool.cpp
     src/scheduler/LockFreeQueue.cpp
     src/scheduler/WorkStealingQueue.cpp
@@ -252,6 +276,7 @@ add_executable(threadpool-test
     tests/scheduler/ThreadPoolTest.cpp
 
     src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
     src/scheduler/ThreadPool.cpp
     src/scheduler/LockFreeQueue.cpp
     src/scheduler/WorkStealingQueue.cpp
@@ -317,6 +342,7 @@ add_executable(workstealing-test
     tests/scheduler/WorkStealingTest.cpp
 
     src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
     src/scheduler/ThreadPool.cpp
     src/scheduler/LockFreeQueue.cpp
     src/scheduler/WorkStealingQueue.cpp

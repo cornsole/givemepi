@@ -1,35 +1,117 @@
-#include "scheduler/Scheduler.hpp"
 #include "scheduler/LockFreeQueue.hpp"
+#include "scheduler/Scheduler.hpp"
 
 #include <atomic>
 #include <cassert>
-#include <chrono>
 #include <iostream>
-#include <thread>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 
-int main()
+static_assert(
+    !std::is_copy_constructible_v<pi::scheduler::TaskHandle>
+);
+
+static_assert(
+    !std::is_copy_assignable_v<pi::scheduler::TaskHandle>
+);
+
+static_assert(
+    std::is_nothrow_move_constructible_v<pi::scheduler::TaskHandle>
+);
+
+static_assert(
+    std::is_nothrow_move_assignable_v<pi::scheduler::TaskHandle>
+);
+
+static_assert(
+    std::is_same_v<
+        decltype(
+            std::declval<pi::scheduler::Scheduler&>().submit(
+                std::declval<pi::scheduler::Task>()
+            )
+        ),
+        pi::scheduler::TaskHandle
+    >
+);
+
+
+namespace
 {
-    using namespace pi::scheduler;
+
+using pi::scheduler::LockFreeQueue;
+using pi::scheduler::Scheduler;
+using pi::scheduler::Task;
+using pi::scheduler::TaskHandle;
+
+constexpr int taskCount = 100;
 
 
+void waitForSuccessfulTasks(
+    std::vector<TaskHandle>& handles
+)
+{
+    for (auto& handle : handles)
+    {
+        handle.wait();
+
+        assert(handle.isReady());
+        assert(handle.isCompleted());
+        assert(!handle.isFailed());
+    }
+}
+
+
+void testAcceptedTasksCanBeJoined()
+{
     std::atomic<int> counter{
         0
     };
-
 
     Scheduler scheduler(
         4,
         128
     );
 
-
     scheduler.start();
 
 
-    for (int i = 0; i < 100; ++i)
+    TaskHandle moveSource =
+        scheduler.submit(
+            Task(
+                []()
+                {
+                }
+            )
+        );
+
+    assert(moveSource.valid());
+
+
+    TaskHandle moveTarget =
+        std::move(moveSource);
+
+    assert(!moveSource.valid());
+    assert(moveTarget.valid());
+
+    moveTarget.wait();
+
+    assert(moveTarget.isCompleted());
+    assert(!moveTarget.exception());
+
+
+    std::vector<TaskHandle> handles;
+
+    handles.reserve(taskCount);
+
+
+    for (int i = 0; i < taskCount; ++i)
     {
-        bool submitted =
+        TaskHandle submitted =
             scheduler.submit(
                 Task(
                     [&counter]()
@@ -42,51 +124,196 @@ int main()
                 )
             );
 
+        assert(submitted.valid());
 
-        assert(submitted);
+        handles.push_back(
+            std::move(submitted)
+        );
     }
 
+
+    waitForSuccessfulTasks(
+        handles
+    );
 
     scheduler.stop();
 
 
-    assert(
-        counter.load() == 100
+    assert(counter.load(std::memory_order_relaxed) == taskCount);
+}
+
+
+void testFailedTaskDoesNotStopWorker()
+{
+    Scheduler scheduler(
+        2,
+        16
+    );
+
+    scheduler.start();
+
+
+    TaskHandle failed =
+        scheduler.submit(
+            Task(
+                []()
+                {
+                    throw std::runtime_error(
+                        "expected task failure"
+                    );
+                }
+            )
+        );
+
+    assert(failed.valid());
+
+    failed.wait();
+
+    assert(failed.isReady());
+    assert(failed.isFailed());
+    assert(!failed.isCompleted());
+    assert(failed.exception());
+
+
+    bool failureRethrown = false;
+
+    try
+    {
+        failed.rethrowIfFailed();
+    }
+    catch (const std::runtime_error& error)
+    {
+        failureRethrown =
+            std::string(error.what())
+            ==
+            "expected task failure";
+    }
+
+    assert(failureRethrown);
+
+
+    std::atomic<bool> workerSurvived{
+        false
+    };
+
+    TaskHandle recovery =
+        scheduler.submit(
+            Task(
+                [&workerSurvived]()
+                {
+                    workerSurvived.store(
+                        true,
+                        std::memory_order_relaxed
+                    );
+                }
+            )
+        );
+
+    assert(recovery.valid());
+
+    recovery.wait();
+
+    assert(recovery.isCompleted());
+    assert(workerSurvived.load(std::memory_order_relaxed));
+
+
+    scheduler.stop();
+}
+
+
+void testRejectedSubmissionsReturnInvalidHandles()
+{
+    Scheduler scheduler(
+        2,
+        16
     );
 
 
+    TaskHandle beforeStart =
+        scheduler.submit(
+            Task(
+                []()
+                {
+                }
+            )
+        );
 
-    std::cout
-        << "Scheduler OK\n";
+    assert(!beforeStart.valid());
 
 
-    std::cout
-        << "Executed tasks: "
-        << counter.load()
-        << "\n";
+    scheduler.start();
 
-    std::atomic<int> lockfreeCounter{
+    TaskHandle invalidTask =
+        scheduler.submit(
+            Task{}
+        );
+
+    assert(!invalidTask.valid());
+
+    scheduler.stop();
+
+
+    TaskHandle afterStop =
+        scheduler.submit(
+            Task(
+                []()
+                {
+                }
+            )
+        );
+
+    assert(!afterStop.valid());
+
+
+    Scheduler noWorkers(
+        0,
+        16
+    );
+
+    noWorkers.start();
+
+    TaskHandle noWorkerHandle =
+        noWorkers.submit(
+            Task(
+                []()
+                {
+                }
+            )
+        );
+
+    assert(!noWorkerHandle.valid());
+
+    noWorkers.stop();
+}
+
+
+void testCustomQueueTasksCanBeJoined()
+{
+    std::atomic<int> counter{
         0
     };
 
-
-    Scheduler lockfree(
+    Scheduler scheduler(
         std::make_unique<LockFreeQueue>(128),
         4
     );
 
+    scheduler.start();
 
-    lockfree.start();
+
+    std::vector<TaskHandle> handles;
+
+    handles.reserve(taskCount);
 
 
-    for (int i = 0; i < 100; ++i)
+    for (int i = 0; i < taskCount; ++i)
     {
-        bool submitted =
-            lockfree.submit(
+        TaskHandle submitted =
+            scheduler.submit(
                 Task(
-                    [&lockfreeCounter]()
+                    [&counter]()
                     {
-                        lockfreeCounter.fetch_add(
+                        counter.fetch_add(
                             1,
                             std::memory_order_relaxed
                         );
@@ -94,45 +321,37 @@ int main()
                 )
             );
 
-        assert(submitted);
+        assert(submitted.valid());
+
+        handles.push_back(
+            std::move(submitted)
+        );
     }
 
 
-    auto start =
-    std::chrono::steady_clock::now();
-
-
-    while (lockfreeCounter.load() != 100)
-    {
-        if (
-            std::chrono::steady_clock::now() - start
-            >
-            std::chrono::seconds(2)
-        )
-        {
-            break;
-        }
-
-        std::this_thread::yield();
-    }
-
-    lockfree.stop();
-
-    assert(
-        lockfreeCounter.load() == 100
+    waitForSuccessfulTasks(
+        handles
     );
 
+    scheduler.stop();
+
+
+    assert(counter.load(std::memory_order_relaxed) == taskCount);
+}
+
+} // namespace
+
+
+int main()
+{
+    testAcceptedTasksCanBeJoined();
+    testFailedTaskDoesNotStopWorker();
+    testRejectedSubmissionsReturnInvalidHandles();
+    testCustomQueueTasksCanBeJoined();
+
 
     std::cout
-        << "LockFreeQueue OK\n";
-
-
-    std::cout
-        << "Executed tasks: "
-        << lockfreeCounter.load()
-        << "\n";
-
-
+        << "Scheduler synchronization OK\n";
 
 
     return 0;

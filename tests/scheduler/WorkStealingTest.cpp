@@ -1,18 +1,27 @@
-#include "scheduler/Scheduler.hpp"
 #include "scheduler/LockFreeQueue.hpp"
+#include "scheduler/Scheduler.hpp"
 
 #include <atomic>
 #include <cassert>
-#include <chrono>
 #include <iostream>
-#include <thread>
+#include <memory>
+#include <utility>
+#include <vector>
 
 
-int main()
+namespace
 {
-    using namespace pi::scheduler;
+
+using pi::scheduler::LockFreeQueue;
+using pi::scheduler::Scheduler;
+using pi::scheduler::Task;
+using pi::scheduler::TaskHandle;
+
+constexpr int taskCount = 10000;
 
 
+void testSubmittedLoadCompletesWithHandles()
+{
     std::atomic<int> counter{
         0
     };
@@ -27,9 +36,14 @@ int main()
     scheduler.start();
 
 
-    for (int i = 0; i < 10000; ++i)
+    std::vector<TaskHandle> handles;
+
+    handles.reserve(taskCount);
+
+
+    for (int i = 0; i < taskCount; ++i)
     {
-        bool submitted =
+        TaskHandle submitted =
             scheduler.submit(
                 Task(
                     [&counter]()
@@ -43,35 +57,19 @@ int main()
             );
 
 
-        assert(submitted);
+        assert(submitted.valid());
+
+        handles.push_back(
+            std::move(submitted)
+        );
     }
 
 
-    auto start =
-        std::chrono::steady_clock::now();
-
-
-    while (
-        counter.load(
-            std::memory_order_relaxed
-        )
-        !=
-        10000
-    )
+    for (auto& handle : handles)
     {
-        if (
-            std::chrono::steady_clock::now()
-            -
-            start
-            >
-            std::chrono::seconds(5)
-        )
-        {
-            break;
-        }
+        handle.wait();
 
-
-        std::this_thread::yield();
+        assert(handle.isCompleted());
     }
 
 
@@ -81,18 +79,20 @@ int main()
     assert(
         counter.load()
         ==
-        10000
+        taskCount
     );
+}
+
+} // namespace
+
+
+int main()
+{
+    testSubmittedLoadCompletesWithHandles();
 
 
     std::cout
-        << "WorkStealing OK\n";
-
-
-    std::cout
-        << "Executed tasks: "
-        << counter.load()
-        << "\n";
+        << "Scheduler load handles OK\n";
 
 
     return 0;

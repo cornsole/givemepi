@@ -55,7 +55,7 @@ void Scheduler::stop()
 }
 
 
-bool Scheduler::submit(
+TaskHandle Scheduler::submit(
     Task task
 )
 {

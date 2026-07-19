@@ -1,21 +1,14 @@
 #pragma once
 
-#include <cstdint>
+#include "scheduler/TaskHandle.hpp"
+
 #include <functional>
+#include <memory>
 #include <utility>
 
 
 namespace pi::scheduler
 {
-
-enum class TaskState : std::uint8_t
-{
-    Pending,
-    Running,
-    Completed,
-    Failed
-};
-
 
 class Task
 {
@@ -25,13 +18,18 @@ public:
         std::function<void()>;
 
 
+    /// Create an invalid task with no callable or shared state.
     Task() = default;
 
 
+    /// Create a task and the shared state observed by its handle.
     explicit Task(
         Function function
     )
-        : function_(std::move(function))
+        : function_(std::move(function)),
+          shared_state_(
+              std::make_shared<detail::TaskSharedState>()
+          )
     {
     }
 
@@ -44,23 +42,31 @@ public:
     Task& operator=(Task&&) noexcept = default;
 
 
+    /// Execute the callable at most once and publish its terminal state.
+    /// Callable exceptions are captured in the shared state.
     void execute();
 
 
+    /// Return the task's current lifecycle state.
     [[nodiscard]]
     TaskState state() const noexcept;
 
 
+    /// Check whether the task has an executable callable and shared state.
     [[nodiscard]]
     bool valid() const noexcept;
+
+
+    /// Create a move-only handle observing this task's shared state.
+    [[nodiscard]]
+    TaskHandle handle() const noexcept;
 
 
 private:
 
     Function function_;
 
-    TaskState state_ =
-        TaskState::Pending;
+    std::shared_ptr<detail::TaskSharedState> shared_state_;
 
 };
 

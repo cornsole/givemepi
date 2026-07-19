@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scheduler/Task.hpp"
+#include "scheduler/TaskHandle.hpp"
 #include "scheduler/ThreadPool.hpp"
 
 #include <cstddef>
@@ -42,7 +43,10 @@ public:
     void stop();
 
 
-    bool submit(
+    /// Submit one task and return a handle when the task is accepted.
+    /// Returns an invalid handle when the scheduler cannot accept the task.
+    [[nodiscard]]
+    TaskHandle submit(
         Task task
     );
 

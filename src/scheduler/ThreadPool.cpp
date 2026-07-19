@@ -1,4 +1,5 @@
 #include "scheduler/ThreadPool.hpp"
+#include "scheduler/TaskHandle.hpp"
 
 #include <utility>
 
@@ -74,20 +75,27 @@ void ThreadPool::stop()
 }
 
 
-bool ThreadPool::submit(
+TaskHandle ThreadPool::submit(
     Task task
 )
 {
     if (!running_)
     {
-        return false;
+        return {};
     }
 
 
-    if (workers_.empty())
+    if (
+        workers_.empty()
+        || !task.valid()
+    )
     {
-        return false;
+        return {};
     }
+
+
+    TaskHandle handle =
+        task.handle();
 
 
     auto index =
@@ -104,7 +112,7 @@ bool ThreadPool::submit(
     );
 
 
-    return true;
+    return handle;
 }
 
 

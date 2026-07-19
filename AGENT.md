@@ -6,11 +6,12 @@ When starting a new implementation session, always read the following files in o
 
 
 1. AGENT.md
-2. DECISIONS.md
-3. ROADMAP.md
-4. CHECKLIST.md
-5. CHANGELOG.md
-6. Current source files
+2. docs/DECISIONS.md
+3. docs/ROADMAP.md
+4. docs/IMPLEMENTATION_PLAN.md
+5. docs/CHECKLIST.md
+6. docs/CHANGELOG.md
+7. Current source files
 
 The following md files are in the docs folder
 
@@ -23,11 +24,12 @@ Session End Procedure
 Before ending a session:
 
 1. Verify code builds.
-2. Update CHECKLIST.md.
-3. Update CHANGELOG.md.
-4. Update DECISIONS.md if architecture changed.
-5. Update ROADMAP.md if priorities changed.
-6. Leave clear TODOs for the next contributor.
+2. Update docs/CHECKLIST.md.
+3. Update docs/CHANGELOG.md.
+4. Update docs/DECISIONS.md if architecture changed.
+5. Update docs/ROADMAP.md if priorities changed.
+6. Update docs/IMPLEMENTATION_PLAN.md if an approved plan or PR boundary changed.
+7. Leave clear TODOs for the next contributor in docs/IMPLEMENTATION_PLAN.md.
 
 # Project
 
@@ -222,6 +224,11 @@ If implementation order changes
 
 update roadmap.
 
+IMPLEMENTATION_PLAN.md
+
+If an approved implementation sequence, PR boundary, or future extension plan
+changes, update the implementation plan after user confirmation.
+
 Never leave documentation behind code.
 
 Documentation is considered part of the implementation.
@@ -283,11 +290,48 @@ Rules:
 
 # AI Collaboration Rules
 
+## Planning Document Rule
+
+Agent-authored implementation plans belong in:
+
+docs/IMPLEMENTATION_PLAN.md
+
+Before recording a new plan or changing an existing plan:
+
+1. Present the proposed plan to the user.
+2. Wait for explicit user approval.
+3. Record only the approved scope.
+
+Never store agent-authored plans in `PR-progress/`.
+
+## PR-progress Ownership Rule
+
+The `PR-progress/` directory is reserved for the developer's own work records.
+
+Agents may read these records when needed to understand current work, but must
+not create, edit, append, delete, rename, move, reformat, or replace files in
+`PR-progress/` unless the user explicitly requests that exact operation.
+
+Do not use `PR-progress/` for:
+
+- agent implementation plans
+- future PR proposals
+- generated checklists
+- session summaries
+- agent status tracking
+
+When leaving agent TODOs or approved future plans, use
+`docs/IMPLEMENTATION_PLAN.md`.
+
 ## PR Work Sequence Rule
 
 At the start of every PR implementation:
 
-Always write the planned work sequence before modifying code.
+Read the approved work sequence from `docs/IMPLEMENTATION_PLAN.md` before
+modifying code.
+
+If no approved sequence exists, propose one to the user and wait for approval
+before recording it in `docs/IMPLEMENTATION_PLAN.md`.
 
 Example:
 
