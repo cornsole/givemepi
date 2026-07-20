@@ -77,6 +77,12 @@ bool Scheduler::running() const noexcept
 }
 
 
+bool Scheduler::ownsCurrentWorker() const noexcept
+{
+    return pool_->ownsCurrentWorker();
+}
+
+
 SchedulerState Scheduler::state() const noexcept
 {
     return pool_->state();

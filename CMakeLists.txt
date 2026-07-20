@@ -356,6 +356,15 @@ add_executable(binary-test
     src/binary/BinarySplitter.cpp
 
     src/bigint/GMPInteger.cpp
+
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
 )
 
 add_test(
@@ -372,6 +381,7 @@ target_include_directories(binary-test
 target_link_libraries(binary-test
     PRIVATE
         gmp
+        Threads::Threads
 )
 
 

@@ -1,8 +1,14 @@
 #include "binary/BinarySplitter.hpp"
+#include "scheduler/Scheduler.hpp"
+#include "scheduler/Task.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 
 using pi::bigint::GMPInteger;
@@ -135,6 +141,45 @@ BinaryNode splitSequentialValidated(
     );
 }
 
+
+void waitForStage(
+    std::vector<scheduler::TaskHandle>& handles
+)
+{
+    for (const scheduler::TaskHandle& handle : handles)
+    {
+        handle.wait();
+    }
+
+
+    for (const scheduler::TaskHandle& handle : handles)
+    {
+        handle.rethrowIfFailed();
+    }
+}
+
+
+std::size_t boundedBlockCount(
+    std::size_t termCount,
+    std::size_t sequentialCutoff,
+    std::size_t workerCount,
+    std::size_t tasksPerWorker
+) noexcept
+{
+    const std::size_t requestedBlocks =
+        1 + (termCount - 1) / sequentialCutoff;
+
+    const std::size_t maximumBlocks =
+        workerCount > std::numeric_limits<std::size_t>::max() / tasksPerWorker
+        ? std::numeric_limits<std::size_t>::max()
+        : workerCount * tasksPerWorker;
+
+    return std::min(
+        requestedBlocks,
+        maximumBlocks
+    );
+}
+
 } // namespace
 
 BinaryNode BinarySplitter::merge(
@@ -239,6 +284,208 @@ BinaryNode BinarySplitter::splitParallel(
         start,
         end
     );
+}
+
+
+BinaryNode BinarySplitter::splitParallel(
+    std::size_t start,
+    std::size_t end,
+    scheduler::Scheduler& executor,
+    std::size_t sequentialCutoff
+)
+{
+    return splitParallel(
+        start,
+        end,
+        executor,
+        ParallelSplitOptions{
+            sequentialCutoff,
+            4
+        }
+    );
+}
+
+
+BinaryNode BinarySplitter::splitParallel(
+    std::size_t start,
+    std::size_t end,
+    scheduler::Scheduler& executor,
+    const ParallelSplitOptions& options
+)
+{
+    validateRange(start, end);
+
+    if (options.sequentialCutoff == 0)
+    {
+        throw std::invalid_argument(
+            "Binary Splitting sequential cutoff must be greater than zero"
+        );
+    }
+
+    if (options.tasksPerWorker == 0)
+    {
+        throw std::invalid_argument(
+            "Binary Splitting tasks per worker must be greater than zero"
+        );
+    }
+
+
+    const std::size_t termCount = end - start;
+
+    if (termCount <= options.sequentialCutoff
+        || !executor.running()
+        || executor.workerCount() == 0
+        || executor.ownsCurrentWorker())
+    {
+        return splitSequentialValidated(start, end);
+    }
+
+
+    const std::size_t blockCount = boundedBlockCount(
+        termCount,
+        options.sequentialCutoff,
+        executor.workerCount(),
+        options.tasksPerWorker
+    );
+
+    if (blockCount < 2)
+    {
+        return splitSequentialValidated(start, end);
+    }
+
+
+    std::vector<std::optional<BinaryNode>> leafResults(blockCount);
+    std::vector<scheduler::TaskHandle> handles;
+    handles.reserve(blockCount);
+
+    const std::size_t baseBlockSize = termCount / blockCount;
+    const std::size_t largerBlockCount = termCount % blockCount;
+    std::size_t blockStart = start;
+
+    for (std::size_t index = 0; index < blockCount; ++index)
+    {
+        const std::size_t blockSize =
+            baseBlockSize + (index < largerBlockCount ? 1 : 0);
+        const std::size_t blockEnd = blockStart + blockSize;
+
+        scheduler::TaskHandle handle = executor.submit(
+            scheduler::Task(
+                [&leafResults, index, blockStart, blockEnd]()
+                {
+                    leafResults[index].emplace(
+                        splitSequentialValidated(blockStart, blockEnd)
+                    );
+                }
+            )
+        );
+
+        if (handle.valid())
+        {
+            handles.push_back(std::move(handle));
+        }
+        else
+        {
+            leafResults[index].emplace(
+                splitSequentialValidated(blockStart, blockEnd)
+            );
+        }
+
+        blockStart = blockEnd;
+    }
+
+    waitForStage(handles);
+
+
+    std::vector<BinaryNode> nodes;
+    nodes.reserve(blockCount);
+
+    for (std::optional<BinaryNode>& result : leafResults)
+    {
+        nodes.push_back(std::move(result.value()));
+    }
+
+
+    while (nodes.size() > 1)
+    {
+        const std::size_t pairCount = nodes.size() / 2;
+
+        if (pairCount == 1)
+        {
+            std::vector<BinaryNode> finalLevel;
+            finalLevel.reserve(1 + nodes.size() % 2);
+            finalLevel.push_back(
+                merge(nodes[0], nodes[1])
+            );
+
+            if (nodes.size() % 2 != 0)
+            {
+                finalLevel.push_back(std::move(nodes.back()));
+            }
+
+            nodes = std::move(finalLevel);
+            continue;
+        }
+
+        std::vector<std::optional<BinaryNode>> mergeResults(
+            pairCount
+        );
+        handles.clear();
+        handles.reserve(pairCount);
+
+        for (std::size_t pair = 0; pair < pairCount; ++pair)
+        {
+            const std::size_t leftIndex = pair * 2;
+
+            scheduler::TaskHandle handle = executor.submit(
+                scheduler::Task(
+                    [&nodes, &mergeResults, pair, leftIndex]()
+                    {
+                        mergeResults[pair].emplace(
+                            BinarySplitter::merge(
+                                nodes[leftIndex],
+                                nodes[leftIndex + 1]
+                            )
+                        );
+                    }
+                )
+            );
+
+            if (handle.valid())
+            {
+                handles.push_back(std::move(handle));
+            }
+            else
+            {
+                mergeResults[pair].emplace(
+                    merge(
+                        nodes[leftIndex],
+                        nodes[leftIndex + 1]
+                    )
+                );
+            }
+        }
+
+        waitForStage(handles);
+
+
+        std::vector<BinaryNode> nextLevel;
+        nextLevel.reserve(pairCount + nodes.size() % 2);
+
+        for (std::optional<BinaryNode>& result : mergeResults)
+        {
+            nextLevel.push_back(std::move(result.value()));
+        }
+
+        if (nodes.size() % 2 != 0)
+        {
+            nextLevel.push_back(std::move(nodes.back()));
+        }
+
+        nodes = std::move(nextLevel);
+    }
+
+
+    return std::move(nodes.front());
 }
 
 } // namespace pi::binary

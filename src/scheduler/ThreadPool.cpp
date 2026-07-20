@@ -283,6 +283,13 @@ bool ThreadPool::running() const noexcept
 }
 
 
+bool ThreadPool::ownsCurrentWorker() const noexcept
+{
+    return Worker::currentWorker_ != nullptr
+        && Worker::currentWorker_->owner_ == this;
+}
+
+
 SchedulerState ThreadPool::state() const noexcept
 {
     return state_.load(

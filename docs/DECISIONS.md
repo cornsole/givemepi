@@ -1079,3 +1079,64 @@ publication has an explicit memory-ordering contract.
 Direct tests validate capacity boundaries, FIFO and slot reuse, unused-capacity
 producer contention, and exactly-once execution under concurrent producers and
 consumers.
+
+---
+
+## ADR-0025
+
+Date
+
+2026-07-20
+
+Status
+
+Accepted
+
+Title
+
+Use a Staged DAG for Parallel Binary Splitting
+
+Decision
+
+Parallel Binary Splitting uses a caller-orchestrated staged DAG rather than
+recursive worker tasks that submit child tasks and wait for their handles.
+
+The caller partitions the input into balanced sequential leaf blocks, bounded
+by an explicit tasks-per-worker policy. Tasks write exclusively owned result
+slots and never wait for other tasks. After joining one complete level, the
+caller submits adjacent P/Q/T merges for the next level. Levels with fewer than
+two merge pairs execute inline.
+
+The parallel API receives a scheduler reference and an explicit cutoff. It
+falls back synchronously for small ranges, stopped or zero-worker schedulers,
+calls from a worker owned by that scheduler, and rejected submissions.
+
+Reason
+
+The scheduler's `TaskHandle::wait()` blocks but does not execute queued work.
+Recursive fork/join can therefore occupy every worker with a parent waiting on
+children that remain in local queues. A staged DAG has no worker-side waits and
+makes every dependency boundary explicit.
+
+Bounded independent blocks limit task metadata, expose useful parallelism, and
+map naturally to future checkpoint, progress, NUMA, and memory-reclamation
+stages. Internal result slots avoid expanding the completion-only task handle
+into a generic future before other consumers require that abstraction.
+
+Alternatives
+
+- Submit recursive child tasks and block worker threads on their handles.
+- Add cooperative wait-and-help behavior to the scheduler in the same PR.
+- Introduce a generic typed future and task graph runtime before parallelizing.
+- Use a global scheduler and a hidden fixed cutoff.
+
+Consequence
+
+Parallel execution cannot deadlock from every worker waiting on queued child
+work. Sequential and fallback paths retain exact P/Q/T equality, and task count
+is bounded by worker count rather than total term count.
+
+The caller synchronizes between merge levels, and current-worker calls do not
+parallelize. Cooperative scheduler waits and a generic task DAG remain possible
+future extensions if broader workloads justify their complexity with
+benchmarks.

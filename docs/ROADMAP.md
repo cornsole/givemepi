@@ -73,9 +73,9 @@ Binary Splitting
 [x] Chudnovsky Leaf Integration (PR-0018)
 [x] Input Range Validation (PR-0018)
 [x] Small Known-Digits Integration Test (PR-0018)
-[ ] Parallel Cutoff Policy (PR-0019)
-[ ] Parallel Execution (PR-0019)
-[ ] Parallel Merge (PR-0019)
+[x] Parallel Cutoff Policy (PR-0019)
+[x] Parallel Execution (PR-0019)
+[x] Parallel Merge (PR-0019)
 
 ----------------------
 

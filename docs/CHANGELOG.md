@@ -12,6 +12,26 @@
   Chudnovsky leaf, parallel Binary Splitting, checkpoint, progress, and final
   output stages.
 
+## [0.10.0] - PR-0019
+
+### Added
+
+- Added a scheduler-aware Binary Splitting API with explicit sequential-cutoff
+  and tasks-per-worker policy values.
+- Added read-only detection of whether the current thread belongs to a given
+  scheduler for deadlock-safe nested-call fallback.
+- Added stopped, zero-worker, queue-rejection, worker-context, cutoff, exact
+  result equality, and observable multi-worker execution coverage.
+
+### Changed
+
+- Changed parallel-compatible Binary Splitting from a sequential placeholder
+  to a staged DAG of balanced leaf blocks and adjacent parallel merge levels.
+- Kept task result slots internal to Binary Splitting instead of expanding the
+  scheduler completion handle into a generic future.
+- Execute final merge levels inline when fewer than two merge pairs are
+  available, avoiding scheduler overhead without available parallelism.
+
 ## [0.9.0] - PR-0018
 
 ### Added

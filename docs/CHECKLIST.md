@@ -202,11 +202,19 @@
 
 [x] Binary Splitting Boundary and Regression Coverage
 
-[ ] Parallel Cutoff Policy
+[x] Parallel Cutoff Policy
 
-[ ] Parallel Execution
+[x] Parallel Execution
 
-[ ] Parallel Merge
+[x] Parallel Merge
+
+[x] Staged Parallel DAG
+
+[x] Parallel Submission Fallback
+
+[x] Worker-Context Deadlock Avoidance
+
+[x] Observable Parallel Binary Splitting Test
 
 -----------------
 

@@ -3,8 +3,21 @@
 #include "binary/BinaryNode.hpp"
 
 
+namespace pi::scheduler
+{
+class Scheduler;
+}
+
+
 namespace pi::binary
 {
+
+struct ParallelSplitOptions
+{
+    std::size_t sequentialCutoff;
+    std::size_t tasksPerWorker = 4;
+};
+
 
 class BinarySplitter
 {
@@ -41,6 +54,37 @@ public:
     static BinaryNode splitParallel(
         std::size_t start,
         std::size_t end
+    );
+
+    /**
+     * Computes [start, end) through a staged parallel Binary Splitting DAG.
+     *
+     * Input: a running scheduler and a non-zero minimum sequential block size.
+     * Output: the same P/Q/T node as splitSequential().
+     * Time complexity: O(n log(n)^2) arithmetic work, distributed by stage.
+     * Memory complexity: O(min(n / cutoff, worker count)) result nodes.
+     *
+     * @throws std::invalid_argument if the range is invalid or cutoff is zero.
+     */
+    [[nodiscard]]
+    static BinaryNode splitParallel(
+        std::size_t start,
+        std::size_t end,
+        scheduler::Scheduler& executor,
+        std::size_t sequentialCutoff
+    );
+
+    /**
+     * Computes [start, end) using an explicit parallel execution policy.
+     *
+     * @throws std::invalid_argument if either policy value is zero.
+     */
+    [[nodiscard]]
+    static BinaryNode splitParallel(
+        std::size_t start,
+        std::size_t end,
+        scheduler::Scheduler& executor,
+        const ParallelSplitOptions& options
     );
 
     [[nodiscard]]

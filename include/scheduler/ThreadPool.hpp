@@ -62,6 +62,11 @@ public:
     bool running() const noexcept;
 
 
+    /// Check whether the current thread is a worker owned by this pool.
+    [[nodiscard]]
+    bool ownsCurrentWorker() const noexcept;
+
+
     /// Return the current scheduler lifecycle state.
     [[nodiscard]]
     SchedulerState state() const noexcept;

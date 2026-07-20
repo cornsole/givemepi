@@ -1,5 +1,8 @@
 #include "binary/BinaryNode.hpp"
 #include "binary/BinarySplitter.hpp"
+#include "scheduler/IQueue.hpp"
+#include "scheduler/Scheduler.hpp"
+#include "scheduler/Task.hpp"
 
 #include <gmp.h>
 
@@ -7,15 +10,137 @@
 #include <cstring>
 #include <iostream>
 #include <limits>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <queue>
+#include <set>
 #include <stdexcept>
+#include <thread>
 
 
 using pi::binary::BinaryNode;
 using pi::binary::BinarySplitter;
+using pi::binary::ParallelSplitOptions;
+using pi::scheduler::IQueue;
+using pi::scheduler::Scheduler;
+using pi::scheduler::Task;
 
 
 namespace
 {
+
+class RejectingQueue final : public IQueue
+{
+public:
+
+    bool push(Task) override
+    {
+        return false;
+    }
+
+
+    std::optional<Task> pop() override
+    {
+        return std::nullopt;
+    }
+
+
+    [[nodiscard]]
+    bool empty() const noexcept override
+    {
+        return true;
+    }
+
+
+    [[nodiscard]]
+    std::size_t capacity() const noexcept override
+    {
+        return 0;
+    }
+};
+
+
+class DistinctWorkerQueue final : public IQueue
+{
+public:
+
+    explicit DistinctWorkerQueue(
+        std::size_t capacity
+    )
+        : capacity_(capacity)
+    {
+    }
+
+
+    bool push(Task task) override
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        if (tasks_.size() >= capacity_)
+        {
+            return false;
+        }
+
+        tasks_.push(std::move(task));
+        return true;
+    }
+
+
+    std::optional<Task> pop() override
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        if (tasks_.empty())
+        {
+            return std::nullopt;
+        }
+
+        const std::thread::id current = std::this_thread::get_id();
+
+        if (workerThreads_.size() < 2
+            && workerThreads_.contains(current))
+        {
+            return std::nullopt;
+        }
+
+        workerThreads_.insert(current);
+        Task task = std::move(tasks_.front());
+        tasks_.pop();
+        return task;
+    }
+
+
+    [[nodiscard]]
+    bool empty() const noexcept override
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return tasks_.empty();
+    }
+
+
+    [[nodiscard]]
+    std::size_t capacity() const noexcept override
+    {
+        return capacity_;
+    }
+
+
+    [[nodiscard]]
+    std::size_t workerThreadCount() const noexcept
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return workerThreads_.size();
+    }
+
+
+private:
+
+    const std::size_t capacity_;
+    mutable std::mutex mutex_;
+    std::queue<Task> tasks_;
+    std::set<std::thread::id> workerThreads_;
+};
 
 using SplitFunction = BinaryNode (*)(std::size_t, std::size_t);
 
@@ -368,6 +493,249 @@ int main()
     {
         std::cerr
             << "Multi-level recursive range mismatch\n";
+
+        return 1;
+    }
+
+
+    Scheduler stoppedScheduler(2, 64);
+
+    if (!nodesEqual(
+            recursiveRange,
+            BinarySplitter::splitParallel(
+                0,
+                16,
+                stoppedScheduler,
+                2
+            )
+        ))
+    {
+        std::cerr
+            << "Stopped scheduler fallback failed\n";
+
+        return 1;
+    }
+
+
+    bool rejectedZeroCutoff = false;
+
+    try
+    {
+        static_cast<void>(
+            BinarySplitter::splitParallel(
+                0,
+                16,
+                stoppedScheduler,
+                0
+            )
+        );
+    }
+    catch (const std::invalid_argument&)
+    {
+        rejectedZeroCutoff = true;
+    }
+
+    if (!rejectedZeroCutoff)
+    {
+        std::cerr
+            << "Zero parallel cutoff was accepted\n";
+
+        return 1;
+    }
+
+
+    bool rejectedZeroTasksPerWorker = false;
+
+    try
+    {
+        static_cast<void>(
+            BinarySplitter::splitParallel(
+                0,
+                16,
+                stoppedScheduler,
+                ParallelSplitOptions{
+                    1,
+                    0
+                }
+            )
+        );
+    }
+    catch (const std::invalid_argument&)
+    {
+        rejectedZeroTasksPerWorker = true;
+    }
+
+    if (!rejectedZeroTasksPerWorker)
+    {
+        std::cerr
+            << "Zero tasks-per-worker policy was accepted\n";
+
+        return 1;
+    }
+
+
+    Scheduler zeroWorkerScheduler(0, 2);
+    zeroWorkerScheduler.start();
+
+    const BinaryNode zeroWorkerResult =
+        BinarySplitter::splitParallel(
+            0,
+            16,
+            zeroWorkerScheduler,
+            1
+        );
+
+    zeroWorkerScheduler.stop();
+
+    if (!nodesEqual(recursiveRange, zeroWorkerResult))
+    {
+        std::cerr
+            << "Zero-worker scheduler fallback failed\n";
+
+        return 1;
+    }
+
+
+    Scheduler parallelScheduler(4, 128);
+    parallelScheduler.start();
+
+    const BinaryNode parallelDagResult =
+        BinarySplitter::splitParallel(
+            0,
+            16,
+            parallelScheduler,
+            1
+        );
+
+    const BinaryNode unevenSequentialResult =
+        BinarySplitter::splitSequential(
+            0,
+            17
+        );
+
+    const BinaryNode unevenParallelResult =
+        BinarySplitter::splitParallel(
+            0,
+            17,
+            parallelScheduler,
+            ParallelSplitOptions{
+                4,
+                2
+            }
+        );
+
+    const BinaryNode cutoffBoundarySequential =
+        BinarySplitter::splitSequential(
+            0,
+            4
+        );
+
+    const BinaryNode cutoffBoundaryParallel =
+        BinarySplitter::splitParallel(
+            0,
+            4,
+            parallelScheduler,
+            4
+        );
+
+    parallelScheduler.stop();
+
+    if (!nodesEqual(recursiveRange, parallelDagResult)
+        || !nodesEqual(unevenSequentialResult, unevenParallelResult)
+        || !nodesEqual(
+            cutoffBoundarySequential,
+            cutoffBoundaryParallel
+        ))
+    {
+        std::cerr
+            << "Parallel DAG result mismatch\n";
+
+        return 1;
+    }
+
+
+    auto rejectingQueue = std::make_unique<RejectingQueue>();
+    Scheduler rejectingScheduler(std::move(rejectingQueue), 2);
+    rejectingScheduler.start();
+
+    const BinaryNode rejectedSubmissionResult =
+        BinarySplitter::splitParallel(
+            0,
+            16,
+            rejectingScheduler,
+            1
+        );
+
+    rejectingScheduler.stop();
+
+    if (!nodesEqual(recursiveRange, rejectedSubmissionResult))
+    {
+        std::cerr
+            << "Rejected submission fallback failed\n";
+
+        return 1;
+    }
+
+
+    Scheduler workerFallbackScheduler(2, 32);
+    workerFallbackScheduler.start();
+    std::optional<BinaryNode> workerFallbackResult;
+    bool observedOwnedWorker = false;
+
+    pi::scheduler::TaskHandle workerFallbackHandle =
+        workerFallbackScheduler.submit(
+            Task(
+                [&]()
+                {
+                    observedOwnedWorker =
+                        workerFallbackScheduler.ownsCurrentWorker();
+                    workerFallbackResult.emplace(
+                        BinarySplitter::splitParallel(
+                            0,
+                            16,
+                            workerFallbackScheduler,
+                            1
+                        )
+                    );
+                }
+            )
+        );
+
+    workerFallbackHandle.wait();
+    workerFallbackHandle.rethrowIfFailed();
+    workerFallbackScheduler.stop();
+
+    if (!observedOwnedWorker
+        || !workerFallbackResult.has_value()
+        || !nodesEqual(recursiveRange, *workerFallbackResult))
+    {
+        std::cerr
+            << "Worker-context sequential fallback failed\n";
+
+        return 1;
+    }
+
+
+    auto distinctQueue = std::make_unique<DistinctWorkerQueue>(128);
+    DistinctWorkerQueue* distinctQueueObserver = distinctQueue.get();
+    Scheduler observedParallelScheduler(std::move(distinctQueue), 4);
+    observedParallelScheduler.start();
+
+    const BinaryNode observedParallelResult =
+        BinarySplitter::splitParallel(
+            0,
+            16,
+            observedParallelScheduler,
+            1
+        );
+
+    observedParallelScheduler.stop();
+
+    if (!nodesEqual(recursiveRange, observedParallelResult)
+        || distinctQueueObserver->workerThreadCount() < 2)
+    {
+        std::cerr
+            << "Observable parallel execution failed\n";
 
         return 1;
     }

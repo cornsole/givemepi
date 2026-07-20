@@ -16,7 +16,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0016 | Task synchronization foundation | Complete |
 | PR-0017 | Scheduler correctness hardening | Complete |
 | PR-0018 | Chudnovsky leaf and range validation | Complete |
-| PR-0019 | Cutoff-based parallel Binary Splitting | Planned |
+| PR-0019 | Cutoff-based parallel Binary Splitting | Complete |
 | PR-0020 | P/Q/T checkpoint block foundation | Planned |
 | PR-0021 | Checkpoint integrity verification | Planned |
 | PR-0022 | Progress snapshot and reporting | Planned |
@@ -362,6 +362,72 @@ parallel while keeping small ranges sequential.
 - preserve sequential fallback
 - test sequential and parallel result equality with real Chudnovsky values
 - measure scheduling overhead before tuning the cutoff
+
+### Parallel Execution Contract
+
+PR-0019 uses a staged Binary Splitting DAG instead of recursive worker tasks
+that submit children and block. The current scheduler does not execute queued
+work while a worker waits on a `TaskHandle`; recursive fork/join could therefore
+leave every worker waiting while child tasks remain queued.
+
+The caller partitions `[start, end)` into balanced sequential leaf blocks. The
+number of blocks is bounded by the worker count so task metadata and scheduler
+overhead do not grow linearly with a very large term count. Each accepted task
+writes one exclusively owned result slot and never waits for another task.
+
+After all leaf blocks are complete, adjacent results are merged in parallel
+levels until one root remains. The caller joins each complete level before
+starting the next, making dependencies explicit and providing natural future
+boundaries for checkpointing, progress reporting, NUMA placement, and memory
+reclamation.
+
+The public parallel API receives a `Scheduler&` and an explicit execution
+policy containing the sequential cutoff and target tasks per worker. A
+cutoff-only convenience overload retains a measured default task multiplier.
+It does not use a global scheduler or read application configuration.
+If the range is below the cutoff, the scheduler is stopped or has no workers,
+the call originates from one of the scheduler's own workers, or an individual
+submission is rejected, affected work executes synchronously. Every path must
+produce exactly the same P/Q/T result as `splitSequential()`.
+
+Task failures are rethrown by the caller after joining their handles. Result
+storage remains internal to Binary Splitting; PR-0019 does not turn the
+scheduler completion-only `TaskHandle` into a generic future.
+
+### Work Sequence
+
+1. Expose read-only detection of the scheduler's current worker context.
+2. Add the scheduler-aware `splitParallel()` overload and validate cutoff.
+3. Partition large ranges into a bounded set of balanced sequential blocks.
+4. Execute leaf blocks through accepted tasks or synchronous fallback.
+5. Join and rethrow task failures before consuming result slots.
+6. Execute adjacent merge pairs as staged parallel levels.
+7. Test exact equality, cutoff behavior, stopped/zero-worker fallback,
+   submission rejection, worker-call fallback, and observable concurrency.
+8. Measure representative task sizes before selecting a production default.
+
+### Completion
+
+PR-0019 was completed on 2026-07-20.
+
+- Large ranges execute as bounded sequential leaf blocks followed by staged
+  parallel merge levels.
+- Tasks never wait for child tasks, avoiding worker-starvation deadlocks.
+- Stopped, zero-worker, owned-worker, and rejected-submission paths fall back
+  synchronously without changing P/Q/T results.
+- Tests observe task acquisition by multiple worker threads and verify exact
+  sequential equality across cutoff and uneven-range cases.
+- The task count is bounded by the configurable tasks-per-worker policy and the
+  final merge levels execute inline when no parallel pair work remains.
+- A diagnostic four-worker `-O2` measurement showed scheduler overhead at 64
+  terms and useful speedup by 256 terms; the cutoff remains explicit until the
+  production workload and target CPUs have a benchmark suite.
+
+### Next Contributor TODO
+
+Begin PR-0020 with a versioned P/Q/T checkpoint block format. Treat completed
+parallel leaf blocks as natural checkpoint candidates, keep disk I/O outside
+worker threads, and do not make a block reusable until PR-0021 validation.
 
 ---
 
