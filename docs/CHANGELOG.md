@@ -14,6 +14,9 @@
 - Reordered the approved plan to complete guarded integer fixed-point
   Chudnovsky finalization and end-to-end benchmarking before checkpoint format,
   integrity, and progress work.
+- Defined the PR-0021 canonical P/Q/T block, mathematical identity, CRC32C,
+  atomic commit, deterministic manifest, filesystem boundary, and ordered
+  implementation plan.
 
 ## [0.11.0] - PR-0020
 

@@ -529,10 +529,104 @@ range without implementing resume policy yet.
 - versioned manifest format
 - round-trip and interrupted-write tests
 
+### Computation Identity Contract
+
+Checkpoint compatibility is based on mathematical identity, not execution
+policy. The identity contains:
+
+- algorithm identifier and arithmetic-format version
+- requested digits and guard digits
+- working digits and Chudnovsky term count
+- Binary Splitting formula/version identifier
+
+Worker count, cutoff, tasks per worker, timing values, and queue capacity do not
+change P/Q/T and therefore are not compatibility fields. They may be recorded
+as optional provenance. Each block's `[start, end)` and tree level define its
+position independently of the parallel partition policy that produced it.
+
+### Canonical Block Format
+
+The codec writes fields explicitly and never dumps a native C++ struct. All
+fixed-width integers use big-endian byte order. Version 1 contains:
+
+1. fixed magic and format version
+2. encoded header size and flags
+3. mathematical computation identity
+4. `[start, end)` and tree level
+5. canonical P/Q/T sign and magnitude lengths
+6. checksum algorithm, checksum length, and checksum value
+7. canonical P/Q/T payloads
+
+GMP values use signed magnitude encoding. Zero has sign `zero` and an empty
+magnitude; positive and negative values use a minimal unsigned big-endian
+magnitude with no leading zero bytes. The decoder rejects non-canonical values
+instead of silently normalizing them.
+
+The initial checksum algorithm is CRC32C. It covers the canonical header with
+the checksum bytes zeroed plus the complete P/Q/T payload. CRC32C protects
+against accidental storage corruption; it does not replace PR-0022 independent
+modular P/Q/T verification.
+
+### Atomic Commit Contract
+
+Block and manifest updates use a temporary file in the destination directory:
+
+1. encode the complete content and checksum
+2. create a unique temporary file without replacing another writer's temp file
+3. write every byte and handle short writes
+4. flush and synchronize the file
+5. close the file successfully
+6. atomically rename it to the deterministic final path
+7. synchronize the parent directory
+
+No final filename is visible before the full file is durable. A failed write,
+sync, close, or rename leaves the previous final file untouched and removes or
+leaves only an ignorable temporary file. Tests use injected commit fault points
+rather than process timing races.
+
+### Manifest Contract
+
+The versioned manifest is an index, not proof that a block is reusable. It
+contains the computation identity and deterministic entries with range, level,
+filename, payload size, checksum metadata, and completion state. Entries are
+sorted by range and level before encoding so identical state produces identical
+bytes. Manifest replacement uses the same atomic commit protocol as blocks.
+
+PR-0022 remains responsible for validating block structure, checksums,
+manifest gaps/overlaps, and modular P/Q/T residues before resume trusts an
+entry.
+
+### Work Sequence
+
+1. Define version constants, limits, computation identity, block metadata, and
+   manifest entry value types without filesystem behavior.
+2. Add canonical GMP signed-magnitude export/import and boundary tests for
+   zero, positive, negative, and very large values.
+3. Implement endian-safe primitive encoding/decoding with checked size
+   arithmetic and no native struct serialization.
+4. Implement CRC32C and fixed checksum-coverage fixtures.
+5. Encode/decode an in-memory version-1 P/Q/T block and verify byte-stable
+   round trips.
+6. Implement same-directory temporary write, file sync, atomic rename, and
+   parent-directory sync behind one storage component.
+7. Add deterministic block naming and a synchronous `CheckpointStore` called
+   only outside scheduler worker tasks.
+8. Implement deterministic manifest encoding and atomic replacement.
+9. Add fault-injected interrupted-write tests proving the old final file is
+   preserved and partial files are never accepted as final.
+10. Run GCC, Clang, ASan, UBSan, analyzer, filesystem round-trip, and repeated
+    atomic-commit tests before documenting completion.
+
 ### Boundary
 
-Worker threads never perform checkpoint disk I/O. They publish completed block
-data to the checkpoint writer.
+Worker threads never perform checkpoint disk I/O. PR-0021 provides a
+synchronous checkpoint storage path that the stage coordinator may call only
+after completed nodes have been joined. A dedicated asynchronous writer thread
+may wrap this path later without changing the block codec or commit protocol.
+
+PR-0021 writes and round-trips checkpoint data but does not implement resume,
+trust decisions, quarantine, corruption recovery, compression, or worker-stage
+integration.
 
 The presence of a block file does not make it reusable. PR-0022 performs all
 validation before resume accepts it.
@@ -544,6 +638,9 @@ validation before resume accepts it.
 - The header can be extended through format versioning.
 - Checksum metadata is part of the initial format.
 - Existing computation paths remain independent from storage details.
+- Canonical bytes are independent of host endianness and struct layout.
+- Failed atomic commits cannot replace an existing valid final file.
+- Equivalent manifests encode to identical bytes regardless of insertion order.
 
 ---
 
