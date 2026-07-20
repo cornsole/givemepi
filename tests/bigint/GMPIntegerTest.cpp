@@ -155,6 +155,50 @@ int main()
     }
 
 
+    GMPInteger positive(
+        42
+    );
+
+
+    positive.negate();
+
+
+    if (positive.toString() != "-42")
+    {
+        std::cerr
+            << "Positive negate failed\n";
+
+        return 1;
+    }
+
+
+    positive.negate();
+
+
+    if (positive.toString() != "42")
+    {
+        std::cerr
+            << "Negative negate failed\n";
+
+        return 1;
+    }
+
+
+    GMPInteger signedZero;
+
+
+    signedZero.negate();
+
+
+    if (!signedZero.isZero() || signedZero.toString() != "0")
+    {
+        std::cerr
+            << "Zero negate failed\n";
+
+        return 1;
+    }
+
+
     std::cout
         << "GMPInteger OK\n";
 

@@ -1,8 +1,141 @@
 #include "binary/BinarySplitter.hpp"
+
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
+
+
 using pi::bigint::GMPInteger;
 
 namespace pi::binary
 {
+
+namespace
+{
+
+static_assert(
+    std::numeric_limits<std::size_t>::digits
+    <= std::numeric_limits<std::uint64_t>::digits,
+    "Binary Splitting term indices must fit in GMPInteger's input type"
+);
+
+
+BinaryNode makeChudnovskyLeaf(
+    std::size_t term,
+    std::size_t end
+)
+{
+    BinaryNode node(
+        term,
+        end
+    );
+
+
+    if (term == 0)
+    {
+        node.P() = GMPInteger(1);
+        node.Q() = GMPInteger(1);
+        node.T() = GMPInteger(13591409);
+
+        return node;
+    }
+
+
+    const GMPInteger k(
+        static_cast<std::uint64_t>(term)
+    );
+
+
+    GMPInteger firstFactor(k);
+    firstFactor.mul(GMPInteger(6));
+    firstFactor.sub(GMPInteger(5));
+
+    GMPInteger secondFactor(k);
+    secondFactor.mul(GMPInteger(2));
+    secondFactor.sub(GMPInteger(1));
+
+    GMPInteger thirdFactor(k);
+    thirdFactor.mul(GMPInteger(6));
+    thirdFactor.sub(GMPInteger(1));
+
+
+    node.P().set(firstFactor);
+    node.P().mul(secondFactor);
+    node.P().mul(thirdFactor);
+
+
+    node.Q().set(k);
+    node.Q().mul(k);
+    node.Q().mul(k);
+    node.Q().mul(GMPInteger(10939058860032000ULL));
+
+
+    node.T().set(k);
+    node.T().mul(GMPInteger(545140134));
+    node.T().add(GMPInteger(13591409));
+    node.T().mul(node.P());
+
+    if (term % 2 != 0)
+    {
+        node.T().negate();
+    }
+
+
+    return node;
+}
+
+void validateRange(
+    std::size_t start,
+    std::size_t end
+)
+{
+    if (start >= end)
+    {
+        throw std::invalid_argument(
+            "Binary Splitting requires start < end"
+        );
+    }
+}
+
+
+BinaryNode splitSequentialValidated(
+    std::size_t start,
+    std::size_t end
+)
+{
+    if (end - start == 1)
+    {
+        return makeChudnovskyLeaf(
+            start,
+            end
+        );
+    }
+
+
+    const std::size_t mid =
+        start + (end - start) / 2;
+
+
+    BinaryNode left =
+        splitSequentialValidated(
+            start,
+            mid
+        );
+
+    BinaryNode right =
+        splitSequentialValidated(
+            mid,
+            end
+        );
+
+
+    return BinarySplitter::merge(
+        left,
+        right
+    );
+}
+
+} // namespace
 
 BinaryNode BinarySplitter::merge(
     const BinaryNode& left,
@@ -81,39 +214,15 @@ BinaryNode BinarySplitter::splitSequential(
     std::size_t end
 )
 {
-    if (end - start == 1)
-    {
-        BinaryNode node(
-            start,
-            end
-        );
-
-        // leaf 계산 예정
-
-        return node;
-    }
+    validateRange(
+        start,
+        end
+    );
 
 
-    std::size_t mid =
-        start + (end - start) / 2;
-
-
-    BinaryNode left =
-        splitSequential(
-            start,
-            mid
-        );
-
-    BinaryNode right =
-        splitSequential(
-            mid,
-            end
-        );
-
-
-    return merge(
-        left,
-        right
+    return splitSequentialValidated(
+        start,
+        end
     );
 }
 

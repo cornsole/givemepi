@@ -57,6 +57,16 @@ public:
         const GMPInteger& other
     );
 
+    /**
+     * Negates this integer in place.
+     *
+     * Input: the current arbitrary-precision integer value.
+     * Output: the additive inverse of the current value.
+     * Time complexity: O(n), where n is the number of limbs.
+     * Memory complexity: O(1) auxiliary space.
+     */
+    void negate() noexcept;
+
     void set(
         const GMPInteger& other
     );

@@ -70,8 +70,9 @@ Binary Splitting
 [x] Merge
 [x] Recursive Split
 [x] Parallel API Refactoring
-[ ] Chudnovsky Leaf Integration (PR-0018)
-[ ] Input Range Validation (PR-0018)
+[x] Chudnovsky Leaf Integration (PR-0018)
+[x] Input Range Validation (PR-0018)
+[x] Small Known-Digits Integration Test (PR-0018)
 [ ] Parallel Cutoff Policy (PR-0019)
 [ ] Parallel Execution (PR-0019)
 [ ] Parallel Merge (PR-0019)

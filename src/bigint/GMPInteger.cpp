@@ -127,6 +127,15 @@ void GMPInteger::mul(
 }
 
 
+void GMPInteger::negate() noexcept
+{
+    mpz_neg(
+        value_,
+        value_
+    );
+}
+
+
 void GMPInteger::set(
     const GMPInteger& other
 )

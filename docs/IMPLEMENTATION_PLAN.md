@@ -15,7 +15,7 @@ Agent-authored plans are added or changed here only after user approval.
 | --- | --- | --- |
 | PR-0016 | Task synchronization foundation | Complete |
 | PR-0017 | Scheduler correctness hardening | Complete |
-| PR-0018 | Chudnovsky leaf and range validation | Planned |
+| PR-0018 | Chudnovsky leaf and range validation | Complete |
 | PR-0019 | Cutoff-based parallel Binary Splitting | Planned |
 | PR-0020 | P/Q/T checkpoint block foundation | Planned |
 | PR-0021 | Checkpoint integrity verification | Planned |
@@ -289,6 +289,35 @@ P/Q/T expectations before changing the parallel path.
 Turn sequential Binary Splitting from a structural placeholder into a correct
 Chudnovsky P/Q/T computation.
 
+### Binary Splitting Contract
+
+Every Binary Splitting range uses the half-open interval `[start, end)`.
+Public split entry points reject empty or reversed ranges where `start >= end`
+before performing unsigned range arithmetic or entering recursion.
+
+For the single-term range `[k, k + 1)`, the leaf values are:
+
+- when `k == 0`, `P = 1`, `Q = 1`, and `T = 13591409`
+- when `k > 0`, `P = (6k - 5)(2k - 1)(6k - 1)`
+- when `k > 0`, `Q = k^3 * 10939058860032000`
+- when `k > 0`, `T = P * (13591409 + 545140134k)`
+- `T` is negated when `k` is odd
+
+Leaf coefficient arithmetic is performed with `GMPInteger` after converting
+the term index. Intermediate coefficient products must not be evaluated in a
+fixed-width integer type where they can overflow before reaching GMP.
+
+Adjacent nodes `[a, m)` and `[m, b)` merge into `[a, b)` using:
+
+- `P = P_left * P_right`
+- `Q = Q_left * Q_right`
+- `T = T_left * Q_right + P_left * T_right`
+
+`split()` remains the default sequential entry point and delegates to
+`splitSequential()`. `splitParallel()` must return the same mathematical result
+and enforce the same range contract, but scheduler-backed execution, cutoff
+selection, and parallel merge remain deferred to PR-0019.
+
 ### Scope
 
 - validate `[start, end)` input ranges
@@ -296,6 +325,25 @@ Chudnovsky P/Q/T computation.
 - test known leaf and small-range P/Q/T results
 - add a small known-digits integration test
 - preserve the existing merge equation and sequential API
+
+### Completion
+
+PR-0018 was completed on 2026-07-20.
+
+- Sequential Binary Splitting now produces Chudnovsky P/Q/T leaf values.
+- Every public split entry point rejects empty and reversed ranges.
+- Leaf, small-range, upper-boundary, and multi-level recursive results have
+  direct regression coverage.
+- A test-only GMP calculation verifies 20 decimal places of pi from `[0, 3)`.
+- GCC, Clang, ASan, and UBSan pass the full test suite; LeakSanitizer is not
+  runnable under the workspace ptrace restrictions.
+
+### Next Contributor TODO
+
+Begin PR-0019 by defining and measuring a sequential cutoff before introducing
+scheduler submissions. Preserve exact equality with `splitSequential()`, join
+every submitted child through `TaskHandle`, and retain a sequential fallback
+for small ranges and rejected submissions.
 
 ---
 

@@ -176,6 +176,8 @@
 
 [x] GMP
 
+[x] In-Place Sign Negation
+
 [ ] FFT
 
 -----------------
@@ -190,9 +192,15 @@
 
 [x] Parallel API Refactoring
 
-[ ] Chudnovsky Leaf Integration
+[x] Chudnovsky Leaf Integration
 
-[ ] Input Range Validation
+[x] Input Range Validation
+
+[x] Leaf and Small-Range P/Q/T Correctness
+
+[x] Small Known-Digits Integration Test
+
+[x] Binary Splitting Boundary and Regression Coverage
 
 [ ] Parallel Cutoff Policy
 

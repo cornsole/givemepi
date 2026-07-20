@@ -12,6 +12,32 @@
   Chudnovsky leaf, parallel Binary Splitting, checkpoint, progress, and final
   output stages.
 
+## [0.9.0] - PR-0018
+
+### Added
+
+- Added in-place arbitrary-precision sign negation to `GMPInteger` for
+  Chudnovsky leaf terms, including positive, negative, and zero coverage.
+- Added consistent half-open Binary Splitting range validation to all public
+  split entry points, with empty, reversed, and minimum valid range coverage.
+- Added GMP-backed Chudnovsky leaf computation for P/Q/T terms, including the
+  zero-term special case, alternating T sign, and known k=0, k=1, and k=2
+  values.
+- Added exact Chudnovsky P/Q/T regression values for `[0, 2)`, `[1, 3)`, and
+  `[0, 3)`, including range metadata and public split-entry-point equality.
+- Added a test-only 256-bit GMP integration check that converts the `[0, 3)`
+  P/Q/T result into a Chudnovsky approximation and verifies 20 decimal places
+  of pi without introducing production precision or output APIs.
+- Added Binary Splitting boundary regression coverage for maximum `size_t`
+  ranges and multi-level `[0, 16)` equality across all split entry points.
+
+### Changed
+
+- Changed sequential Binary Splitting from zero-valued placeholder leaves to
+  mathematically correct Chudnovsky P/Q/T nodes.
+- Documented the half-open range, leaf arithmetic, merge, and deferred
+  parallel-execution contracts for Binary Splitting.
+
 ## [0.8.0] - PR-0017
 
 ### Added
