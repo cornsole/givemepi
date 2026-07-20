@@ -179,6 +179,18 @@ Every algorithm must describe
 - Time Complexity
 - Memory Complexity
 
+## Reports Folder Rule
+
+Never create or modify files in `docs/reports/` unless the user explicitly
+requests a report to be written as a separate file or specifically requests
+work in the reports folder.
+
+A request for a separate report file is explicit authorization to create the
+corresponding file in `docs/reports/` for that task only.
+
+Ordinary status summaries, verification results, and completion reports must
+be provided in the conversation and must not be persisted in `docs/reports/`.
+
 ---
 
 # Benchmark Rules

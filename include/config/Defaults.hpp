@@ -32,6 +32,10 @@ inline constexpr std::string_view PROGRESS_FORMAT = "text";
 // Output
 inline constexpr std::string_view OUTPUT_FILE = "pi.txt";
 
+// Final verification
+inline constexpr bool VERIFICATION_ENABLED = true;
+inline constexpr std::uint32_t BBP_SAMPLE_COUNT = 8;
+
 // Resume
 inline constexpr bool RESUME_ENABLED = true;
 

@@ -17,7 +17,7 @@ int main()
     using pi::progress::terminalState;
     using pi::progress::toString;
 
-    static_assert(PROGRESS_SCHEMA_VERSION == 1);
+    static_assert(PROGRESS_SCHEMA_VERSION == 2);
     static_assert(!isTerminal(ProgressPhase::initializing));
     static_assert(isTerminal(ProgressPhase::completed));
     static_assert(isTerminal(ProgressPhase::failed));
@@ -41,6 +41,7 @@ int main()
         ProgressPhase::merging,
         ProgressPhase::finalizing,
         ProgressPhase::writingOutput,
+        ProgressPhase::verifyingOutput,
         ProgressPhase::completed
     };
 
@@ -100,6 +101,7 @@ int main()
     assert(toString(ProgressPhase::validatingCheckpoints)
         == "validating_checkpoints");
     assert(toString(ProgressPhase::writingOutput) == "writing_output");
+    assert(toString(ProgressPhase::verifyingOutput) == "verifying_output");
     assert(toString(ProgressPhase::completed) == "completed");
     assert(toString(ProgressPhase::failed) == "failed");
     assert(toString(ProgressTerminalState::running) == "running");

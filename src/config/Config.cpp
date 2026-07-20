@@ -66,6 +66,12 @@ void validateConfig(Config& config)
             "Config validation failed: output file is empty."
         );
     }
+    if (config.bbp_sample_count == 0 || config.bbp_sample_count > 32)
+    {
+        throw std::runtime_error(
+            "Config validation failed: BBP samples must be between 1 and 32."
+        );
+    }
     if (config.compression.empty())
     {
         config.compression = "none";

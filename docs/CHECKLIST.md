@@ -284,17 +284,17 @@
 
 [x] Save
 
-[ ] Structural Block Validation
+[x] Structural Block Validation
 
-[ ] Payload Checksum Validation
+[x] Payload Checksum Validation
 
-[ ] Manifest Consistency Validation
+[x] Manifest Consistency Validation
 
-[ ] Resume from Verified Blocks
+[x] Resume from Verified Blocks
 
-[ ] Corrupt Block Quarantine
+[x] Corrupt Block Quarantine
 
-[ ] Corrupt Block Recalculation
+[x] Corrupt Block Recalculation
 
 [x] CRC
 
@@ -310,23 +310,23 @@
 
 [x] Total and Completed Terms
 
-[ ] Total and Completed Blocks
+[x] Total and Completed Blocks
 
 [x] Current Merge Level
 
-[ ] Active and Queued Tasks
+[x] Active and Queued Tasks
 
 [x] ETA
 
 [x] Speed
 
-[ ] Memory
+[x] Memory
 
 [ ] Chunk
 
-[ ] Checkpoint Bytes
+[x] Checkpoint Bytes
 
-[ ] Last Verified Checkpoint
+[x] Last Verified Checkpoint
 
 [x] CLI Text Reporter
 
@@ -350,13 +350,33 @@
 
 ## Verification
 
-[ ] Independent Modular P/Q/T Verification
+[x] Independent Modular P/Q/T Verification
 
-[ ] Hash
+[x] Canonical Output Contract
 
-[ ] BBP
+[x] Streaming SHA-256
 
-[ ] Known Digits
+[x] Versioned Known Digits
+
+[x] BBP Hexadecimal Digit Calculation
+
+[x] GMP Decimal-to-Hex Digit Extraction
+
+[x] Deterministic BBP Sample Policy
+
+[x] Final Verification Orchestrator
+
+[x] Versioned Verification Manifest
+
+[x] Manifest Hash Revalidation
+
+[x] CLI Verification Controls and Diagnostics
+
+[x] Verifying Output Progress Phase
+
+[x] 128 MiB Bounded-Memory Streaming Verification
+
+[x] Final Verification Release Benchmark
 
 -----------------
 

@@ -60,7 +60,10 @@ int main()
         std::ofstream file(path);
         file << "progress = false\n"
              << "progress_interval = 750\n"
-             << "progress_format = \"json\"\n";
+             << "progress_format = \"json\"\n"
+             << "verification = false\n"
+             << "bbp_samples = 5\n"
+             << "verification_manifest = \"result.verify\"\n";
     }
 
     Config config = ConfigLoader::load(path);
@@ -68,16 +71,25 @@ int main()
     assert(!config.progress_enabled);
     assert(config.progress_interval_ms == 750);
     assert(config.progress_format == ProgressFormat::json);
+    assert(!config.verification_enabled);
+    assert(config.bbp_sample_count == 5);
+    assert(config.verification_manifest_file == "result.verify");
 
     apply(config, {
         "pi-engine",
         "--progress",
         "--progress-interval", "125",
-        "--progress-format", "text"
+        "--progress-format", "text",
+        "--verify",
+        "--bbp-samples", "12",
+        "--verification-manifest", "override.verify"
     });
     assert(config.progress_enabled);
     assert(config.progress_interval_ms == 125);
     assert(config.progress_format == ProgressFormat::text);
+    assert(config.verification_enabled);
+    assert(config.bbp_sample_count == 12);
+    assert(config.verification_manifest_file == "override.verify");
 
     Config disabled;
     apply(disabled, {"pi-engine", "--no-progress"});
@@ -90,6 +102,14 @@ int main()
     assert(throws<std::invalid_argument>([]() {
         Config invalid;
         apply(invalid, {"pi-engine", "--progress-format", "xml"});
+    }));
+    assert(throws<std::runtime_error>([]() {
+        Config invalid;
+        apply(invalid, {"pi-engine", "--bbp-samples", "0"});
+    }));
+    assert(throws<std::runtime_error>([]() {
+        Config invalid;
+        apply(invalid, {"pi-engine", "--bbp-samples", "33"});
     }));
     assert(throws<std::invalid_argument>([]() {
         Config invalid;

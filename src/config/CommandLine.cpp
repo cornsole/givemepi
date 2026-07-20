@@ -105,6 +105,25 @@ void CommandLine::applyOverrides(
                 requireValue(arg, i, argc, argv)
             );
         }
+        else if (arg == "--verify")
+        {
+            config.verification_enabled = true;
+        }
+        else if (arg == "--no-verify")
+        {
+            config.verification_enabled = false;
+        }
+        else if (arg == "--bbp-samples")
+        {
+            config.bbp_sample_count = parseUint32(
+                arg,
+                requireValue(arg, i, argc, argv)
+            );
+        }
+        else if (arg == "--verification-manifest")
+        {
+            config.verification_manifest_file = requireValue(arg, i, argc, argv);
+        }
 
         // Unknown arguments are ignored for now.
         // Future versions may report them as warnings or errors.

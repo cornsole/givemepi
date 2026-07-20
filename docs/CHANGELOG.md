@@ -4,6 +4,55 @@
 
 ### Added
 
+- Added the version-1 final verification result model with immutable stage
+  results, structured diagnostics, computation identity, stage timings,
+  deterministic status aggregation, and stable machine-readable names.
+- Defined the canonical in-memory final decimal as exactly `3.` plus the
+  requested number of ASCII digits, with immutable ownership, a newline-free
+  hash domain, and structured first-error offsets for malformed candidates.
+- Added separate memory and stored-file final output inspection APIs, with
+  fixed-size streaming file validation, exact single-newline record framing,
+  canonical byte-range metadata, and no whole-file allocation.
+- Added an incremental FIPS 180-4 SHA-256 implementation with standard-vector
+  coverage, chunk-independent updates, strict finalization lifecycle, lowercase
+  digest encoding, and bounded-memory file-prefix hashing.
+- Added a versioned 100-digit pi reference and bounded known-digits verifier
+  for canonical memory values and inspected files, including compared-prefix
+  metadata and exact canonical mismatch offsets.
+- Added an independent BBP hexadecimal fractional-digit calculator using
+  overflow-safe modular exponentiation, a bounded fractional tail, and
+  conservative inconclusive results near numerical digit boundaries.
+- Added reusable GMP-backed decimal-to-hexadecimal digit extraction for memory
+  and streaming file inputs, with exact integer arithmetic and conservative
+  decimal-rounding intervals that reject unsafe trailing positions.
+- Added a configurable deterministic BBP sampling policy with fixed early and
+  quartile coverage, identity-derived positions, conservative precision bounds,
+  uniqueness, stable ordering, and a schema-bounded sample-count limit.
+- Added a final verification orchestrator for memory and stored outputs that
+  preserves structure, known-prefix, canonical SHA-256, and per-sample BBP
+  diagnostics while isolating failures and stopping math on malformed output.
+- Added a canonical version-1 verification manifest with output identity,
+  SHA-256, known-reference and BBP evidence, CRC32C corruption detection, and
+  durable same-directory atomic replacement for fully passed results.
+- Connected final verification and manifest publication to the CLI with
+  configurable enablement and BBP sample count, added the version-2
+  `verifying_output` progress phase, and kept progress reporting active through
+  writing, verification, failure, and completion.
+- Added a 1,000-digit calculation-to-manifest integration regression and an
+  opt-in Release benchmark that measures eight-sample final verification
+  overhead independently at 1,000, 10,000, and 100,000 decimal digits.
+- Added manifest-hash revalidation for stored outputs, explicit BBP
+  inconclusive and mutation coverage, reporter verification-phase assertions,
+  and a 128 MiB bounded-memory streaming inspection and SHA-256 regression.
+
+### Fixed
+
+- Corrected known-digit verification to compare against the rounded prefix at
+  the requested precision instead of incorrectly treating every output as a
+  truncated decimal prefix.
+- Treated inapplicable skipped checks as neutral when other required final
+  verification stages pass, allowing valid very-small outputs to complete
+  while preserving all-skipped reports as skipped.
 - Added the version-1 progress lifecycle contract with stable phase names,
   derived terminal states, explicit legal transitions, and terminal-state
   immutability.

@@ -26,6 +26,9 @@ struct PiCalculationRequest
 {
     std::uint64_t digits;
     std::uint32_t guardDigits = PrecisionPolicy::defaultGuardDigits;
+    /// Leaves an attached tracker in finalizing for a caller-owned output and
+    /// verification pipeline. The default preserves standalone API behavior.
+    bool deferProgressCompletion = false;
 };
 
 

@@ -1236,3 +1236,57 @@ execution policies. Failures before rename preserve the previous final file.
 PR-0022 remains responsible for deciding whether persisted blocks are trusted
 for resume, including manifest-set consistency and independent modular P/Q/T
 verification.
+
+---
+
+## ADR-0028
+
+Date
+
+2026-07-20
+
+Status
+
+Accepted
+
+Title
+
+Verify Canonical Final Output Through Independent Evidence Layers
+
+Decision
+
+Final decimal output is canonical `3.` plus exactly the requested ASCII
+fractional digits. Stored files add one LF byte, while SHA-256 covers only the
+newline-free canonical bytes.
+
+Every completed CLI computation uses three independent evidence layers:
+
+- a versioned rounded known-decimal prefix;
+- canonical SHA-256, persisted in a versioned CRC32C-protected manifest;
+- deterministic BBP hexadecimal samples compared with hexadecimal digits
+  extracted from the actual decimal output through exact GMP arithmetic.
+
+BBP calculation retains a numeric error bound and returns inconclusive at a
+digit boundary. Decimal extraction includes the complete half-decimal-ULP
+rounding interval. A skipped inapplicable check is neutral when other required
+checks pass, but an all-skipped report remains skipped.
+
+Final verification manifests are published only for passed reports through
+durable same-directory atomic replacement. Later file validation compares the
+stored canonical SHA-256 so arbitrary middle and trailing digit mutation is
+detectable independently of sampled mathematical checks.
+
+Reason
+
+Hashing, known digits, and BBP detect different failure classes. BBP must check
+the generated output rather than only another embedded reference to remain an
+independent mathematical cross-check. Canonical bytes and a versioned manifest
+make verification portable and reproducible outside the calculation process.
+
+Consequence
+
+Progress schema version 2 includes `verifying_output`. The CLI owns output,
+verification, manifest publication, and terminal progress after the calculator
+finishes arithmetic. Default verification uses eight deterministic samples;
+future large-scale latency work should parallelize independent BBP samples
+without creating threads inside the algorithm.

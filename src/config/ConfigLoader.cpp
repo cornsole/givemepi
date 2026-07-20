@@ -99,6 +99,14 @@ Config ConfigLoader::load(
             "output",
             config.output_file);
 
+        load_value(table, "verification", config.verification_enabled);
+        load_value(table, "bbp_samples", config.bbp_sample_count);
+        load_value(
+            table,
+            "verification_manifest",
+            config.verification_manifest_file
+        );
+
         load_value(
             table,
             "resume",

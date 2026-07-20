@@ -45,6 +45,11 @@ struct Config
     // Output
     std::string output_file = std::string(defaults::OUTPUT_FILE);
 
+    // Final verification
+    bool verification_enabled = defaults::VERIFICATION_ENABLED;
+    std::uint32_t bbp_sample_count = defaults::BBP_SAMPLE_COUNT;
+    std::string verification_manifest_file;
+
     // Resume
     bool resume_enabled = defaults::RESUME_ENABLED;
 };

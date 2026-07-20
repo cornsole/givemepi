@@ -135,7 +135,8 @@ PiCalculationResult makeResult(
     PrecisionPlan precision,
     BinaryNode node,
     std::chrono::nanoseconds splitTime,
-    progress::ProgressTracker* progress
+    progress::ProgressTracker* progress,
+    bool deferProgressCompletion
 )
 {
     if (progress != nullptr
@@ -151,11 +152,6 @@ PiCalculationResult makeResult(
     GMPInteger scaledPi = finalizeFixedPoint(node, precision);
     const auto finalizeEnd = Clock::now();
 
-    if (progress != nullptr
-        && !progress->transitionTo(progress::ProgressPhase::writingOutput))
-    {
-        throw std::logic_error("Cannot enter progress output phase");
-    }
     std::string decimal = formatDecimal(scaledPi, precision);
     const auto formatEnd = Clock::now();
 
@@ -168,10 +164,13 @@ PiCalculationResult makeResult(
             formatEnd - finalizeEnd
         }
     };
-    if (progress != nullptr
-        && !progress->transitionTo(progress::ProgressPhase::completed))
+    if (progress != nullptr && !deferProgressCompletion)
     {
-        throw std::logic_error("Cannot complete progress lifecycle");
+        if (!progress->transitionTo(progress::ProgressPhase::writingOutput)
+            || !progress->transitionTo(progress::ProgressPhase::completed))
+        {
+            throw std::logic_error("Cannot complete progress lifecycle");
+        }
     }
     return result;
 }
@@ -262,7 +261,8 @@ PiCalculationResult ChudnovskyCalculator::calculateSequential(
             precision,
             std::move(node),
             splitEnd - splitStart,
-            progress
+            progress,
+            request.deferProgressCompletion
         );
     }
     catch (const std::exception& error)
@@ -309,7 +309,8 @@ PiCalculationResult ChudnovskyCalculator::calculateParallel(
             precision,
             std::move(node),
             splitEnd - splitStart,
-            progress
+            progress,
+            request.deferProgressCompletion
         );
     }
     catch (const std::exception& error)

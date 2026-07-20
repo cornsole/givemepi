@@ -107,12 +107,12 @@ Checkpoint
 [x] Versioned Block Header and Payload Metadata (PR-0021)
 [x] Atomic Temporary File Commit (PR-0021)
 [x] Manifest Format (PR-0021)
-[ ] Structural Block Validation (PR-0022)
-[ ] Payload Checksum Validation (PR-0022)
-[ ] Independent Modular P/Q/T Verification (PR-0022)
-[ ] Manifest Consistency Validation (PR-0022)
-[ ] Resume from Verified Blocks Only (PR-0022)
-[ ] Corrupt Block Quarantine and Recalculation (PR-0022)
+[x] Structural Block Validation (PR-0022)
+[x] Payload Checksum Validation (PR-0022)
+[x] Independent Modular P/Q/T Verification (PR-0022)
+[x] Manifest Consistency Validation (PR-0022)
+[x] Resume from Verified Blocks Only (PR-0022)
+[x] Corrupt Block Quarantine and Recalculation (PR-0022)
 
 ----------------------
 
@@ -120,16 +120,16 @@ Phase 9
 
 Progress
 
-[ ] Progress Phase Model (PR-0023)
-[ ] Thread-Safe Progress Tracker (PR-0023)
-[ ] Immutable Progress Snapshot (PR-0023)
-[ ] Terms, Blocks, and Merge-Level Counters (PR-0023)
-[ ] Speed, ETA, Memory, and Checkpoint Metrics (PR-0023)
-[ ] CLI Text Reporter (PR-0023)
-[ ] CLI JSON Reporter (PR-0023)
-[ ] TOML and CLI Progress Controls (PR-0023)
-[ ] Post-Override Configuration Validation (PR-0023)
-[ ] Resume Progress Reconstruction (PR-0023)
+[x] Progress Phase Model (PR-0023)
+[x] Thread-Safe Progress Tracker (PR-0023)
+[x] Immutable Progress Snapshot (PR-0023)
+[x] Terms, Blocks, and Merge-Level Counters (PR-0023)
+[x] Speed, ETA, Memory, and Checkpoint Metrics (PR-0023)
+[x] CLI Text Reporter (PR-0023)
+[x] CLI JSON Reporter (PR-0023)
+[x] TOML and CLI Progress Controls (PR-0023)
+[x] Post-Override Configuration Validation (PR-0023)
+[x] Resume Progress Reconstruction (PR-0023)
 
 ----------------------
 
@@ -137,9 +137,14 @@ Phase 10
 
 Verification
 
-[ ] Final Output Hash
-[ ] BBP Spot Check
-[ ] Known Digits
+[x] Canonical Final Output Inspection (PR-0024)
+[x] Streaming SHA-256 and Manifest Hash Revalidation (PR-0024)
+[x] Versioned Known Digits (PR-0024)
+[x] Independent BBP Spot Check (PR-0024)
+[x] GMP Decimal-to-Hex Cross-Check (PR-0024)
+[x] Versioned Verification Manifest (PR-0024)
+[x] CLI and Progress Integration (PR-0024)
+[x] Bounded-Memory and Release Performance Validation (PR-0024)
 
 ----------------------
 

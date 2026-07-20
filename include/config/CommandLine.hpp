@@ -24,6 +24,9 @@ public:
     ///   --no-progress
     ///   --progress-interval <milliseconds>
     ///   --progress-format <text|json>
+    ///   --verify | --no-verify
+    ///   --bbp-samples <1..32>
+    ///   --verification-manifest <path>
     ///
     /// Unknown options are ignored for now.
     ///

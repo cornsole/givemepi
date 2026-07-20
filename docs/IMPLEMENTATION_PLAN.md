@@ -789,3 +789,76 @@ values and may be unavailable until enough samples exist.
 - Automation can consume versioned JSON progress.
 - No algorithm or scheduler component depends on CLI formatting.
 - Future reporter types require no changes to computation code.
+
+---
+
+## PR-0024: Final Output Verification
+
+### Goal
+
+Publish a final decimal result only after independent structural, cryptographic,
+and mathematical verification, while supporting bounded-memory stored-file
+inspection and durable external verification evidence.
+
+### Implemented Architecture
+
+```text
+canonical output inspection
+        |
+        +--> versioned known digits
+        +--> streaming SHA-256
+        +--> GMP decimal-to-hex extraction
+                         |
+                         +--> deterministic BBP samples
+        |
+        v
+FinalVerificationReport
+        |
+        v
+versioned CRC32C verification manifest
+```
+
+### Contracts
+
+- memory output is exactly `3.` plus requested ASCII digits;
+- stored output adds exactly one LF and no other trailing bytes;
+- SHA-256 excludes the LF;
+- known digits are rounded at the requested precision;
+- BBP positions are zero-based hexadecimal fractional positions;
+- decimal-to-hex uses exact GMP integer arithmetic and a half-ULP interval;
+- unresolved numeric boundaries are inconclusive, never guessed;
+- malformed structure stops mathematical verification;
+- known-digit failure does not suppress diagnostic hashing or BBP checks;
+- passed manifests use canonical version-1 bytes, CRC32C, and atomic storage;
+- manifest hash revalidation detects arbitrary stored-output mutation;
+- CLI progress flows through writing, verifying, then terminal completion.
+
+### Validation
+
+- normal 1, 10, 50, 100, and 1,000-digit calculations;
+- malformed structure, known-prefix mutation, BBP mismatch and inconclusive;
+- middle and final file-digit mutation against manifest SHA-256;
+- SHA-256 and known hexadecimal standard references;
+- canonical manifest round-trip, corruption, and atomic failure injection;
+- text and JSON `verifying_output` reporting;
+- progress-enabled and disabled output equality;
+- 128 MiB bounded-memory streaming inspection and hashing;
+- GCC ASan/UBSan 49-test suite, Clang cross-build, and scan-build;
+- Release verification benchmark at 1,000, 10,000, and 100,000 digits.
+
+### Definition of Done
+
+- every CLI result is verified by default before terminal success;
+- success reports canonical SHA-256 and verification manifest path;
+- verification failures retain structured stage diagnostics;
+- external file revalidation can compare against manifest SHA-256;
+- verification does not depend on calculator internal state;
+- large file structure and hashing remain bounded-memory.
+
+### Next Contributor TODO
+
+- Do not change the final-output or manifest format without a new version and
+  compatibility decision.
+- Select the next PR boundary with the user before implementation.
+- If large-scale verification latency becomes a priority, benchmark parallel
+  execution of independent BBP samples while keeping algorithms thread-free.

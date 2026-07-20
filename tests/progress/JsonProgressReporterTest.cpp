@@ -50,7 +50,7 @@ int main()
 
     const std::string record = output.str();
     assert(record.starts_with(
-        "{\"schema_version\":1,\"sampled_at\":\"1970-01-01T00:00:00Z\""
+        "{\"schema_version\":2,\"sampled_at\":\"1970-01-01T00:00:00Z\""
     ));
     assert(record.find("\"phase\":\"merging\"") != std::string::npos);
     assert(record.find("\"terminal_state\":\"running\"")
@@ -66,6 +66,11 @@ int main()
     assert(record.ends_with("}}\n"));
     assert(record.find('\n') == record.size() - 1);
 
+    data.phase = ProgressPhase::verifyingOutput;
+    reporter.report(ProgressSnapshot(data), metrics);
+    assert(output.str().find("\"phase\":\"verifying_output\"")
+        != std::string::npos);
+
     data.phase = ProgressPhase::failed;
     data.failureDetail = "quote \" slash \\ newline\n tab\t byte\x01";
     metrics.completionRatio = std::numeric_limits<double>::infinity();
@@ -75,8 +80,10 @@ int main()
     reporter.report(ProgressSnapshot(data), metrics);
 
     const std::string allRecords = output.str();
-    const std::size_t secondStart = record.size();
-    const std::string second = allRecords.substr(secondStart);
+    const std::size_t failedStart = allRecords.rfind(
+        "{\"schema_version\""
+    );
+    const std::string second = allRecords.substr(failedStart);
     assert(second.find(
         "\"failure_detail\":\"quote \\\" slash \\\\ newline\\n tab\\t byte\\u0001\""
     ) != std::string::npos);

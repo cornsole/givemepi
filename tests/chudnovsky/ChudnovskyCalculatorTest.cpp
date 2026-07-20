@@ -181,6 +181,22 @@ int main()
         return 1;
     }
 
+    pi::progress::ProgressTracker deferredProgress({
+        progressPlan.requestedDigits,
+        progressPlan.termCount,
+        0
+    });
+    static_cast<void>(ChudnovskyCalculator::calculateSequential(
+        PiCalculationRequest{100, 32, true},
+        &deferredProgress
+    ));
+    if (deferredProgress.snapshot().phase()
+        != pi::progress::ProgressPhase::finalizing)
+    {
+        std::cerr << "Deferred CLI progress ownership mismatch\n";
+        return 1;
+    }
+
 
     std::cout << "ChudnovskyCalculator OK\n";
     return 0;

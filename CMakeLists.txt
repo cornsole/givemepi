@@ -177,6 +177,48 @@ set(PI_ENGINE_SOURCES
     src/progress/TextProgressReporter.cpp
     src/progress/JsonProgressReporter.cpp
     src/progress/ProgressReportingRunner.cpp
+
+    src/verification/FinalVerification.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalOutputInspector.cpp
+    src/verification/SHA256.cpp
+    src/verification/KnownDigitsVerifier.cpp
+    src/verification/BBPHexDigit.cpp
+    src/verification/DecimalHexDigit.cpp
+    src/verification/BBPSamplePolicy.cpp
+    src/verification/FinalVerifier.cpp
+    src/verification/VerificationManifest.cpp
+)
+
+set(FINAL_VERIFICATION_INTEGRATION_SOURCES
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/chudnovsky/ChudnovskyCalculator.cpp
+    src/binary/BinaryNode.cpp
+    src/binary/BinarySplitter.cpp
+    src/bigint/GMPInteger.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
+    src/progress/ProgressTracker.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+    src/verification/FinalVerification.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalOutputInspector.cpp
+    src/verification/SHA256.cpp
+    src/verification/KnownDigitsVerifier.cpp
+    src/verification/BBPHexDigit.cpp
+    src/verification/DecimalHexDigit.cpp
+    src/verification/BBPSamplePolicy.cpp
+    src/verification/FinalVerifier.cpp
+    src/verification/VerificationManifest.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CRC32C.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -190,6 +232,212 @@ add_executable(pi-engine
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
+add_executable(final-verification-test
+    tests/verification/FinalVerificationTest.cpp
+    src/verification/FinalVerification.cpp
+)
+
+add_executable(canonical-decimal-test
+    tests/verification/CanonicalDecimalTest.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalVerification.cpp
+)
+
+add_test(
+    NAME CanonicalDecimalTest
+    COMMAND canonical-decimal-test
+)
+
+target_include_directories(canonical-decimal-test
+    PRIVATE
+        include
+)
+
+add_executable(final-output-inspector-test
+    tests/verification/FinalOutputInspectorTest.cpp
+    src/verification/FinalOutputInspector.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalVerification.cpp
+)
+
+add_test(
+    NAME FinalOutputInspectorTest
+    COMMAND final-output-inspector-test
+)
+
+target_include_directories(final-output-inspector-test
+    PRIVATE
+        include
+)
+
+add_executable(sha256-test
+    tests/verification/SHA256Test.cpp
+    src/verification/SHA256.cpp
+)
+
+add_test(
+    NAME SHA256Test
+    COMMAND sha256-test
+)
+
+target_include_directories(sha256-test
+    PRIVATE
+        include
+)
+
+add_executable(known-digits-verifier-test
+    tests/verification/KnownDigitsVerifierTest.cpp
+    src/verification/KnownDigitsVerifier.cpp
+    src/verification/FinalOutputInspector.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalVerification.cpp
+)
+
+add_test(
+    NAME KnownDigitsVerifierTest
+    COMMAND known-digits-verifier-test
+)
+
+target_include_directories(known-digits-verifier-test
+    PRIVATE
+        include
+)
+
+add_executable(bbp-hex-digit-test
+    tests/verification/BBPHexDigitTest.cpp
+    src/verification/BBPHexDigit.cpp
+)
+
+add_test(NAME BBPHexDigitTest COMMAND bbp-hex-digit-test)
+
+target_include_directories(bbp-hex-digit-test PRIVATE include)
+
+add_executable(decimal-hex-digit-test
+    tests/verification/DecimalHexDigitTest.cpp
+    src/verification/DecimalHexDigit.cpp
+    src/verification/BBPHexDigit.cpp
+    src/verification/FinalOutputInspector.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalVerification.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME DecimalHexDigitTest COMMAND decimal-hex-digit-test)
+
+target_include_directories(decimal-hex-digit-test PRIVATE include)
+target_link_libraries(decimal-hex-digit-test PRIVATE gmp)
+
+add_executable(bbp-sample-policy-test
+    tests/verification/BBPSamplePolicyTest.cpp
+    src/verification/BBPSamplePolicy.cpp
+    src/verification/BBPHexDigit.cpp
+)
+
+add_test(NAME BBPSamplePolicyTest COMMAND bbp-sample-policy-test)
+
+target_include_directories(bbp-sample-policy-test PRIVATE include)
+
+add_executable(final-verifier-test
+    tests/verification/FinalVerifierTest.cpp
+    src/verification/FinalVerifier.cpp
+    src/verification/BBPSamplePolicy.cpp
+    src/verification/DecimalHexDigit.cpp
+    src/verification/BBPHexDigit.cpp
+    src/verification/KnownDigitsVerifier.cpp
+    src/verification/SHA256.cpp
+    src/verification/FinalOutputInspector.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalVerification.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME FinalVerifierTest COMMAND final-verifier-test)
+
+target_include_directories(final-verifier-test PRIVATE include)
+target_link_libraries(final-verifier-test PRIVATE gmp)
+
+add_executable(verification-manifest-test
+    tests/verification/VerificationManifestTest.cpp
+    src/verification/VerificationManifest.cpp
+    src/verification/FinalVerifier.cpp
+    src/verification/BBPSamplePolicy.cpp
+    src/verification/DecimalHexDigit.cpp
+    src/verification/BBPHexDigit.cpp
+    src/verification/KnownDigitsVerifier.cpp
+    src/verification/SHA256.cpp
+    src/verification/FinalOutputInspector.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalVerification.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CRC32C.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME VerificationManifestTest COMMAND verification-manifest-test)
+
+target_include_directories(verification-manifest-test PRIVATE include)
+target_link_libraries(verification-manifest-test PRIVATE gmp)
+
+add_executable(final-verification-integration-test
+    tests/verification/FinalVerificationIntegrationTest.cpp
+    ${FINAL_VERIFICATION_INTEGRATION_SOURCES}
+)
+
+add_test(
+    NAME FinalVerificationIntegrationTest
+    COMMAND final-verification-integration-test
+)
+
+target_include_directories(final-verification-integration-test
+    PRIVATE
+        include
+        third_party/tomlplusplus/include
+)
+target_compile_definitions(final-verification-integration-test
+    PRIVATE TOML_HEADER_ONLY=1
+)
+target_link_libraries(final-verification-integration-test
+    PRIVATE gmp Threads::Threads
+)
+
+add_executable(large-output-streaming-test
+    tests/verification/LargeOutputStreamingTest.cpp
+    src/verification/FinalOutputInspector.cpp
+    src/verification/CanonicalDecimal.cpp
+    src/verification/FinalVerification.cpp
+    src/verification/SHA256.cpp
+)
+
+add_test(NAME LargeOutputStreamingTest COMMAND large-output-streaming-test)
+set_tests_properties(LargeOutputStreamingTest PROPERTIES LABELS "large")
+target_include_directories(large-output-streaming-test PRIVATE include)
+
+if(ENABLE_BENCHMARKS)
+    add_executable(final-verification-benchmark
+        benchmarks/verification/FinalVerificationBenchmark.cpp
+        ${FINAL_VERIFICATION_INTEGRATION_SOURCES}
+    )
+    target_include_directories(final-verification-benchmark
+        PRIVATE include third_party/tomlplusplus/include
+    )
+    target_compile_definitions(final-verification-benchmark
+        PRIVATE TOML_HEADER_ONLY=1
+    )
+    target_link_libraries(final-verification-benchmark
+        PRIVATE gmp Threads::Threads
+    )
+endif()
+
+add_test(
+    NAME FinalVerificationTest
+    COMMAND final-verification-test
+)
+
+target_include_directories(final-verification-test
+    PRIVATE
+        include
+)
 
 add_executable(progress-config-test
     tests/config/ProgressConfigTest.cpp

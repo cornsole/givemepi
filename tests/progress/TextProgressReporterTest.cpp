@@ -55,6 +55,11 @@ int main()
         != std::string::npos);
     assert(terminalRecord.ends_with("\x1b[K"));
 
+    data.phase = ProgressPhase::verifyingOutput;
+    terminal.report(ProgressSnapshot(data), metrics);
+    assert(terminalOutput.str().find("phase=verifying_output")
+        != std::string::npos);
+
     data.phase = ProgressPhase::completed;
     data.completedTerms = 100;
     metrics.completionRatio = 1.0;

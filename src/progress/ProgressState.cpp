@@ -37,6 +37,9 @@ bool isValidTransition(ProgressPhase from, ProgressPhase to) noexcept
             return to == ProgressPhase::writingOutput
                 || to == ProgressPhase::completed;
         case ProgressPhase::writingOutput:
+            return to == ProgressPhase::verifyingOutput
+                || to == ProgressPhase::completed;
+        case ProgressPhase::verifyingOutput:
             return to == ProgressPhase::completed;
         case ProgressPhase::completed:
         case ProgressPhase::failed:
@@ -57,6 +60,7 @@ std::string_view toString(ProgressPhase phase) noexcept
         case ProgressPhase::merging: return "merging";
         case ProgressPhase::finalizing: return "finalizing";
         case ProgressPhase::writingOutput: return "writing_output";
+        case ProgressPhase::verifyingOutput: return "verifying_output";
         case ProgressPhase::completed: return "completed";
         case ProgressPhase::failed: return "failed";
     }
