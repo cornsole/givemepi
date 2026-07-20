@@ -16,20 +16,11 @@ class LockFreeQueue final : public IQueue
 {
 public:
 
+    /// Create a bounded MPMC queue.
+    /// Capacity must be at least two and fit in std::ptrdiff_t.
     explicit LockFreeQueue(
         std::size_t capacity
-    )
-        : capacity_(capacity),
-          buffer_(std::make_unique<Cell[]>(capacity))
-    {
-        for (std::size_t i = 0; i < capacity_; ++i)
-        {
-            buffer_[i].sequence.store(
-                i,
-                std::memory_order_relaxed
-            );
-        }
-    }
+    );
 
 
     LockFreeQueue(const LockFreeQueue&) = delete;

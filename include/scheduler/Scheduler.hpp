@@ -1,5 +1,6 @@
 #pragma once
 
+#include "scheduler/SchedulerState.hpp"
 #include "scheduler/Task.hpp"
 #include "scheduler/TaskHandle.hpp"
 #include "scheduler/ThreadPool.hpp"
@@ -37,13 +38,15 @@ public:
     Scheduler& operator=(Scheduler&&) = delete;
 
 
+    /// Start scheduler workers or restart after a completed stop.
     void start();
 
 
+    /// Reject new work and drain every accepted task before returning.
     void stop();
 
 
-    /// Submit one task and return a handle when the task is accepted.
+    /// Submit one task according to the scheduler's global/local routing.
     /// Returns an invalid handle when the scheduler cannot accept the task.
     [[nodiscard]]
     TaskHandle submit(
@@ -57,6 +60,11 @@ public:
 
     [[nodiscard]]
     bool running() const noexcept;
+
+
+    /// Return the current scheduler lifecycle state.
+    [[nodiscard]]
+    SchedulerState state() const noexcept;
 
 
 private:

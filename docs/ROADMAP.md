@@ -44,9 +44,13 @@ Scheduler
 [x] Work Stealing
 [x] Shared Task State (PR-0016)
 [x] Task Handle / Future / Join (PR-0016)
-[ ] Scheduler Correctness Hardening (PR-0017)
-[ ] Drain Shutdown Semantics (PR-0017)
-[ ] Global / Local Queue Role Validation (PR-0017)
+[x] Scheduler Lifecycle Contract (PR-0017)
+[x] Scheduler Correctness Hardening (PR-0017)
+[x] Drain Shutdown Semantics (PR-0017)
+[x] Global / Local Queue Role Validation (PR-0017)
+[x] Lock-Free Queue Correctness Hardening (PR-0017)
+[x] Direct Scheduler Concurrency Tests (PR-0017)
+[x] Observable Work-Stealing Behavior Test (PR-0017)
 
 ----------------------
 

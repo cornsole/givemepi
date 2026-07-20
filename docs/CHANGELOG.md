@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.8.0] - PR-0017
+
+### Added
+
+- Added observable `Stopped`, `Running`, and `Stopping` scheduler lifecycle
+  states.
+- Added lifecycle tests for idempotent start and stop, restart, concurrent
+  start and stop, and submission rejection while stopping.
+- Added accepted outstanding-task accounting for deterministic drain shutdown.
+- Added worker execution context tracking for global and local queue routing.
+- Added tests for immediate drain, failed-task drain, bounded global queue
+  rejection, and worker-local nested submission.
+- Added cross-pool worker submission coverage to verify that only workers owned
+  by the target pool may use its local queues.
+- Added direct LockFreeQueue tests for capacity validation, bounded FIFO order,
+  repeated slot reuse, concurrent producers, and exactly-once MPMC execution.
+- Added a dedicated scheduler concurrency test target for deterministic
+  submit/stop acceptance-boundary validation.
+- Added direct coverage proving that concurrent producers' accepted tasks run
+  exactly once while submissions made after `Stopping` are never executed.
+- Added repeated multi-caller `start()` and `stop()` coverage across reusable
+  ThreadPool lifecycle cycles.
+- Added a dedicated observable work-stealing behavior test separate from the
+  existing high-volume scheduler completion test.
+- Added a root-only global test queue proving worker-created child tasks execute
+  from a worker-local queue without global fallback.
+- Added coverage that blocks the root worker and observes child execution on at
+  least two distinct thief threads, with exactly-once execution and completed
+  handles.
+
+### Changed
+
+- Serialized `ThreadPool` lifecycle transitions without holding the lifecycle
+  lock while joining workers.
+- Changed submissions to be accepted only while the pool is `Running`.
+- Made worker startup publish `running` only after thread creation succeeds.
+- Changed external submissions to use the bounded global queue and worker
+  submissions to use the current worker's local queue.
+- Changed shutdown to request every worker to stop before joining any worker.
+- Changed workers to continue local, global, and steal execution until every
+  accepted task reaches a terminal state.
+- Changed LockFreeQueue sequence handling to retry stale producer and consumer
+  positions while preserving acquire/release publication of task payloads.
+- Changed `empty()` to inspect the next consumer slot instead of comparing
+  reservation counters.
+
+### Fixed
+
+- Fixed races between concurrent scheduler start, stop, and submit operations.
+- Fixed partial worker startup state when thread creation fails.
+- Fixed shutdown leaving accepted tasks pending in worker or global queues.
+- Fixed global queue capacity being bypassed by external submissions.
+- Fixed producer and consumer contention being misreported as full or empty.
+- Fixed invalid zero- and one-slot LockFreeQueue capacities being accepted.
+- Removed unrelated trailing text from the LockFreeQueue implementation file.
+
 ## [0.7.0] - PR-0016
 
 ### Added

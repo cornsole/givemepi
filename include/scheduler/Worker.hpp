@@ -14,11 +14,15 @@
 namespace pi::scheduler
 {
 
+class ThreadPool;
+
+
 class Worker
 {
 public:
 
     Worker(
+        ThreadPool* owner,
         std::size_t id,
         IQueue* queue,
         std::vector<std::unique_ptr<Worker>>* workers
@@ -36,9 +40,11 @@ public:
     Worker& operator=(Worker&&) = delete;
 
 
+    /// Start this worker's execution loop.
     void start();
 
 
+    /// Request stop and join after all pool-accepted work drains.
     void stop() noexcept;
 
 
@@ -49,22 +55,35 @@ public:
     [[nodiscard]]
     std::size_t id() const noexcept;
 
+    /// Push worker-created work to this worker's local queue.
     void push(
         Task task
     );
 
 
+    /// Steal one task from another worker's local queue.
     std::optional<Task> steal();
 
 
 private:
 
+    void requestStop() noexcept;
+
+
+    void join() noexcept;
+
+
     void run();
 
 
-    std::optional<Task> trySteal();
+    void executeTask(
+        Task& task
+    );
 
 private:
+
+    ThreadPool* owner_ = nullptr;
+
 
     std::size_t id_ = 0;
 
@@ -89,6 +108,12 @@ private:
     std::atomic<bool> stopRequested_{
         false
     };
+
+
+    static thread_local Worker* currentWorker_;
+
+
+    friend class ThreadPool;
 
 };
 

@@ -28,7 +28,7 @@ void testSubmittedLoadCompletesWithHandles()
 
 
     Scheduler scheduler(
-        std::make_unique<LockFreeQueue>(1024),
+        std::make_unique<LockFreeQueue>(16384),
         4
     );
 

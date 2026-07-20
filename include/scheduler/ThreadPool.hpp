@@ -1,13 +1,16 @@
 #pragma once
 
 #include "scheduler/IQueue.hpp"
+#include "scheduler/SchedulerState.hpp"
 #include "scheduler/Task.hpp"
 #include "scheduler/TaskHandle.hpp"
 #include "scheduler/Worker.hpp"
 
 #include <atomic>
 #include <cstddef>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 
@@ -35,14 +38,16 @@ public:
     ThreadPool& operator=(ThreadPool&&) = delete;
 
 
+    /// Start workers, waiting for an overlapping stop to finish if necessary.
     void start();
 
 
+    /// Reject new work, drain every accepted task, and join all workers.
     void stop();
 
 
-    /// Submit one task and return a handle when the task is accepted.
-    /// Returns an invalid handle when the pool cannot accept the task.
+    /// Submit external work globally or current-worker work locally.
+    /// Returns an invalid handle when the pool or global queue rejects it.
     [[nodiscard]]
     TaskHandle submit(
         Task task
@@ -55,6 +60,11 @@ public:
 
     [[nodiscard]]
     bool running() const noexcept;
+
+
+    /// Return the current scheduler lifecycle state.
+    [[nodiscard]]
+    SchedulerState state() const noexcept;
 
 
     Worker* workerAt(
@@ -72,14 +82,33 @@ private:
     > workers_;
 
 
-    std::atomic<std::size_t> nextWorker_{
+    std::atomic<std::size_t> outstandingTasks_{
         0
     };
 
 
-    std::atomic<bool> running_{
-        false
+    std::atomic<SchedulerState> state_{
+        SchedulerState::Stopped
     };
+
+
+    mutable std::mutex lifecycleMutex_;
+
+
+    std::condition_variable lifecycleCondition_;
+
+
+    std::size_t stopGeneration_ = 0;
+
+
+    void taskCompleted() noexcept;
+
+
+    [[nodiscard]]
+    bool drainComplete() const noexcept;
+
+
+    friend class Worker;
 
 };
 

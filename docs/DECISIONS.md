@@ -866,3 +866,216 @@ and CLI text/JSON reporters.
 
 Additional reporting environments can be added without changing Binary
 Splitting, checkpoint, or scheduler implementations.
+
+---
+
+## ADR-0022
+
+Date
+
+2026-07-19
+
+Status
+
+Accepted
+
+Title
+
+Explicit Restartable Scheduler Lifecycle
+
+Decision
+
+`Scheduler` and `ThreadPool` use one observable lifecycle model:
+
+- `Stopped`
+- `Running`
+- `Stopping`
+
+A newly constructed scheduler is `Stopped`. `start()` moves it to `Running`,
+and `stop()` moves it through `Stopping` to `Stopped`. Repeated start or stop
+calls are idempotent in their corresponding stable state.
+
+Calls are serialized by a lifecycle mutex. A start that overlaps `Stopping`
+waits for that stop operation and then restarts the workers. A stop that
+overlaps another stop waits for the same stop generation to complete.
+
+Submission is accepted only while the state is `Running`. Once `Stopping` is
+published, new submissions return an invalid `TaskHandle`. `running()` returns
+true only for `Running`; callers that need the full distinction use `state()`.
+
+The lifecycle mutex is released before joining workers. This prevents a worker
+task attempting submission during shutdown from waiting on a lock held by the
+thread that is joining that same worker.
+
+Restart after a completed stop is supported.
+
+Reason
+
+The previous atomic boolean did not distinguish a completed stop from a stop in
+progress and did not serialize start, stop, and submission. That allowed races
+where work could be accepted after shutdown began or worker threads could be
+started and stopped concurrently.
+
+A distinct `Stopping` state creates a clear submission cutoff and gives drain
+shutdown a stable lifecycle boundary.
+
+Alternatives
+
+- Keep one atomic running boolean.
+- Make Scheduler instances single-use after stop.
+- Hold the lifecycle mutex while joining every worker.
+- Allow submission during `Stopping`.
+
+Consequence
+
+Scheduler lifecycle transitions are observable and restartable. Concurrent
+start, stop, and submit calls have a defined ordering.
+
+The drain guarantee paired with this lifecycle cutoff is defined and completed
+by ADR-0023. This decision defines the cutoff; ADR-0023 defines completion of
+work accepted before it.
+
+---
+
+## ADR-0023
+
+Date
+
+2026-07-20
+
+Status
+
+Accepted
+
+Title
+
+Outstanding-Task Drain and Context-Aware Queue Routing
+
+Decision
+
+`ThreadPool` maintains an atomic count of accepted tasks that have not finished
+execution. The count includes tasks in the global queue, tasks in worker-local
+queues, stolen tasks, and tasks currently executing.
+
+The task count is reserved before a task is published to a queue. A rejected or
+throwing queue insertion rolls back the reservation. A worker decrements the
+count only after `Task::execute()` has published completion or failure.
+
+Shutdown uses two phases:
+
+1. Publish the stop request to every worker.
+2. Join every worker after it drains accepted work.
+
+A worker continues local pop, global pop, and steal attempts after receiving a
+stop request. It exits only when the accepted outstanding-task count is zero.
+Therefore `stop()` returns only after every accepted `TaskHandle` is terminal.
+
+Submission routing depends on the calling context:
+
+- external thread to bounded global `IQueue`
+- worker owned by this pool to that worker's local queue
+- worker owned by another pool to this pool's global queue
+
+The public API remains `submit(Task) -> TaskHandle`. A full global queue rejects
+the external submission with an invalid handle.
+
+Reason
+
+Queue emptiness alone cannot prove that drain is complete. A queue may be empty
+while a worker is still executing an accepted task, and separately checking
+multiple local queues creates transient snapshots with no single correctness
+boundary.
+
+Counting accepted unfinished work creates one drain invariant across global,
+local, stolen, and active tasks.
+
+External submissions must use the global queue so configured capacity and
+rejection are observable. Worker-created child work belongs in the local queue
+so it remains cheap and available for stealing.
+
+Alternatives
+
+- Stop workers immediately when a stop flag is set.
+- Exit when every queue appears empty.
+- Route every submission directly to a round-robin worker local queue.
+- Expose separate public APIs for external and local submission.
+- Join each worker immediately after requesting that individual worker stop.
+
+Consequence
+
+Accepted work cannot remain permanently pending after normal drain shutdown.
+Global queue capacity applies to external producers, while nested worker work
+uses local queues without changing the scheduler API.
+
+The current idle path still yields while waiting for work or drain completion.
+Wake-up optimization remains deferred until benchmarked.
+
+---
+
+## ADR-0024
+
+Date
+
+2026-07-20
+
+Status
+
+Accepted
+
+Title
+
+Bounded MPMC Slot-Sequence Contract
+
+Decision
+
+`LockFreeQueue` remains a bounded multi-producer, multi-consumer queue with one
+atomic sequence value per slot and separate producer and consumer position
+counters.
+
+Capacity must be at least two and no greater than `PTRDIFF_MAX`. This keeps the
+occupied and reusable slot generations distinct and makes modular sequence
+ordering unambiguous within the supported queue distance.
+
+Push and pop classify a slot sequence relative to the operation's expected
+sequence:
+
+- equal: claim the position with compare-and-exchange
+- behind: report full to push or empty to pop
+- ahead: reload the shared position because the prior observation is stale
+
+The position counters use relaxed atomic operations because they only allocate
+positions. A release store to the slot sequence publishes the task payload, and
+an acquire load of that sequence makes the payload visible before it is moved.
+The same release/acquire relationship protects reuse after consumption.
+
+`empty()` inspects the next consumer slot sequence. Its answer is only a
+concurrent snapshot and cannot replace accepted outstanding-task accounting for
+drain shutdown.
+
+Reason
+
+Treating every sequence mismatch as full or empty confuses contention with a
+stable queue boundary. Another producer or consumer can advance the shared
+position between the initial position load and the slot sequence load, leaving
+the observer with a stale position even when the queue can still make progress.
+
+Capacity zero causes invalid slot indexing. With one slot, the initial free
+sequence and the post-consumption reusable sequence collide with the occupied
+generation required by this protocol.
+
+Alternatives
+
+- Serialize the queue with a mutex.
+- Keep retrying every mismatch without distinguishing true full or empty.
+- Require a power-of-two capacity and mask slot indices.
+- Use reservation-counter equality as the definition of empty.
+
+Consequence
+
+Queue contention no longer creates false rejection solely from a stale
+position. Arbitrary capacities of at least two remain supported, and slot
+publication has an explicit memory-ordering contract.
+
+Direct tests validate capacity boundaries, FIFO and slot reuse, unused-capacity
+producer contention, and exactly-once execution under concurrent producers and
+consumers.

@@ -114,13 +114,59 @@
 
 [x] Scheduler Synchronization Test Scenarios
 
-[ ] Drain Shutdown Semantics
+[x] Scheduler Lifecycle State
 
-[ ] Global / Local Queue Role Contract
+[x] Concurrent Start / Stop Serialization
 
-[ ] Lock-Free Queue Concurrent Tests
+[x] Idempotent Start / Stop
 
-[ ] Work-Stealing Behavior Tests
+[x] Scheduler Restart After Stop
+
+[x] Submission Rejection While Stopping
+
+[x] Drain Shutdown Semantics
+
+[x] Accepted Outstanding Task Accounting
+
+[x] Two-Phase Worker Stop and Join
+
+[x] Global / Local Queue Role Contract
+
+[x] Cross-Pool Worker Submission Routing
+
+[x] Global Queue Capacity Rejection
+
+[x] Lock-Free Queue Capacity Validation
+
+[x] Lock-Free Queue Sequence / Contention Correctness
+
+[x] Lock-Free Queue Slot Reuse Coverage
+
+[x] Lock-Free Queue Concurrent Tests
+
+[x] Lock-Free Queue Exactly-Once MPMC Coverage
+
+[x] Concurrent Submit / Stop Acceptance Cutoff Test
+
+[x] Concurrent Accepted / Rejected Execution Accounting
+
+[x] Multi-Caller Repeated Start / Stop Test
+
+[x] Dedicated Scheduler Concurrency Test Target
+
+[x] Work-Stealing Behavior Tests
+
+[x] Worker-Local Child Concentration Test
+
+[x] Multiple Thief Thread Observation
+
+[x] Root / Thief Thread Identity Validation
+
+[x] Global Fallback Exclusion Test Queue
+
+[x] Work-Stealing Load / Behavior Test Separation
+
+[x] Scheduler Correctness Hardening (PR-0017)
 
 -----------------
 

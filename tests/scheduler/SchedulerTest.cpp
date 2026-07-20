@@ -39,12 +39,22 @@ static_assert(
     >
 );
 
+static_assert(
+    std::is_same_v<
+        decltype(
+            std::declval<const pi::scheduler::Scheduler&>().state()
+        ),
+        pi::scheduler::SchedulerState
+    >
+);
+
 
 namespace
 {
 
 using pi::scheduler::LockFreeQueue;
 using pi::scheduler::Scheduler;
+using pi::scheduler::SchedulerState;
 using pi::scheduler::Task;
 using pi::scheduler::TaskHandle;
 
@@ -63,6 +73,51 @@ void waitForSuccessfulTasks(
         assert(handle.isCompleted());
         assert(!handle.isFailed());
     }
+}
+
+
+void testLifecycleStateDelegationAndRestart()
+{
+    Scheduler scheduler(
+        1,
+        16
+    );
+
+
+    assert(scheduler.state() == SchedulerState::Stopped);
+    assert(!scheduler.running());
+
+    scheduler.start();
+    scheduler.start();
+
+    assert(scheduler.state() == SchedulerState::Running);
+    assert(scheduler.running());
+
+    scheduler.stop();
+    scheduler.stop();
+
+    assert(scheduler.state() == SchedulerState::Stopped);
+    assert(!scheduler.running());
+
+
+    scheduler.start();
+
+    TaskHandle restarted =
+        scheduler.submit(
+            Task(
+                []()
+                {
+                }
+            )
+        );
+
+    assert(restarted.valid());
+
+    restarted.wait();
+
+    assert(restarted.isCompleted());
+
+    scheduler.stop();
 }
 
 
@@ -344,6 +399,7 @@ void testCustomQueueTasksCanBeJoined()
 
 int main()
 {
+    testLifecycleStateDelegationAndRestart();
     testAcceptedTasksCanBeJoined();
     testFailedTaskDoesNotStopWorker();
     testRejectedSubmissionsReturnInvalidHandles();

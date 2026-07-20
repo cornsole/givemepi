@@ -1,6 +1,7 @@
 #include "scheduler/ThreadPool.hpp"
 #include "scheduler/TaskHandle.hpp"
 
+#include <cassert>
 #include <utility>
 
 
@@ -24,6 +25,7 @@ ThreadPool::ThreadPool(
     {
         workers_.push_back(
             std::make_unique<Worker>(
+                this,
                 i,
                 queue_.get(),
                 &workers_
@@ -41,37 +43,136 @@ ThreadPool::~ThreadPool()
 
 void ThreadPool::start()
 {
-    if (running_)
+    std::unique_lock<std::mutex> lock(
+        lifecycleMutex_
+    );
+
+
+    lifecycleCondition_.wait(
+        lock,
+        [this]()
+        {
+            return state_.load(
+                       std::memory_order_acquire
+                   ) != SchedulerState::Stopping;
+        }
+    );
+
+
+    if (
+        state_.load(
+            std::memory_order_acquire
+        ) == SchedulerState::Running
+    )
     {
         return;
     }
 
 
-    running_ = true;
-
-
-    for (auto& worker : workers_)
+    try
     {
-        worker->start();
+        for (auto& worker : workers_)
+        {
+            worker->start();
+        }
     }
+    catch (...)
+    {
+        for (auto& worker : workers_)
+        {
+            worker->stop();
+        }
+
+        state_.store(
+            SchedulerState::Stopped,
+            std::memory_order_release
+        );
+
+        throw;
+    }
+
+
+    state_.store(
+        SchedulerState::Running,
+        std::memory_order_release
+    );
 }
 
 
 void ThreadPool::stop()
 {
-    if (!running_)
     {
-        return;
+        std::unique_lock<std::mutex> lock(
+            lifecycleMutex_
+        );
+
+
+        if (
+            state_.load(
+                std::memory_order_acquire
+            ) == SchedulerState::Stopped
+        )
+        {
+            return;
+        }
+
+
+        if (
+            state_.load(
+                std::memory_order_acquire
+            ) == SchedulerState::Stopping
+        )
+        {
+            const std::size_t stopGeneration =
+                stopGeneration_;
+
+            lifecycleCondition_.wait(
+                lock,
+                [this, stopGeneration]()
+                {
+                    return stopGeneration_
+                        != stopGeneration;
+                }
+            );
+
+            return;
+        }
+
+
+        state_.store(
+            SchedulerState::Stopping,
+            std::memory_order_release
+        );
     }
 
 
     for (auto& worker : workers_)
     {
-        worker->stop();
+        worker->requestStop();
     }
 
 
-    running_ = false;
+    for (auto& worker : workers_)
+    {
+        worker->join();
+    }
+
+
+    {
+        std::lock_guard<std::mutex> lock(
+            lifecycleMutex_
+        );
+
+        state_.store(
+            SchedulerState::Stopped,
+            std::memory_order_release
+        );
+
+        ++stopGeneration_;
+    }
+
+
+    lifecycleCondition_.notify_all();
 }
 
 
@@ -79,7 +180,16 @@ TaskHandle ThreadPool::submit(
     Task task
 )
 {
-    if (!running_)
+    std::lock_guard<std::mutex> lock(
+        lifecycleMutex_
+    );
+
+
+    if (
+        state_.load(
+            std::memory_order_acquire
+        ) != SchedulerState::Running
+    )
     {
         return {};
     }
@@ -98,18 +208,48 @@ TaskHandle ThreadPool::submit(
         task.handle();
 
 
-    auto index =
-        nextWorker_.fetch_add(
-            1,
-            std::memory_order_relaxed
-        )
-        %
-        workers_.size();
-
-
-    workers_[index]->push(
-        std::move(task)
+    outstandingTasks_.fetch_add(
+        1,
+        std::memory_order_acq_rel
     );
+
+
+    try
+    {
+        Worker* currentWorker =
+            Worker::currentWorker_;
+
+
+        if (
+            currentWorker != nullptr
+            && currentWorker->owner_ == this
+        )
+        {
+            currentWorker->push(
+                std::move(task)
+            );
+
+            return handle;
+        }
+
+
+        if (
+            !queue_->push(
+                std::move(task)
+            )
+        )
+        {
+            taskCompleted();
+
+            return {};
+        }
+    }
+    catch (...)
+    {
+        taskCompleted();
+
+        throw;
+    }
 
 
     return handle;
@@ -139,9 +279,36 @@ ThreadPool::workerAt(
 
 bool ThreadPool::running() const noexcept
 {
-    return running_.load(
-        std::memory_order_relaxed
+    return state() == SchedulerState::Running;
+}
+
+
+SchedulerState ThreadPool::state() const noexcept
+{
+    return state_.load(
+        std::memory_order_acquire
     );
+}
+
+
+void ThreadPool::taskCompleted() noexcept
+{
+    const std::size_t previous =
+        outstandingTasks_.fetch_sub(
+            1,
+            std::memory_order_acq_rel
+        );
+
+
+    assert(previous > 0);
+}
+
+
+bool ThreadPool::drainComplete() const noexcept
+{
+    return outstandingTasks_.load(
+               std::memory_order_acquire
+           ) == 0;
 }
 
 

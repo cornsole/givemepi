@@ -254,6 +254,55 @@ target_link_libraries(task-test
         Threads::Threads
 )
 
+add_executable(lockfreequeue-test
+    tests/scheduler/LockFreeQueueTest.cpp
+
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/LockFreeQueue.cpp
+)
+
+add_test(
+    NAME LockFreeQueueTest
+    COMMAND lockfreequeue-test
+)
+
+target_include_directories(lockfreequeue-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(lockfreequeue-test
+    PRIVATE
+        Threads::Threads
+)
+
+add_executable(scheduler-concurrency-test
+    tests/scheduler/SchedulerConcurrencyTest.cpp
+
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+)
+
+add_test(
+    NAME SchedulerConcurrencyTest
+    COMMAND scheduler-concurrency-test
+)
+
+target_include_directories(scheduler-concurrency-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(scheduler-concurrency-test
+    PRIVATE
+        Threads::Threads
+)
+
 add_executable(scheduler-test
     tests/scheduler/SchedulerTest.cpp
     
@@ -354,6 +403,33 @@ add_executable(workstealing-test
 add_test(
     NAME WorkStealingTest
     COMMAND workstealing-test
+)
+
+add_executable(workstealing-behavior-test
+    tests/scheduler/WorkStealingBehaviorTest.cpp
+
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+)
+
+add_test(
+    NAME WorkStealingBehaviorTest
+    COMMAND workstealing-behavior-test
+)
+
+target_include_directories(workstealing-behavior-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(workstealing-behavior-test
+    PRIVATE
+        Threads::Threads
 )
 
 target_include_directories(workstealing-test

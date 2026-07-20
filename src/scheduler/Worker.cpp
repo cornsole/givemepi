@@ -1,21 +1,25 @@
 #include "scheduler/Worker.hpp"
+#include "scheduler/ThreadPool.hpp"
 
-#include <chrono>
 #include <thread>
 #include <utility>
-#include <vector>
-#include <memory>
 
 
 namespace pi::scheduler
 {
 
+thread_local Worker* Worker::currentWorker_ =
+    nullptr;
+
+
 Worker::Worker(
+    ThreadPool* owner,
     std::size_t id,
     IQueue* queue,
     std::vector<std::unique_ptr<Worker>>* workers
 )
-    : id_(id),
+    : owner_(owner),
+      id_(id),
       globalQueue_(queue),
       workers_(workers)
 {
@@ -37,7 +41,6 @@ void Worker::start()
 
 
     stopRequested_ = false;
-    running_ = true;
 
 
     thread_ =
@@ -45,18 +48,34 @@ void Worker::start()
             &Worker::run,
             this
         );
+
+
+    running_ = true;
 }
 
 
 void Worker::stop() noexcept
 {
+    requestStop();
+    join();
+}
+
+
+void Worker::requestStop() noexcept
+{
+    stopRequested_.store(
+        true,
+        std::memory_order_release
+    );
+}
+
+
+void Worker::join() noexcept
+{
     if (!running_)
     {
         return;
     }
-
-
-    stopRequested_ = true;
 
 
     if (thread_.joinable())
@@ -95,7 +114,11 @@ void Worker::push(
 
 void Worker::run()
 {
-    while (!stopRequested_)
+    currentWorker_ =
+        this;
+
+
+    while (true)
     {
         auto task =
             localQueue_.pop();
@@ -103,7 +126,9 @@ void Worker::run()
 
         if (task.has_value())
         {
-            task->execute();
+            executeTask(
+                *task
+            );
             continue;
         }
 
@@ -114,7 +139,9 @@ void Worker::run()
 
         if (task.has_value())
         {
-            task->execute();
+            executeTask(
+                *task
+            );
             continue;
         }
 
@@ -125,12 +152,47 @@ void Worker::run()
 
         if (task.has_value())
         {
-            task->execute();
+            executeTask(
+                *task
+            );
             continue;
         }
 
 
+        if (
+            stopRequested_.load(
+                std::memory_order_acquire
+            )
+            &&
+            (
+                owner_ == nullptr
+                || owner_->drainComplete()
+            )
+        )
+        {
+            break;
+        }
+
+
         std::this_thread::yield();
+    }
+
+
+    currentWorker_ =
+        nullptr;
+}
+
+
+void Worker::executeTask(
+    Task& task
+)
+{
+    task.execute();
+
+
+    if (owner_ != nullptr)
+    {
+        owner_->taskCompleted();
     }
 }
 

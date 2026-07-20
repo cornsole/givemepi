@@ -77,4 +77,10 @@ bool Scheduler::running() const noexcept
 }
 
 
+SchedulerState Scheduler::state() const noexcept
+{
+    return pool_->state();
+}
+
+
 } // namespace pi::scheduler
