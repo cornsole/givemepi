@@ -156,6 +156,14 @@ set(PI_ENGINE_SOURCES
     src/checkpoint/AtomicFileCommit.cpp
     src/checkpoint/CheckpointStore.cpp
     src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointFileInspector.cpp
+    src/checkpoint/CheckpointBlockValidator.cpp
+    src/checkpoint/ManifestEntryValidator.cpp
+    src/checkpoint/CheckpointManifestValidator.cpp
+    src/checkpoint/ModularPQTVerifier.cpp
+    src/checkpoint/CheckpointQuarantine.cpp
+    src/checkpoint/CheckpointResumePlanner.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -359,6 +367,253 @@ target_include_directories(checkpoint-manifest-test
 target_link_libraries(checkpoint-manifest-test
     PRIVATE
         gmp
+)
+
+add_executable(checkpoint-validation-test
+    tests/checkpoint/CheckpointValidationTest.cpp
+    src/checkpoint/CheckpointValidation.cpp
+)
+
+add_test(
+    NAME CheckpointValidationTest
+    COMMAND checkpoint-validation-test
+)
+
+target_include_directories(checkpoint-validation-test
+    PRIVATE
+        include
+)
+
+add_executable(checkpoint-file-inspector-test
+    tests/checkpoint/CheckpointFileInspectorTest.cpp
+    src/checkpoint/CheckpointFileInspector.cpp
+    src/checkpoint/CheckpointBlockValidator.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointStore.cpp
+    src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME CheckpointFileInspectorTest
+    COMMAND checkpoint-file-inspector-test
+)
+
+target_include_directories(checkpoint-file-inspector-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-file-inspector-test
+    PRIVATE
+        gmp
+)
+
+add_executable(checkpoint-block-validator-test
+    tests/checkpoint/CheckpointBlockValidatorTest.cpp
+    src/checkpoint/CheckpointBlockValidator.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME CheckpointBlockValidatorTest
+    COMMAND checkpoint-block-validator-test
+)
+
+target_include_directories(checkpoint-block-validator-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-block-validator-test
+    PRIVATE
+        gmp
+)
+
+add_executable(manifest-entry-validator-test
+    tests/checkpoint/ManifestEntryValidatorTest.cpp
+    src/checkpoint/ManifestEntryValidator.cpp
+    src/checkpoint/CheckpointFileInspector.cpp
+    src/checkpoint/CheckpointBlockValidator.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointStore.cpp
+    src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME ManifestEntryValidatorTest
+    COMMAND manifest-entry-validator-test
+)
+
+target_include_directories(manifest-entry-validator-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(manifest-entry-validator-test
+    PRIVATE
+        gmp
+)
+
+add_executable(checkpoint-manifest-validator-test
+    tests/checkpoint/CheckpointManifestValidatorTest.cpp
+    src/checkpoint/CheckpointManifestValidator.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/checkpoint/CRC32C.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+)
+
+add_test(
+    NAME CheckpointManifestValidatorTest
+    COMMAND checkpoint-manifest-validator-test
+)
+
+target_include_directories(checkpoint-manifest-validator-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-manifest-validator-test
+    PRIVATE
+        gmp
+)
+
+add_executable(modular-pqt-verifier-test
+    tests/checkpoint/ModularPQTVerifierTest.cpp
+    src/checkpoint/ModularPQTVerifier.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/binary/BinaryNode.cpp
+    src/binary/BinarySplitter.cpp
+    src/bigint/GMPInteger.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
+)
+
+add_test(
+    NAME ModularPQTVerifierTest
+    COMMAND modular-pqt-verifier-test
+)
+
+target_include_directories(modular-pqt-verifier-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(modular-pqt-verifier-test
+    PRIVATE
+        gmp
+        Threads::Threads
+)
+
+add_executable(checkpoint-quarantine-test
+    tests/checkpoint/CheckpointQuarantineTest.cpp
+    src/checkpoint/CheckpointQuarantine.cpp
+    src/checkpoint/CheckpointFileInspector.cpp
+    src/checkpoint/CheckpointBlockValidator.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointStore.cpp
+    src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME CheckpointQuarantineTest
+    COMMAND checkpoint-quarantine-test
+)
+
+target_include_directories(checkpoint-quarantine-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-quarantine-test
+    PRIVATE
+        gmp
+)
+
+add_executable(checkpoint-resume-planner-test
+    tests/checkpoint/CheckpointResumePlannerTest.cpp
+    src/checkpoint/CheckpointResumePlanner.cpp
+    src/checkpoint/CheckpointQuarantine.cpp
+    src/checkpoint/ModularPQTVerifier.cpp
+    src/checkpoint/CheckpointManifestValidator.cpp
+    src/checkpoint/ManifestEntryValidator.cpp
+    src/checkpoint/CheckpointFileInspector.cpp
+    src/checkpoint/CheckpointBlockValidator.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointStore.cpp
+    src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/binary/BinaryNode.cpp
+    src/binary/BinarySplitter.cpp
+    src/bigint/GMPInteger.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
+)
+
+add_test(
+    NAME CheckpointResumePlannerTest
+    COMMAND checkpoint-resume-planner-test
+)
+
+target_include_directories(checkpoint-resume-planner-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-resume-planner-test
+    PRIVATE
+        gmp
+        Threads::Threads
 )
 
 add_test(
