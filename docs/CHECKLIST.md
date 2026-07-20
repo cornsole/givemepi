@@ -246,6 +246,14 @@
 
 [x] Production Known-Digits Coverage
 
+[x] Guard-Precision Stability at 1,000 Digits
+
+[x] Split / Finalize / Format Timing Metrics
+
+[x] Standalone End-to-End Benchmark Target
+
+[x] Sequential / Parallel Benchmark Result Validation
+
 -----------------
 
 ## Storage

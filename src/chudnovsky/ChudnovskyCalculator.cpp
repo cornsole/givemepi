@@ -4,6 +4,7 @@
 #include "binary/BinaryNode.hpp"
 #include "scheduler/Scheduler.hpp"
 
+#include <chrono>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -17,9 +18,10 @@ namespace
 
 using bigint::GMPInteger;
 using binary::BinaryNode;
+using Clock = std::chrono::steady_clock;
 
 
-std::string finalizeDecimal(
+GMPInteger finalizeFixedPoint(
     const BinaryNode& node,
     const PrecisionPlan& precision
 )
@@ -54,6 +56,15 @@ std::string finalizeDecimal(
     guardScale.setPowerOfTen(precision.guardDigits);
     scaledPi.floorDivide(guardScale);
 
+    return scaledPi;
+}
+
+
+std::string formatDecimal(
+    const GMPInteger& scaledPi,
+    const PrecisionPlan& precision
+)
+{
     std::string digits = scaledPi.toString();
 
     if (precision.requestedDigits
@@ -81,14 +92,25 @@ std::string finalizeDecimal(
 
 PiCalculationResult makeResult(
     PrecisionPlan precision,
-    BinaryNode node
+    BinaryNode node,
+    std::chrono::nanoseconds splitTime
 )
 {
-    std::string decimal = finalizeDecimal(node, precision);
+    const auto finalizeStart = Clock::now();
+    GMPInteger scaledPi = finalizeFixedPoint(node, precision);
+    const auto finalizeEnd = Clock::now();
+
+    std::string decimal = formatDecimal(scaledPi, precision);
+    const auto formatEnd = Clock::now();
 
     return PiCalculationResult{
         precision,
-        std::move(decimal)
+        std::move(decimal),
+        PiCalculationResult::Timings{
+            splitTime,
+            finalizeEnd - finalizeStart,
+            formatEnd - finalizeEnd
+        }
     };
 }
 
@@ -104,14 +126,17 @@ PiCalculationResult ChudnovskyCalculator::calculateSequential(
         request.guardDigits
     );
 
+    const auto splitStart = Clock::now();
     BinaryNode node = binary::BinarySplitter::splitSequential(
         0,
         precision.termCount
     );
+    const auto splitEnd = Clock::now();
 
     return makeResult(
         precision,
-        std::move(node)
+        std::move(node),
+        splitEnd - splitStart
     );
 }
 
@@ -127,16 +152,19 @@ PiCalculationResult ChudnovskyCalculator::calculateParallel(
         request.guardDigits
     );
 
+    const auto splitStart = Clock::now();
     BinaryNode node = binary::BinarySplitter::splitParallel(
         0,
         precision.termCount,
         executor,
         splitOptions
     );
+    const auto splitEnd = Clock::now();
 
     return makeResult(
         precision,
-        std::move(node)
+        std::move(node),
+        splitEnd - splitStart
     );
 }
 

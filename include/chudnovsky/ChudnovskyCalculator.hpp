@@ -3,6 +3,7 @@
 #include "binary/BinarySplitter.hpp"
 #include "chudnovsky/PrecisionPolicy.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -27,6 +28,19 @@ struct PiCalculationResult
 {
     PrecisionPlan precision;
     std::string decimal;
+
+    struct Timings
+    {
+        std::chrono::nanoseconds split;
+        std::chrono::nanoseconds finalize;
+        std::chrono::nanoseconds format;
+
+        [[nodiscard]]
+        std::chrono::nanoseconds total() const noexcept
+        {
+            return split + finalize + format;
+        }
+    } timings;
 };
 
 

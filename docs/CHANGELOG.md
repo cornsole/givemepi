@@ -15,6 +15,8 @@
   Chudnovsky finalization and end-to-end benchmarking before checkpoint format,
   integrity, and progress work.
 
+## [0.11.0] - PR-0020
+
 ### Added
 
 - Added a deterministic integer-only Chudnovsky precision policy covering
@@ -30,12 +32,19 @@
   its precision identity with a normalized, guard-rounded decimal pi string.
 - Added sequential, stopped-scheduler fallback, and staged-parallel calculation
   coverage with exact rounded known values from 1 through 100 decimal places.
+- Added per-calculation split, fixed-point finalization, decimal formatting, and
+  total timing metrics.
+- Added an opt-in standalone Release benchmark covering sequential and 4/8
+  worker end-to-end calculations from 1,000 through 1,000,000 digits, with
+  median samples and full output equality checks.
 
 ### Changed
 
 - Replaced the test-only floating-point finalization path with guarded GMP
   integer square root, division, rounding, and decimal formatting in production
   calculation code.
+- Added 1,000-digit equality across 16, 32, and 64 guard digits to validate
+  precision-policy stability independently of the fixed 100-digit reference.
 
 ## [0.10.0] - PR-0019
 

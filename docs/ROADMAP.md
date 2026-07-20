@@ -89,7 +89,7 @@ Chudnovsky
 [x] Digit-to-Term Conversion (PR-0020)
 [x] Normalized Decimal Output (PR-0020)
 [x] Production Known-Digits Integration Test (PR-0020)
-[ ] End-to-End Benchmark (PR-0020)
+[x] End-to-End Benchmark (PR-0020)
 
 ----------------------
 

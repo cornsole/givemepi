@@ -300,7 +300,7 @@ SchedulerState ThreadPool::state() const noexcept
 
 void ThreadPool::taskCompleted() noexcept
 {
-    const std::size_t previous =
+    [[maybe_unused]] const std::size_t previous =
         outstandingTasks_.fetch_sub(
             1,
             std::memory_order_acq_rel

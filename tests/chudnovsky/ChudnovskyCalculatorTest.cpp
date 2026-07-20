@@ -107,6 +107,34 @@ int main()
     }
 
 
+    const PiCalculationResult guard16 =
+        ChudnovskyCalculator::calculateSequential(
+            PiCalculationRequest{1000, 16}
+        );
+
+    const PiCalculationResult guard32 =
+        ChudnovskyCalculator::calculateSequential(
+            PiCalculationRequest{1000, 32}
+        );
+
+    const PiCalculationResult guard64 =
+        ChudnovskyCalculator::calculateSequential(
+            PiCalculationRequest{1000, 64}
+        );
+
+    if (guard16.decimal != guard32.decimal
+        || guard32.decimal != guard64.decimal
+        || guard16.decimal.size() != 1002
+        || guard16.precision.termCount >= guard64.precision.termCount
+        || guard16.timings.total().count() < 0
+        || guard32.timings.total().count() < 0
+        || guard64.timings.total().count() < 0)
+    {
+        std::cerr << "Guard stability or timing contract failed\n";
+        return 1;
+    }
+
+
     std::cout << "ChudnovskyCalculator OK\n";
     return 0;
 }

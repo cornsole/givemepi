@@ -47,6 +47,8 @@ option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
 
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 
+option(ENABLE_BENCHMARKS "Build standalone benchmark executables" OFF)
+
 
 if(ENABLE_ASAN)
 
@@ -57,6 +59,42 @@ if(ENABLE_ASAN)
 
     add_link_options(
         -fsanitize=address
+    )
+
+endif()
+
+
+if(ENABLE_BENCHMARKS)
+
+    add_executable(chudnovsky-benchmark
+        benchmarks/chudnovsky/ChudnovskyBenchmark.cpp
+
+        src/chudnovsky/PrecisionPolicy.cpp
+        src/chudnovsky/ChudnovskyCalculator.cpp
+
+        src/binary/BinaryNode.cpp
+        src/binary/BinarySplitter.cpp
+        src/bigint/GMPInteger.cpp
+
+        src/scheduler/Task.cpp
+        src/scheduler/TaskHandle.cpp
+        src/scheduler/ThreadPool.cpp
+        src/scheduler/LockFreeQueue.cpp
+        src/scheduler/WorkStealingQueue.cpp
+        src/scheduler/Worker.cpp
+        src/scheduler/Scheduler.cpp
+        src/scheduler/ReferenceQueue.cpp
+    )
+
+    target_include_directories(chudnovsky-benchmark
+        PRIVATE
+            include
+    )
+
+    target_link_libraries(chudnovsky-benchmark
+        PRIVATE
+            gmp
+            Threads::Threads
     )
 
 endif()

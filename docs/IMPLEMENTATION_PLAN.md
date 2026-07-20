@@ -17,7 +17,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0017 | Scheduler correctness hardening | Complete |
 | PR-0018 | Chudnovsky leaf and range validation | Complete |
 | PR-0019 | Cutoff-based parallel Binary Splitting | Complete |
-| PR-0020 | End-to-end Chudnovsky calculation | In Progress |
+| PR-0020 | End-to-end Chudnovsky calculation | Complete |
 | PR-0021 | P/Q/T checkpoint block foundation | Planned |
 | PR-0022 | Checkpoint integrity verification | Planned |
 | PR-0023 | Progress snapshot and reporting | Planned |
@@ -478,6 +478,34 @@ implicit global GMP floating-point precision.
 - invalid digit, guard, and scheduler policy inputs are rejected
 - end-to-end benchmark results are recorded before further optimization
 - the resulting computation identity fields are documented for PR-0021
+
+### Completion
+
+PR-0020 was completed on 2026-07-20.
+
+- Requested digits map deterministically to guarded working digits, a
+  conservative term count, and estimated binary precision without
+  floating-point policy arithmetic.
+- Sequential and staged-parallel calculation return identical normalized,
+  half-up-rounded decimal strings with their immutable precision identity.
+- Exact known rounded values pass from 1 through 100 decimal places, and 1,000
+  digits remain identical across 16, 32, and 64 guard digits.
+- GCC, Clang, ASan, UBSan, and analyzer checks pass the full suite.
+- An opt-in Release benchmark records split, integer finalization, formatting,
+  and total time through one million digits while validating full output.
+
+### Computation Identity for PR-0021
+
+Checkpoint identity must include requested digits, guard digits, working
+digits, term count, arithmetic-format version, Binary Splitting range, and
+parallel policy where it affects block boundaries. Runtime timing values are
+observations and are not part of computation identity.
+
+### Next Contributor TODO
+
+Begin PR-0021 with a versioned P/Q/T checkpoint block format derived from this
+computation identity. Keep worker threads free of disk I/O and preserve the
+staged leaf-block boundary as the initial checkpoint granularity.
 
 ---
 
