@@ -46,7 +46,7 @@ pi.txt
 config.toml
 
 # Checkpoint data (추후 사용)
-checkpoint/
+/checkpoint/
 *.checkpoint
 
 # Logs

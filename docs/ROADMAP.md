@@ -103,10 +103,10 @@ Phase 8
 
 Checkpoint
 
-[ ] P/Q/T Block Format (PR-0021)
-[ ] Versioned Block Header and Payload Metadata (PR-0021)
-[ ] Atomic Temporary File Commit (PR-0021)
-[ ] Manifest Format (PR-0021)
+[x] P/Q/T Block Format (PR-0021)
+[x] Versioned Block Header and Payload Metadata (PR-0021)
+[x] Atomic Temporary File Commit (PR-0021)
+[x] Manifest Format (PR-0021)
 [ ] Structural Block Validation (PR-0022)
 [ ] Payload Checksum Validation (PR-0022)
 [ ] Independent Modular P/Q/T Verification (PR-0022)

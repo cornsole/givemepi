@@ -268,21 +268,21 @@
 
 ## Checkpoint
 
-[ ] P/Q/T Block Format
+[x] P/Q/T Block Format
 
-[ ] Block Magic and Format Version
+[x] Block Magic and Format Version
 
-[ ] Range and Tree-Level Metadata
+[x] Range and Tree-Level Metadata
 
-[ ] P/Q/T Payload Length Metadata
+[x] P/Q/T Payload Length Metadata
 
-[ ] Checksum Type and Value Metadata
+[x] Checksum Type and Value Metadata
 
-[ ] Atomic Temporary File Commit
+[x] Atomic Temporary File Commit
 
-[ ] Manifest
+[x] Manifest
 
-[ ] Save
+[x] Save
 
 [ ] Structural Block Validation
 
@@ -296,7 +296,7 @@
 
 [ ] Corrupt Block Recalculation
 
-[ ] CRC
+[x] CRC
 
 -----------------
 

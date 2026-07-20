@@ -18,7 +18,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0018 | Chudnovsky leaf and range validation | Complete |
 | PR-0019 | Cutoff-based parallel Binary Splitting | Complete |
 | PR-0020 | End-to-end Chudnovsky calculation | Complete |
-| PR-0021 | P/Q/T checkpoint block foundation | Planned |
+| PR-0021 | P/Q/T checkpoint block foundation | Complete |
 | PR-0022 | Checkpoint integrity verification | Planned |
 | PR-0023 | Progress snapshot and reporting | Planned |
 
@@ -641,6 +641,21 @@ validation before resume accepts it.
 - Canonical bytes are independent of host endianness and struct layout.
 - Failed atomic commits cannot replace an existing valid final file.
 - Equivalent manifests encode to identical bytes regardless of insertion order.
+
+### Completion
+
+PR-0021 was completed on 2026-07-20.
+
+- Added portable computation identity, block location, and execution provenance
+  value types with mathematical compatibility validation.
+- Added canonical signed-magnitude GMP serialization and a versioned,
+  endian-independent P/Q/T block codec protected by CRC32C.
+- Added synchronous deterministic checkpoint storage with same-directory temp
+  files, file and directory synchronization, and atomic replacement.
+- Added a canonical versioned manifest with deterministic ordering, CRC32C,
+  and atomic replacement.
+- Verified byte-stable memory and filesystem round trips, corruption rejection,
+  pre-rename fault preservation, GCC, Clang, ASan, UBSan, and static analysis.
 
 ---
 

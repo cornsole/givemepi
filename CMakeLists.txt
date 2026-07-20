@@ -148,6 +148,14 @@ set(PI_ENGINE_SOURCES
 
     src/chudnovsky/PrecisionPolicy.cpp
     src/chudnovsky/ChudnovskyCalculator.cpp
+
+    src/checkpoint/CheckpointTypes.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CheckpointStore.cpp
+    src/checkpoint/CheckpointManifest.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -218,6 +226,139 @@ add_test(
 target_include_directories(precision-policy-test
     PRIVATE
         include
+)
+
+add_executable(checkpoint-types-test
+    tests/checkpoint/CheckpointTypesTest.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+)
+
+add_test(
+    NAME CheckpointTypesTest
+    COMMAND checkpoint-types-test
+)
+
+target_include_directories(checkpoint-types-test
+    PRIVATE
+        include
+)
+
+add_executable(gmp-serialization-test
+    tests/checkpoint/GMPSerializationTest.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME GMPSerializationTest
+    COMMAND gmp-serialization-test
+)
+
+target_include_directories(gmp-serialization-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(gmp-serialization-test
+    PRIVATE
+        gmp
+)
+
+add_executable(checkpoint-block-codec-test
+    tests/checkpoint/CheckpointBlockCodecTest.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME CheckpointBlockCodecTest
+    COMMAND checkpoint-block-codec-test
+)
+
+target_include_directories(checkpoint-block-codec-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-block-codec-test
+    PRIVATE
+        gmp
+)
+
+add_executable(crc32c-test
+    tests/checkpoint/CRC32CTest.cpp
+    src/checkpoint/CRC32C.cpp
+)
+
+add_test(
+    NAME CRC32CTest
+    COMMAND crc32c-test
+)
+
+target_include_directories(crc32c-test
+    PRIVATE
+        include
+)
+
+add_executable(checkpoint-store-test
+    tests/checkpoint/CheckpointStoreTest.cpp
+    src/checkpoint/CheckpointStore.cpp
+    src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME CheckpointStoreTest
+    COMMAND checkpoint-store-test
+)
+
+target_include_directories(checkpoint-store-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-store-test
+    PRIVATE
+        gmp
+)
+
+add_executable(checkpoint-manifest-test
+    tests/checkpoint/CheckpointManifestTest.cpp
+    src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/CheckpointStore.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME CheckpointManifestTest
+    COMMAND checkpoint-manifest-test
+)
+
+target_include_directories(checkpoint-manifest-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-manifest-test
+    PRIVATE
+        gmp
 )
 
 add_test(

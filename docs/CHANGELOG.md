@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.12.0] - PR-0021
+
+### Added
+
+- Added versioned computation identity and block-location value types while
+  keeping execution provenance outside mathematical compatibility.
+- Added canonical signed-magnitude GMP serialization with minimal big-endian
+  magnitudes and strict rejection of non-canonical forms.
+- Added a portable version-1 P/Q/T checkpoint codec with explicit big-endian
+  fields, checked length arithmetic, and CRC32C coverage.
+- Added deterministic synchronous checkpoint storage with unique
+  same-directory temp files, durable atomic replacement, and fault-injection
+  coverage proving pre-rename failures preserve the previous final file.
+- Added a canonical versioned manifest with sorted entries, CRC32C protection,
+  deterministic naming, and atomic replacement.
+- Added in-memory and filesystem round-trip tests for zero, signed, and
+  10,000-digit GMP values plus malformed and corrupted input coverage.
+
+### Changed
+
+- Restricted the checkpoint ignore rule to the repository-root runtime
+  directory so checkpoint source and test directories remain trackable.
+
 ### Documentation
 
 - Reworked the README to describe PiEngine's current implementation status,

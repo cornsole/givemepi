@@ -778,10 +778,10 @@ Alternatives
 
 Consequence
 
-PR-0020 defines the versioned P/Q/T block and atomic commit format with checksum
+PR-0021 defines the versioned P/Q/T block and atomic commit format with checksum
 metadata from the beginning.
 
-PR-0021 implements structural, checksum, manifest, and modular verification and
+PR-0022 implements structural, checksum, manifest, and modular verification and
 resumes only from validated blocks.
 
 Progress reconstruction uses the set of validated blocks rather than stored
@@ -1192,3 +1192,47 @@ The next implementation target is PR-0020 end-to-end Chudnovsky calculation.
 Checkpoint work starts only after computation identity fields and realistic
 performance measurements are available. Existing checkpoint architecture
 decisions remain valid but their planned PR numbers move forward by one.
+
+---
+
+## ADR-0027
+
+Date
+
+2026-07-20
+
+Status
+
+Accepted
+
+Title
+
+Use Canonical Versioned Checkpoint Bytes and Atomic Synchronous Storage
+
+Decision
+
+Checkpoint compatibility is based on the Chudnovsky algorithm and formula
+versions, requested and guarded precision, working digits, and term count.
+Runtime worker, cutoff, queue, and timing settings are separate provenance.
+
+P/Q/T values use canonical signed magnitude with minimal big-endian bytes.
+Blocks and manifests encode every field explicitly, protect canonical bytes
+with CRC32C, and reject non-canonical or inconsistent input. Storage uses a
+unique same-directory temp file, complete writes, file synchronization, atomic
+rename, and parent-directory synchronization.
+
+Reason
+
+Portable canonical bytes prevent compiler ABI, padding, native endianness, and
+equivalent-encoding differences from changing durable checkpoint identity.
+Separating codec and synchronous storage permits a future writer thread or
+out-of-core layer without changing the file contract or adding disk I/O to
+scheduler workers.
+
+Consequence
+
+Equivalent blocks and manifests produce deterministic bytes and paths across
+execution policies. Failures before rename preserve the previous final file.
+PR-0022 remains responsible for deciding whether persisted blocks are trusted
+for resume, including manifest-set consistency and independent modular P/Q/T
+verification.
