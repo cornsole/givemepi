@@ -58,6 +58,40 @@ public:
     );
 
     /**
+     * Replaces this integer with 10 raised to exponent.
+     *
+     * Time complexity: O(M(n) log(exponent)) for an n-bit result.
+     * Memory complexity: O(n).
+     *
+     * @throws std::overflow_error if exponent is unsupported by GMP.
+     */
+    void setPowerOfTen(
+        std::uint64_t exponent
+    );
+
+    /**
+     * Replaces a non-negative value with its floor integer square root.
+     *
+     * Time complexity: O(M(n)) for an n-bit input.
+     * Memory complexity: O(n).
+     *
+     * @throws std::domain_error if this integer is negative.
+     */
+    void floorSquareRoot();
+
+    /**
+     * Replaces this integer with floor(this / divisor).
+     *
+     * Time complexity: O(M(n)) for n-bit operands.
+     * Memory complexity: O(n).
+     *
+     * @throws std::domain_error if divisor is zero.
+     */
+    void floorDivide(
+        const GMPInteger& divisor
+    );
+
+    /**
      * Negates this integer in place.
      *
      * Input: the current arbitrary-precision integer value.

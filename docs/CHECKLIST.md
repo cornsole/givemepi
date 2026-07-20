@@ -230,6 +230,12 @@
 
 [x] Estimated Binary Precision
 
+[x] GMP Power-of-Ten Operation
+
+[x] GMP Floor Integer Square Root
+
+[x] GMP Floor Division
+
 -----------------
 
 ## Storage

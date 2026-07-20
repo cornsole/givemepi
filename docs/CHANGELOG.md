@@ -23,6 +23,9 @@
 - Added overflow-safe fixed-point digit-to-term conversion with a conservative
   digits-per-term lower bound and one safety term, including billion-digit and
   invalid-boundary coverage.
+- Added GMPInteger power-of-ten, non-negative floor square root, and signed
+  floor division operations for integer fixed-point pi finalization, including
+  domain-error and value-preservation coverage.
 
 ## [0.10.0] - PR-0019
 

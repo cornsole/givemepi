@@ -1,5 +1,7 @@
 #include "bigint/GMPInteger.hpp"
 
+#include <limits>
+#include <stdexcept>
 #include <utility>
 
 
@@ -123,6 +125,60 @@ void GMPInteger::mul(
         value_,
         value_,
         *other.raw()
+    );
+}
+
+
+void GMPInteger::setPowerOfTen(
+    std::uint64_t exponent
+)
+{
+    if (exponent > std::numeric_limits<unsigned long>::max())
+    {
+        throw std::overflow_error(
+            "Power-of-ten exponent is unsupported by GMP"
+        );
+    }
+
+    mpz_ui_pow_ui(
+        value_,
+        10,
+        static_cast<unsigned long>(exponent)
+    );
+}
+
+
+void GMPInteger::floorSquareRoot()
+{
+    if (mpz_sgn(value_) < 0)
+    {
+        throw std::domain_error(
+            "Integer square root requires a non-negative value"
+        );
+    }
+
+    mpz_sqrt(
+        value_,
+        value_
+    );
+}
+
+
+void GMPInteger::floorDivide(
+    const GMPInteger& divisor
+)
+{
+    if (divisor.isZero())
+    {
+        throw std::domain_error(
+            "Integer division by zero"
+        );
+    }
+
+    mpz_fdiv_q(
+        value_,
+        value_,
+        *divisor.raw()
     );
 }
 
