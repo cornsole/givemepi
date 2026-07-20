@@ -14,6 +14,7 @@ namespace pi::checkpoint
 struct AcceptedCheckpoint
 {
     std::filesystem::path path;
+    std::uint64_t fileSize;
     CheckpointBlock block;
 };
 

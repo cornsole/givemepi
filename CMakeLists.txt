@@ -71,6 +71,9 @@ if(ENABLE_BENCHMARKS)
 
         src/chudnovsky/PrecisionPolicy.cpp
         src/chudnovsky/ChudnovskyCalculator.cpp
+        src/progress/ProgressTracker.cpp
+        src/progress/ProgressSnapshot.cpp
+        src/progress/ProgressState.cpp
 
         src/binary/BinaryNode.cpp
         src/binary/BinarySplitter.cpp
@@ -164,6 +167,16 @@ set(PI_ENGINE_SOURCES
     src/checkpoint/ModularPQTVerifier.cpp
     src/checkpoint/CheckpointQuarantine.cpp
     src/checkpoint/CheckpointResumePlanner.cpp
+
+    src/progress/ProgressState.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressTracker.cpp
+    src/progress/ProgressMetrics.cpp
+    src/progress/ResumeProgress.cpp
+    src/progress/ProgressReporter.cpp
+    src/progress/TextProgressReporter.cpp
+    src/progress/JsonProgressReporter.cpp
+    src/progress/ProgressReportingRunner.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -177,6 +190,204 @@ add_executable(pi-engine
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
+add_executable(progress-config-test
+    tests/config/ProgressConfigTest.cpp
+    src/config/Config.cpp
+    src/config/ConfigLoader.cpp
+    src/config/CommandLine.cpp
+)
+
+add_test(
+    NAME ProgressConfigTest
+    COMMAND progress-config-test
+)
+
+target_include_directories(progress-config-test
+    PRIVATE
+        include
+        third_party/tomlplusplus/include
+)
+
+target_compile_definitions(progress-config-test
+    PRIVATE
+        TOML_HEADER_ONLY=1
+)
+
+add_executable(progress-state-test
+    tests/progress/ProgressStateTest.cpp
+    src/progress/ProgressState.cpp
+)
+
+add_test(
+    NAME ProgressStateTest
+    COMMAND progress-state-test
+)
+
+target_include_directories(progress-state-test
+    PRIVATE
+        include
+)
+
+add_executable(progress-snapshot-test
+    tests/progress/ProgressSnapshotTest.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+)
+
+add_test(
+    NAME ProgressSnapshotTest
+    COMMAND progress-snapshot-test
+)
+
+target_include_directories(progress-snapshot-test
+    PRIVATE
+        include
+)
+
+add_executable(progress-tracker-test
+    tests/progress/ProgressTrackerTest.cpp
+    src/progress/ProgressTracker.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+)
+
+add_test(
+    NAME ProgressTrackerTest
+    COMMAND progress-tracker-test
+)
+
+target_include_directories(progress-tracker-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(progress-tracker-test
+    PRIVATE
+        Threads::Threads
+)
+
+add_executable(progress-metrics-test
+    tests/progress/ProgressMetricsTest.cpp
+    src/progress/ProgressMetrics.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+)
+
+add_test(
+    NAME ProgressMetricsTest
+    COMMAND progress-metrics-test
+)
+
+target_include_directories(progress-metrics-test
+    PRIVATE
+        include
+)
+
+add_executable(resume-progress-test
+    tests/progress/ResumeProgressTest.cpp
+    src/progress/ResumeProgress.cpp
+    src/progress/ProgressTracker.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME ResumeProgressTest
+    COMMAND resume-progress-test
+)
+
+target_include_directories(resume-progress-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(resume-progress-test
+    PRIVATE
+        gmp
+        Threads::Threads
+)
+
+add_executable(progress-reporter-test
+    tests/progress/ProgressReporterTest.cpp
+    src/progress/ProgressReporter.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+)
+
+add_test(
+    NAME ProgressReporterTest
+    COMMAND progress-reporter-test
+)
+
+target_include_directories(progress-reporter-test
+    PRIVATE
+        include
+)
+
+add_executable(text-progress-reporter-test
+    tests/progress/TextProgressReporterTest.cpp
+    src/progress/TextProgressReporter.cpp
+    src/progress/ProgressReporter.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+)
+
+add_test(
+    NAME TextProgressReporterTest
+    COMMAND text-progress-reporter-test
+)
+
+target_include_directories(text-progress-reporter-test
+    PRIVATE
+        include
+)
+
+add_executable(json-progress-reporter-test
+    tests/progress/JsonProgressReporterTest.cpp
+    src/progress/JsonProgressReporter.cpp
+    src/progress/ProgressReporter.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+)
+
+add_test(
+    NAME JsonProgressReporterTest
+    COMMAND json-progress-reporter-test
+)
+
+target_include_directories(json-progress-reporter-test
+    PRIVATE
+        include
+)
+
+add_executable(progress-reporting-runner-test
+    tests/progress/ProgressReportingRunnerTest.cpp
+    src/progress/ProgressReportingRunner.cpp
+    src/progress/ProgressReporter.cpp
+    src/progress/ProgressMetrics.cpp
+    src/progress/ProgressTracker.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+)
+
+add_test(
+    NAME ProgressReportingRunnerTest
+    COMMAND progress-reporting-runner-test
+)
+
+target_include_directories(progress-reporting-runner-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(progress-reporting-runner-test
+    PRIVATE
+        Threads::Threads
+)
 
 add_executable(cpu-features-test
     tests/platform/CPUFeaturesTest.cpp
@@ -195,6 +406,9 @@ add_executable(chudnovsky-calculator-test
 
     src/chudnovsky/PrecisionPolicy.cpp
     src/chudnovsky/ChudnovskyCalculator.cpp
+    src/progress/ProgressTracker.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
 
     src/binary/BinaryNode.cpp
     src/binary/BinarySplitter.cpp

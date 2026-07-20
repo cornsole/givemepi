@@ -186,7 +186,9 @@ CheckpointResumePlan CheckpointResumePlanner::create(
             }
 
             plan.acceptedBlocks.push_back(AcceptedCheckpoint{
-                path, std::move(inspection.file->block)
+                path,
+                inspection.file->fileSize,
+                std::move(inspection.file->block)
             });
             processedPaths.insert(path);
         }

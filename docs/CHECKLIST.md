@@ -302,23 +302,23 @@
 
 ## Progress
 
-[ ] Progress Phase
+[x] Progress Phase
 
-[ ] Thread-Safe Progress Tracker
+[x] Thread-Safe Progress Tracker
 
-[ ] Immutable Progress Snapshot
+[x] Immutable Progress Snapshot
 
-[ ] Total and Completed Terms
+[x] Total and Completed Terms
 
 [ ] Total and Completed Blocks
 
-[ ] Current Merge Level
+[x] Current Merge Level
 
 [ ] Active and Queued Tasks
 
-[ ] ETA
+[x] ETA
 
-[ ] Speed
+[x] Speed
 
 [ ] Memory
 
@@ -328,23 +328,23 @@
 
 [ ] Last Verified Checkpoint
 
-[ ] CLI Text Reporter
+[x] CLI Text Reporter
 
-[ ] CLI JSON Reporter
+[x] CLI JSON Reporter
 
-[ ] TTY and Non-TTY Output Modes
+[x] TTY and Non-TTY Output Modes
 
-[ ] Progress Enable / Disable Option
+[x] Progress Enable / Disable Option
 
-[ ] Progress Interval Option
+[x] Progress Interval Option
 
-[ ] Progress Format Option
+[x] Progress Format Option
 
-[ ] Post-CLI Configuration Validation
+[x] Post-CLI Configuration Validation
 
-[ ] Resume Progress Reconstruction
+[x] Resume Progress Reconstruction
 
-[ ] Future Reporter Extension Point
+[x] Future Reporter Extension Point
 
 -----------------
 

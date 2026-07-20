@@ -20,6 +20,10 @@ public:
     ///   --no-checkpoint
     ///   --resume
     ///   --no-resume
+    ///   --progress
+    ///   --no-progress
+    ///   --progress-interval <milliseconds>
+    ///   --progress-format <text|json>
     ///
     /// Unknown options are ignored for now.
     ///
@@ -29,7 +33,8 @@ public:
     static void applyOverrides(
         Config& config,
         int argc,
-        char* argv[]);
+        char* argv[]
+    );
 };
 
 } // namespace pi::config

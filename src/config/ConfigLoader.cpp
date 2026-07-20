@@ -12,45 +12,6 @@ namespace pi::config
 namespace
 {
 
-void validate(Config& config)
-{
-    if (config.digits == 0)
-    {
-        throw std::runtime_error(
-            "Config validation failed: digits must be greater than 0.");
-    }
-
-    if (config.threads > 1024)
-    {
-        throw std::runtime_error(
-            "Config validation failed: threads value is too large.");
-    }
-
-    if (config.checkpoint_interval_seconds == 0 &&
-        config.checkpoint_enabled)
-    {
-        throw std::runtime_error(
-            "Config validation failed: checkpoint interval must be greater than 0.");
-    }
-
-    if (config.progress_interval_ms == 0)
-    {
-        throw std::runtime_error(
-            "Config validation failed: progress interval must be greater than 0.");
-    }
-
-    if (config.output_file.empty())
-    {
-        throw std::runtime_error(
-            "Config validation failed: output file is empty.");
-    }
-
-    if (config.compression.empty())
-    {
-        config.compression = "none";
-    }
-}
-
 template <typename T>
 void load_value(
     const toml::table& table,
@@ -73,7 +34,7 @@ Config ConfigLoader::load(
 
     if (!std::filesystem::exists(path))
     {
-        validate(config);
+        validateConfig(config);
         return config;
     }
 
@@ -119,8 +80,19 @@ Config ConfigLoader::load(
 
         load_value(
             table,
+            "progress",
+            config.progress_enabled);
+
+        load_value(
+            table,
             "progress_interval",
             config.progress_interval_ms);
+
+        std::string progressFormat = std::string(toString(
+            config.progress_format
+        ));
+        load_value(table, "progress_format", progressFormat);
+        config.progress_format = parseProgressFormat(progressFormat);
 
         load_value(
             table,
@@ -139,7 +111,7 @@ Config ConfigLoader::load(
             std::string(e.description()));
     }
 
-    validate(config);
+    validateConfig(config);
 
     return config;
 }

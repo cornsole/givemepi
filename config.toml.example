@@ -56,7 +56,12 @@ compression = "lz4"
 ###############################################################################
 
 # Progress update interval (milliseconds).
+progress = true
+
 progress_interval = 500
+
+# Progress output format: "text" or "json".
+progress_format = "text"
 
 ###############################################################################
 # Output

@@ -25,7 +25,9 @@ inline constexpr bool OUT_OF_CORE_ENABLED = true;
 inline constexpr std::string_view COMPRESSION = "lz4";
 
 // Progress
+inline constexpr bool PROGRESS_ENABLED = true;
 inline constexpr std::uint32_t PROGRESS_INTERVAL_MS = 500;
+inline constexpr std::string_view PROGRESS_FORMAT = "text";
 
 // Output
 inline constexpr std::string_view OUTPUT_FILE = "pi.txt";

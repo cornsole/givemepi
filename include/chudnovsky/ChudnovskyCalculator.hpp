@@ -13,6 +13,11 @@ namespace pi::scheduler
 class Scheduler;
 }
 
+namespace pi::progress
+{
+class ProgressTracker;
+}
+
 
 namespace pi::chudnovsky
 {
@@ -58,7 +63,8 @@ public:
      */
     [[nodiscard]]
     static PiCalculationResult calculateSequential(
-        const PiCalculationRequest& request
+        const PiCalculationRequest& request,
+        progress::ProgressTracker* progress = nullptr
     );
 
     /**
@@ -71,7 +77,8 @@ public:
     static PiCalculationResult calculateParallel(
         const PiCalculationRequest& request,
         scheduler::Scheduler& executor,
-        const binary::ParallelSplitOptions& splitOptions
+        const binary::ParallelSplitOptions& splitOptions,
+        progress::ProgressTracker* progress = nullptr
     );
 };
 

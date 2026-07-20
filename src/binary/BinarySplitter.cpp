@@ -310,7 +310,8 @@ BinaryNode BinarySplitter::splitParallel(
     std::size_t start,
     std::size_t end,
     scheduler::Scheduler& executor,
-    const ParallelSplitOptions& options
+    const ParallelSplitOptions& options,
+    BinarySplitObserver* observer
 )
 {
     validateRange(start, end);
@@ -337,7 +338,12 @@ BinaryNode BinarySplitter::splitParallel(
         || executor.workerCount() == 0
         || executor.ownsCurrentWorker())
     {
-        return splitSequentialValidated(start, end);
+        BinaryNode result = splitSequentialValidated(start, end);
+        if (observer != nullptr)
+        {
+            observer->termsCompleted(termCount);
+        }
+        return result;
     }
 
 
@@ -350,7 +356,12 @@ BinaryNode BinarySplitter::splitParallel(
 
     if (blockCount < 2)
     {
-        return splitSequentialValidated(start, end);
+        BinaryNode result = splitSequentialValidated(start, end);
+        if (observer != nullptr)
+        {
+            observer->termsCompleted(termCount);
+        }
+        return result;
     }
 
 
@@ -370,11 +381,15 @@ BinaryNode BinarySplitter::splitParallel(
 
         scheduler::TaskHandle handle = executor.submit(
             scheduler::Task(
-                [&leafResults, index, blockStart, blockEnd]()
+                [&leafResults, index, blockStart, blockEnd, observer]()
                 {
                     leafResults[index].emplace(
                         splitSequentialValidated(blockStart, blockEnd)
                     );
+                    if (observer != nullptr)
+                    {
+                        observer->termsCompleted(blockEnd - blockStart);
+                    }
                 }
             )
         );
@@ -388,6 +403,10 @@ BinaryNode BinarySplitter::splitParallel(
             leafResults[index].emplace(
                 splitSequentialValidated(blockStart, blockEnd)
             );
+            if (observer != nullptr)
+            {
+                observer->termsCompleted(blockEnd - blockStart);
+            }
         }
 
         blockStart = blockEnd;
@@ -405,8 +424,14 @@ BinaryNode BinarySplitter::splitParallel(
     }
 
 
+    std::uint32_t mergeLevel = 0;
     while (nodes.size() > 1)
     {
+        if (observer != nullptr)
+        {
+            observer->mergeLevelStarted(mergeLevel);
+        }
+        ++mergeLevel;
         const std::size_t pairCount = nodes.size() / 2;
 
         if (pairCount == 1)

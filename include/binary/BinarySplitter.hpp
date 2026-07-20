@@ -2,6 +2,9 @@
 
 #include "binary/BinaryNode.hpp"
 
+#include <cstddef>
+#include <cstdint>
+
 
 namespace pi::scheduler
 {
@@ -11,6 +14,20 @@ class Scheduler;
 
 namespace pi::binary
 {
+
+class BinarySplitObserver
+{
+public:
+    virtual ~BinarySplitObserver() = default;
+
+    /// Receives one completed leaf-block term count from a worker or caller.
+    /// Implementations must not throw or perform blocking work. O(1) expected.
+    virtual void termsCompleted(std::size_t count) noexcept = 0;
+
+    /// Receives each merge level on the coordinating thread. O(1) expected.
+    virtual void mergeLevelStarted(std::uint32_t level) noexcept = 0;
+};
+
 
 struct ParallelSplitOptions
 {
@@ -84,7 +101,8 @@ public:
         std::size_t start,
         std::size_t end,
         scheduler::Scheduler& executor,
-        const ParallelSplitOptions& options
+        const ParallelSplitOptions& options,
+        BinarySplitObserver* observer = nullptr
     );
 
     [[nodiscard]]

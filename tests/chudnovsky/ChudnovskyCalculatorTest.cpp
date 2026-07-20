@@ -1,5 +1,6 @@
 #include "chudnovsky/ChudnovskyCalculator.hpp"
 #include "scheduler/Scheduler.hpp"
+#include "progress/ProgressTracker.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -131,6 +132,52 @@ int main()
         || guard64.timings.total().count() < 0)
     {
         std::cerr << "Guard stability or timing contract failed\n";
+        return 1;
+    }
+
+    const auto progressPlan = pi::chudnovsky::PrecisionPolicy::create(100);
+    pi::progress::ProgressTracker sequentialProgress({
+        progressPlan.requestedDigits,
+        progressPlan.termCount,
+        0
+    });
+    const PiCalculationResult progressResult =
+        ChudnovskyCalculator::calculateSequential(
+            PiCalculationRequest{100},
+            &sequentialProgress
+        );
+    const auto progressSnapshot = sequentialProgress.snapshot();
+    if (progressResult.decimal != knownRounded100
+        || progressSnapshot.phase()
+            != pi::progress::ProgressPhase::completed
+        || progressSnapshot.completedTerms() != progressPlan.termCount
+        || progressSnapshot.activeTasks() != 0
+        || progressSnapshot.queuedTasks() != 0)
+    {
+        std::cerr << "End-to-end sequential progress mismatch\n";
+        return 1;
+    }
+
+    pi::progress::ProgressTracker parallelProgress({
+        progressPlan.requestedDigits,
+        progressPlan.termCount,
+        0
+    });
+    Scheduler progressScheduler(2, 64);
+    progressScheduler.start();
+    static_cast<void>(ChudnovskyCalculator::calculateParallel(
+        PiCalculationRequest{100},
+        progressScheduler,
+        ParallelSplitOptions{1, 2},
+        &parallelProgress
+    ));
+    progressScheduler.stop();
+    if (parallelProgress.snapshot().phase()
+            != pi::progress::ProgressPhase::completed
+        || parallelProgress.snapshot().completedTerms()
+            != progressPlan.termCount)
+    {
+        std::cerr << "End-to-end parallel progress mismatch\n";
         return 1;
     }
 

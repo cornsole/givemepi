@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the version-1 progress lifecycle contract with stable phase names,
+  derived terminal states, explicit legal transitions, and terminal-state
+  immutability.
+- Added an immutable, presentation-independent progress snapshot containing
+  authoritative work, scheduler, timing, memory, checkpoint, and failure data
+  with construction-time invariant validation.
+- Added a thread-safe progress tracker with bounded atomic work counters,
+  low-frequency synchronized metadata, legal terminal transitions, frozen
+  terminal elapsed time, and concurrent immutable snapshot generation.
+- Added policy-driven derived progress metrics for completion ratio, lifetime
+  term and checkpoint throughput, and conservative optional ETA without
+  persisting estimates as authoritative state.
+- Added all-or-nothing resume progress restoration from PR-0022 accepted block
+  metadata, including overlap and bounds protection, exact file-byte recovery,
+  and exclusion of rejected or temporary checkpoint state.
+- Added a CLI-independent progress reporter interface that consumes immutable
+  snapshots and matching derived metrics while leaving scheduling, sampling,
+  and failure isolation to the reporting runner.
+- Added a human-readable text progress reporter with single-line TTY refresh,
+  newline-delimited UTC log records, terminal-state line completion, stable
+  units, optional ETA handling, and control-character sanitization.
+- Added a versioned JSON Lines progress reporter with stable field types,
+  explicit nulls for unavailable metrics, portable UTC timestamps, complete
+  raw snapshot fields, and strict string and non-finite-number handling.
+- Added a dedicated progress reporting runner with explicit start, stop, and
+  join lifecycle, latest-state sampling without backlog, terminal flush, and
+  containment of slow or throwing reporters away from computation workers.
+- Added typed TOML and CLI progress controls for enablement, reporting interval,
+  and text or JSON format with shared post-override validation and the fixed
+  defaults-to-file-to-command-line precedence order.
+- Connected the end-to-end Chudnovsky API to optional progress lifecycle and
+  completed-term updates, and wired the CLI to configure a dedicated reporter,
+  run the scheduler-backed calculation, emit a terminal snapshot, and write
+  the resulting decimal output file.
+
 ## [0.12.0] - PR-0021
 
 ### Added
