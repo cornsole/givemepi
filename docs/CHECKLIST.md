@@ -12,6 +12,8 @@
 
 [x] Project directory structure
 
+[x] README Algorithm, Architecture Direction, and Current Status
+
 [x] Initial scheduler module skeleton
 
 -----------------

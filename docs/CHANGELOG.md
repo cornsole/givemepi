@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Documentation
+
+- Reworked the README to describe PiEngine's current implementation status,
+  Chudnovsky and P/Q/T Binary Splitting direction, GMP arithmetic boundary,
+  scheduler model, checkpoint integrity plan, out-of-core goal, verification
+  strategy, build workflow, and explicit non-goals.
+- Distinguished implemented scheduler and arithmetic foundations from planned
+  Chudnovsky leaf, parallel Binary Splitting, checkpoint, progress, and final
+  output stages.
+
 ## [0.8.0] - PR-0017
 
 ### Added
