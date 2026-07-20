@@ -26,6 +26,16 @@
 - Added GMPInteger power-of-ten, non-negative floor square root, and signed
   floor division operations for integer fixed-point pi finalization, including
   domain-error and value-preservation coverage.
+- Added a CLI-independent end-to-end Chudnovsky calculation API that returns
+  its precision identity with a normalized, guard-rounded decimal pi string.
+- Added sequential, stopped-scheduler fallback, and staged-parallel calculation
+  coverage with exact rounded known values from 1 through 100 decimal places.
+
+### Changed
+
+- Replaced the test-only floating-point finalization path with guarded GMP
+  integer square root, division, rounding, and decimal formatting in production
+  calculation code.
 
 ## [0.10.0] - PR-0019
 

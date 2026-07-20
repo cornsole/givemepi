@@ -17,7 +17,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0017 | Scheduler correctness hardening | Complete |
 | PR-0018 | Chudnovsky leaf and range validation | Complete |
 | PR-0019 | Cutoff-based parallel Binary Splitting | Complete |
-| PR-0020 | End-to-end Chudnovsky calculation | Planned |
+| PR-0020 | End-to-end Chudnovsky calculation | In Progress |
 | PR-0021 | P/Q/T checkpoint block foundation | Planned |
 | PR-0022 | Checkpoint integrity verification | Planned |
 | PR-0023 | Progress snapshot and reporting | Planned |

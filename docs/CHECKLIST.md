@@ -220,9 +220,9 @@
 
 ## Chudnovsky
 
-[ ] Formula
+[x] Formula
 
-[ ] Precision Control
+[x] Precision Control
 
 [x] Precision and Guard-Digit Policy
 
@@ -235,6 +235,16 @@
 [x] GMP Floor Integer Square Root
 
 [x] GMP Floor Division
+
+[x] End-to-End Sequential Pi Calculation
+
+[x] End-to-End Parallel Pi Calculation
+
+[x] Guard-Digit Rounding
+
+[x] Normalized Decimal Output
+
+[x] Production Known-Digits Coverage
 
 -----------------
 

@@ -109,6 +109,7 @@ set(PI_ENGINE_SOURCES
     src/binary/BinarySplitter.cpp
 
     src/chudnovsky/PrecisionPolicy.cpp
+    src/chudnovsky/ChudnovskyCalculator.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -133,6 +134,42 @@ add_executable(cpu-features-test
 add_executable(precision-policy-test
     tests/chudnovsky/PrecisionPolicyTest.cpp
     src/chudnovsky/PrecisionPolicy.cpp
+)
+
+add_executable(chudnovsky-calculator-test
+    tests/chudnovsky/ChudnovskyCalculatorTest.cpp
+
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/chudnovsky/ChudnovskyCalculator.cpp
+
+    src/binary/BinaryNode.cpp
+    src/binary/BinarySplitter.cpp
+    src/bigint/GMPInteger.cpp
+
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
+)
+
+add_test(
+    NAME ChudnovskyCalculatorTest
+    COMMAND chudnovsky-calculator-test
+)
+
+target_include_directories(chudnovsky-calculator-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(chudnovsky-calculator-test
+    PRIVATE
+        gmp
+        Threads::Threads
 )
 
 add_test(
