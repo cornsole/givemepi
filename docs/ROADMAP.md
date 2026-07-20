@@ -85,8 +85,8 @@ Chudnovsky
 
 [ ] End-to-End Formula (PR-0020)
 [ ] Integer Fixed-Point Finalization (PR-0020)
-[ ] Precision and Guard-Digit Policy (PR-0020)
-[ ] Digit-to-Term Conversion (PR-0020)
+[x] Precision and Guard-Digit Policy (PR-0020)
+[x] Digit-to-Term Conversion (PR-0020)
 [ ] Normalized Decimal Output (PR-0020)
 [ ] Production Known-Digits Integration Test (PR-0020)
 [ ] End-to-End Benchmark (PR-0020)

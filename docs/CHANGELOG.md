@@ -15,6 +15,15 @@
   Chudnovsky finalization and end-to-end benchmarking before checkpoint format,
   integrity, and progress work.
 
+### Added
+
+- Added a deterministic integer-only Chudnovsky precision policy covering
+  requested digits, guard digits, working precision, term count, and estimated
+  binary precision.
+- Added overflow-safe fixed-point digit-to-term conversion with a conservative
+  digits-per-term lower bound and one safety term, including billion-digit and
+  invalid-boundary coverage.
+
 ## [0.10.0] - PR-0019
 
 ### Added

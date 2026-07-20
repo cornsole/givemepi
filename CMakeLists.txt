@@ -107,6 +107,8 @@ set(PI_ENGINE_SOURCES
 
     src/binary/BinaryNode.cpp
     src/binary/BinarySplitter.cpp
+
+    src/chudnovsky/PrecisionPolicy.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -126,6 +128,21 @@ add_executable(cpu-features-test
 
     src/platform/CPUFeatures.cpp
     src/platform/CPUInfo.cpp
+)
+
+add_executable(precision-policy-test
+    tests/chudnovsky/PrecisionPolicyTest.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+)
+
+add_test(
+    NAME PrecisionPolicyTest
+    COMMAND precision-policy-test
+)
+
+target_include_directories(precision-policy-test
+    PRIVATE
+        include
 )
 
 add_test(

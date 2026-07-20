@@ -224,6 +224,12 @@
 
 [ ] Precision Control
 
+[x] Precision and Guard-Digit Policy
+
+[x] Overflow-Safe Digit-to-Term Conversion
+
+[x] Estimated Binary Precision
+
 -----------------
 
 ## Storage
