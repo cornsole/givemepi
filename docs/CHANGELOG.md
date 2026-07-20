@@ -11,6 +11,9 @@
 - Distinguished implemented scheduler and arithmetic foundations from planned
   Chudnovsky leaf, parallel Binary Splitting, checkpoint, progress, and final
   output stages.
+- Reordered the approved plan to complete guarded integer fixed-point
+  Chudnovsky finalization and end-to-end benchmarking before checkpoint format,
+  integrity, and progress work.
 
 ## [0.10.0] - PR-0019
 

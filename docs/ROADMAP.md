@@ -83,9 +83,13 @@ Phase 6
 
 Chudnovsky
 
-[ ] Formula
-[ ] Precision Control
-[ ] Known-Digits Integration Test
+[ ] End-to-End Formula (PR-0020)
+[ ] Integer Fixed-Point Finalization (PR-0020)
+[ ] Precision and Guard-Digit Policy (PR-0020)
+[ ] Digit-to-Term Conversion (PR-0020)
+[ ] Normalized Decimal Output (PR-0020)
+[ ] Production Known-Digits Integration Test (PR-0020)
+[ ] End-to-End Benchmark (PR-0020)
 
 ----------------------
 
@@ -99,16 +103,16 @@ Phase 8
 
 Checkpoint
 
-[ ] P/Q/T Block Format (PR-0020)
-[ ] Versioned Block Header and Payload Metadata (PR-0020)
-[ ] Atomic Temporary File Commit (PR-0020)
-[ ] Manifest Format (PR-0020)
-[ ] Structural Block Validation (PR-0021)
-[ ] Payload Checksum Validation (PR-0021)
-[ ] Independent Modular P/Q/T Verification (PR-0021)
-[ ] Manifest Consistency Validation (PR-0021)
-[ ] Resume from Verified Blocks Only (PR-0021)
-[ ] Corrupt Block Quarantine and Recalculation (PR-0021)
+[ ] P/Q/T Block Format (PR-0021)
+[ ] Versioned Block Header and Payload Metadata (PR-0021)
+[ ] Atomic Temporary File Commit (PR-0021)
+[ ] Manifest Format (PR-0021)
+[ ] Structural Block Validation (PR-0022)
+[ ] Payload Checksum Validation (PR-0022)
+[ ] Independent Modular P/Q/T Verification (PR-0022)
+[ ] Manifest Consistency Validation (PR-0022)
+[ ] Resume from Verified Blocks Only (PR-0022)
+[ ] Corrupt Block Quarantine and Recalculation (PR-0022)
 
 ----------------------
 
@@ -116,16 +120,16 @@ Phase 9
 
 Progress
 
-[ ] Progress Phase Model (PR-0022)
-[ ] Thread-Safe Progress Tracker (PR-0022)
-[ ] Immutable Progress Snapshot (PR-0022)
-[ ] Terms, Blocks, and Merge-Level Counters (PR-0022)
-[ ] Speed, ETA, Memory, and Checkpoint Metrics (PR-0022)
-[ ] CLI Text Reporter (PR-0022)
-[ ] CLI JSON Reporter (PR-0022)
-[ ] TOML and CLI Progress Controls (PR-0022)
-[ ] Post-Override Configuration Validation (PR-0022)
-[ ] Resume Progress Reconstruction (PR-0022)
+[ ] Progress Phase Model (PR-0023)
+[ ] Thread-Safe Progress Tracker (PR-0023)
+[ ] Immutable Progress Snapshot (PR-0023)
+[ ] Terms, Blocks, and Merge-Level Counters (PR-0023)
+[ ] Speed, ETA, Memory, and Checkpoint Metrics (PR-0023)
+[ ] CLI Text Reporter (PR-0023)
+[ ] CLI JSON Reporter (PR-0023)
+[ ] TOML and CLI Progress Controls (PR-0023)
+[ ] Post-Override Configuration Validation (PR-0023)
+[ ] Resume Progress Reconstruction (PR-0023)
 
 ----------------------
 

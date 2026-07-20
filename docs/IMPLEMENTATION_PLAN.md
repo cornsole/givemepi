@@ -17,9 +17,10 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0017 | Scheduler correctness hardening | Complete |
 | PR-0018 | Chudnovsky leaf and range validation | Complete |
 | PR-0019 | Cutoff-based parallel Binary Splitting | Complete |
-| PR-0020 | P/Q/T checkpoint block foundation | Planned |
-| PR-0021 | Checkpoint integrity verification | Planned |
-| PR-0022 | Progress snapshot and reporting | Planned |
+| PR-0020 | End-to-end Chudnovsky calculation | Planned |
+| PR-0021 | P/Q/T checkpoint block foundation | Planned |
+| PR-0022 | Checkpoint integrity verification | Planned |
+| PR-0023 | Progress snapshot and reporting | Planned |
 
 ---
 
@@ -425,13 +426,62 @@ PR-0019 was completed on 2026-07-20.
 
 ### Next Contributor TODO
 
-Begin PR-0020 with a versioned P/Q/T checkpoint block format. Treat completed
-parallel leaf blocks as natural checkpoint candidates, keep disk I/O outside
-worker threads, and do not make a block reusable until PR-0021 validation.
+Begin PR-0020 with the minimum end-to-end Chudnovsky calculation path. Convert
+requested digits to a guarded term count, execute the existing Binary
+Splitting engine, finalize pi with integer fixed-point arithmetic, and verify
+known decimal output before defining checkpoint computation identity.
 
 ---
 
-## PR-0020: P/Q/T Checkpoint Block Foundation
+## PR-0020: End-to-End Chudnovsky Calculation
+
+### Goal
+
+Turn the verified P/Q/T engine into a minimal production calculation path from
+requested decimal digits to a normalized pi string.
+
+### Arithmetic Contract
+
+The finalization path remains integer based. For requested digits `d`, compute
+with explicit guard digits, derive the required Chudnovsky term count, and use
+the existing sequential or staged-parallel Binary Splitting engine.
+
+The square-root factor is produced with GMP integer square root at the guarded
+decimal scale. Final division, guard removal, and decimal formatting operate on
+integers so correctness does not depend on host floating-point behavior or an
+implicit global GMP floating-point precision.
+
+### Scope
+
+- define requested-digit, guard-digit, and term-count policy
+- add required GMPInteger power-of-ten, square-root, and division operations
+- implement `426880 * sqrt(10005) * Q / T` at guarded fixed-point precision
+- normalize output as `3.<requested digits>`
+- expose a computation API independent from CLI, checkpoint, and reporting
+- support sequential and scheduler-backed Binary Splitting execution
+- test known digits across multiple requested precisions
+- add an end-to-end benchmark separating split, finalize, and format time
+
+### Out of Scope
+
+- checkpoint files and resume
+- progress reporters
+- BBP verification and final output hashing
+- automatic CPU topology and cutoff tuning
+- out-of-core decimal conversion
+
+### Definition of Done
+
+- requested digits deterministically map to sufficient guarded terms
+- sequential and parallel calculation produce identical normalized output
+- known pi prefixes pass at multiple precision boundaries
+- invalid digit, guard, and scheduler policy inputs are rejected
+- end-to-end benchmark results are recorded before further optimization
+- the resulting computation identity fields are documented for PR-0021
+
+---
+
+## PR-0021: P/Q/T Checkpoint Block Foundation
 
 ### Goal
 
@@ -456,7 +506,7 @@ range without implementing resume policy yet.
 Worker threads never perform checkpoint disk I/O. They publish completed block
 data to the checkpoint writer.
 
-The presence of a block file does not make it reusable. PR-0021 performs all
+The presence of a block file does not make it reusable. PR-0022 performs all
 validation before resume accepts it.
 
 ### Definition of Done
@@ -469,7 +519,7 @@ validation before resume accepts it.
 
 ---
 
-## PR-0021: Checkpoint Integrity Verification
+## PR-0022: Checkpoint Integrity Verification
 
 ### Goal
 
@@ -515,7 +565,7 @@ mathematically verified P/Q/T blocks.
 
 ---
 
-## PR-0022: Progress Snapshot and Reporting
+## PR-0023: Progress Snapshot and Reporting
 
 ### Goal
 
@@ -578,7 +628,7 @@ values and may be unavailable until enough samples exist.
 - non-TTY text emits complete timestamped records
 - JSON output uses a versioned machine-readable schema
 - slow reporters cannot block computation workers
-- resume reconstructs counters from PR-0021 validated blocks
+- resume reconstructs counters from PR-0022 validated blocks
 
 ### Tests
 

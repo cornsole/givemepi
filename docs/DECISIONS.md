@@ -1140,3 +1140,55 @@ The caller synchronizes between merge levels, and current-worker calls do not
 parallelize. Cooperative scheduler waits and a generic task DAG remain possible
 future extensions if broader workloads justify their complexity with
 benchmarks.
+
+---
+
+## ADR-0026
+
+Date
+
+2026-07-20
+
+Status
+
+Accepted
+
+Title
+
+Complete the End-to-End Calculation Before Checkpoint Storage
+
+Decision
+
+Insert an end-to-end Chudnovsky calculation PR before the checkpoint block
+foundation. The new PR-0020 defines digit-to-term conversion, guard precision,
+integer fixed-point finalization, normalized decimal output, and end-to-end
+benchmarks. The previously planned checkpoint, integrity, and progress work
+moves to PR-0021, PR-0022, and PR-0023 respectively.
+
+Final pi construction uses guarded GMP integer arithmetic and integer square
+root instead of promoting the test-only `mpf_t` approximation into the
+production API.
+
+Reason
+
+Checkpoint identity and compatibility depend on the requested digits, guard
+policy, term count, arithmetic version, and finalization contract. Defining a
+durable format before those fields exist risks format churn and makes it
+impossible to benchmark the real end-to-end bottleneck.
+
+Integer fixed-point finalization makes rounding inputs explicit, avoids hidden
+global floating-point precision, and preserves the project's GMP integer
+boundary for very large calculations.
+
+Alternatives
+
+- Implement checkpoint blocks before the final calculation contract.
+- Promote the test-only GMP floating-point calculation directly to production.
+- Combine finalization, checkpoint, resume, and progress in one PR.
+
+Consequence
+
+The next implementation target is PR-0020 end-to-end Chudnovsky calculation.
+Checkpoint work starts only after computation identity fields and realistic
+performance measurements are available. Existing checkpoint architecture
+decisions remain valid but their planned PR numbers move forward by one.
