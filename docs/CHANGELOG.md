@@ -4,6 +4,41 @@
 
 ### Added
 
+- Added a version-1 runtime chunk codec with explicit big-endian metadata,
+  canonical P/Q/T signed-magnitude payloads, CRC32C coverage, checked lengths,
+  deterministic round trips, and corruption/version rejection.
+- Added a bounded compression codec interface and the `none` codec, including
+  exact input/output size contracts and explicit rejection of unimplemented
+  compression algorithms.
+- Added a TOML- and CLI-independent typed `StoragePolicy` with storage
+  enablement, directory, memory budget, target chunk size, compression, and
+  maximum concurrent I/O settings plus shared validation and compression
+  parsing.
+- Added runtime `ChunkIdentity` and `ChunkMetadata` types with computation
+  identity and range validation, deterministic filenames, format and checksum
+  metadata, and explicit rejection of unsupported compression algorithms.
+- Defined the PR-0025 runtime storage lifecycle and ownership boundary,
+  including resident, spilling, stored, loading, corrupted, and removed
+  states, failure preservation, durable publication, and separation from
+  checkpoint resume evidence.
+- Added the canonical PR-0025 `ChunkIndex` contract: deterministic identity
+  ordering, duplicate and same-level range-overlap rejection, stored-size
+  aggregation, CRC32C-protected serialization, atomic save, and restart load.
+- Integrated `ChunkStore` with the canonical `ChunkCodec`: stored files now
+  contain the versioned P/Q/T chunk format directly, without metadata
+  sidecars, and reload validates identity, sizes, CRC32C, compression policy,
+  and canonical GMP decoding.
+- Added the synchronous `StorageManager` boundary for durable chunk publish,
+  index-backed reload, restart reconstruction, removal, snapshots, and
+  eviction planning.
+- Added restart/integrity integration coverage for durable chunk/index
+  corruption and a configurable storage throughput benchmark. On the current
+  runner, a 99.66 MiB synthetic P/Q/T chunk measured 157.17 MiB/s store and
+  10.47 MiB/s reload throughput.
+- Hardened memory accounting with saturating byte totals and deterministic
+  eviction ordering: merge-protected chunks are excluded, invalid distances
+  and duplicate resident IDs are rejected, and plans report unsatisfied byte
+  requirements explicitly.
 - Added the version-1 final verification result model with immutable stage
   results, structured diagnostics, computation identity, stage timings,
   deterministic status aggregation, and stable machine-readable names.
@@ -580,3 +615,9 @@
 - Big integer backend.
 - Binary splitting engine.
 - Chudnovsky calculation core.
+### Added
+
+- Wired storage directory, memory budget, target chunk size, compression, and
+  concurrent I/O settings through TOML/CLI configuration into `StoragePolicy`.
+- Extended progress snapshots and reporters with resident storage bytes,
+  durable stored bytes, and indexed chunk count.

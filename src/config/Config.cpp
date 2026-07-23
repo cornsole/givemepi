@@ -1,5 +1,7 @@
 #include "config/Config.hpp"
 
+#include "storage/StoragePolicy.hpp"
+
 #include <stdexcept>
 
 
@@ -76,6 +78,51 @@ void validateConfig(Config& config)
     {
         config.compression = "none";
     }
+    if (config.compression != "none" && config.compression != "lz4")
+    {
+        throw std::invalid_argument(
+            "Config validation failed: unsupported storage compression: "
+            + config.compression);
+    }
+    if (config.out_of_core_enabled)
+    {
+        if (config.storage_directory.empty())
+        {
+            throw std::runtime_error(
+                "Config validation failed: storage directory is empty.");
+        }
+        if (config.storage_memory_budget_bytes == 0)
+        {
+            throw std::runtime_error(
+                "Config validation failed: storage memory budget must be greater than 0.");
+        }
+        if (config.storage_target_chunk_size_bytes == 0
+            || config.storage_target_chunk_size_bytes
+                > config.storage_memory_budget_bytes)
+        {
+            throw std::runtime_error(
+                "Config validation failed: storage chunk size must be between 1 and the memory budget.");
+        }
+        if (config.storage_max_concurrent_io == 0)
+        {
+            throw std::runtime_error(
+                "Config validation failed: storage max concurrent I/O must be greater than 0.");
+        }
+    }
+}
+
+pi::storage::StoragePolicy makeStoragePolicy(const Config& config)
+{
+    Config validated = config;
+    validateConfig(validated);
+    return pi::storage::StoragePolicy(
+        validated.out_of_core_enabled,
+        validated.storage_directory,
+        validated.storage_memory_budget_bytes,
+        validated.storage_target_chunk_size_bytes,
+        pi::storage::parseCompressionAlgorithm(validated.compression),
+        validated.storage_max_concurrent_io
+    );
 }
 
 } // namespace pi::config

@@ -38,6 +38,9 @@ struct ProgressSnapshotData
     std::chrono::nanoseconds elapsed = std::chrono::nanoseconds::zero();
     std::uint64_t memoryBytes = 0;
     std::uint64_t checkpointBytes = 0;
+    std::uint64_t storageResidentBytes = 0;
+    std::uint64_t storageStoredBytes = 0;
+    std::uint64_t storageChunkCount = 0;
     std::optional<ValidatedCheckpointProgress> lastValidatedCheckpoint;
     std::optional<std::string> failureDetail;
 };
@@ -72,6 +75,9 @@ public:
     [[nodiscard]] std::chrono::nanoseconds elapsed() const noexcept;
     [[nodiscard]] std::uint64_t memoryBytes() const noexcept;
     [[nodiscard]] std::uint64_t checkpointBytes() const noexcept;
+    [[nodiscard]] std::uint64_t storageResidentBytes() const noexcept;
+    [[nodiscard]] std::uint64_t storageStoredBytes() const noexcept;
+    [[nodiscard]] std::uint64_t storageChunkCount() const noexcept;
 
     [[nodiscard]]
     const std::optional<ValidatedCheckpointProgress>&
@@ -96,6 +102,9 @@ private:
     std::chrono::nanoseconds elapsed_;
     std::uint64_t memoryBytes_;
     std::uint64_t checkpointBytes_;
+    std::uint64_t storageResidentBytes_;
+    std::uint64_t storageStoredBytes_;
+    std::uint64_t storageChunkCount_;
     std::optional<ValidatedCheckpointProgress> lastValidatedCheckpoint_;
     std::optional<std::string> failureDetail_;
 };

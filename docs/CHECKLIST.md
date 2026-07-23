@@ -258,11 +258,41 @@
 
 ## Storage
 
+[x] Storage Lifecycle and Ownership Contract (PR-0025)
+
+[x] Chunk Identity and Metadata (PR-0025)
+
+[x] Typed Storage Policy Model (PR-0025)
+
+[x] Versioned Chunk Format (PR-0025)
+
+[x] Compression Codec Interface and None Codec (PR-0025)
+
 [ ] Compression
 
-[ ] Chunk Index
+[x] Chunk Index Contract and Durable Codec (PR-0025)
 
-[ ] Reload
+[x] ChunkCodec-backed Local ChunkStore and Reload (PR-0025)
+
+[x] Synchronous StorageManager Boundary (PR-0025)
+
+[x] Deterministic Memory Budget and Eviction Planner (PR-0025)
+
+[x] Storage Configuration and Progress Telemetry Integration (PR-0025)
+
+[x] Large Synthetic P/Q/T Round-trip and Throughput Validation (PR-0025)
+
+[ ] Separate file-read, CRC32C, and GMP decode timings
+
+[ ] Cold-cache versus warm-cache reload benchmark
+
+[ ] Multi-chunk and concurrent I/O throughput benchmark
+
+[ ] None versus LZ4 size/throughput comparison
+
+[ ] Peak RSS validation for 100 MiB, 512 MiB, and 1 GiB workloads
+
+[ ] Large-data ASan/UBSan round-trip validation
 
 -----------------
 

@@ -68,6 +68,13 @@ public:
     /// Publishes total durable checkpoint bytes. Time and memory: O(1).
     void setCheckpointBytes(std::uint64_t bytes) noexcept;
 
+    /// Publishes storage resident bytes, durable bytes, and indexed chunk count.
+    void setStorageProgress(
+        std::uint64_t residentBytes,
+        std::uint64_t storedBytes,
+        std::uint64_t chunkCount
+    ) noexcept;
+
     /// Publishes the current merge level on the low-frequency metadata path.
     ///
     /// Returns false after termination. Time and memory: O(1).
@@ -109,6 +116,9 @@ private:
     std::atomic<std::uint64_t> queuedTasks_{0};
     std::atomic<std::uint64_t> memoryBytes_{0};
     std::atomic<std::uint64_t> checkpointBytes_{0};
+    std::atomic<std::uint64_t> storageResidentBytes_{0};
+    std::atomic<std::uint64_t> storageStoredBytes_{0};
+    std::atomic<std::uint64_t> storageChunkCount_{0};
 
     mutable std::mutex metadataMutex_;
     std::optional<std::uint32_t> currentMergeLevel_;

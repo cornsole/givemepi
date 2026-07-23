@@ -31,6 +31,9 @@ int main()
     data.elapsed = 5s;
     data.memoryBytes = 4096;
     data.checkpointBytes = 2048;
+    data.storageResidentBytes = 8192;
+    data.storageStoredBytes = 16384;
+    data.storageChunkCount = 3;
     data.lastValidatedCheckpoint =
         ValidatedCheckpointProgress{0, 25, 2};
 
@@ -50,7 +53,7 @@ int main()
 
     const std::string record = output.str();
     assert(record.starts_with(
-        "{\"schema_version\":2,\"sampled_at\":\"1970-01-01T00:00:00Z\""
+        "{\"schema_version\":3,\"sampled_at\":\"1970-01-01T00:00:00Z\""
     ));
     assert(record.find("\"phase\":\"merging\"") != std::string::npos);
     assert(record.find("\"terminal_state\":\"running\"")
@@ -58,6 +61,8 @@ int main()
     assert(record.find("\"terms\":{\"completed\":25,\"total\":100}")
         != std::string::npos);
     assert(record.find("\"last_validated_checkpoint\":{\"start_term\":0,")
+        != std::string::npos);
+    assert(record.find("\"storage\":{\"resident_bytes\":8192,\"stored_bytes\":16384,\"chunk_count\":3}")
         != std::string::npos);
     assert(record.find("\"completion_ratio\":0.25")
         != std::string::npos);

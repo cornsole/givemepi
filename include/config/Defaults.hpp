@@ -23,6 +23,10 @@ inline constexpr bool HUGE_PAGES_ENABLED = true;
 // Out-of-Core Storage
 inline constexpr bool OUT_OF_CORE_ENABLED = true;
 inline constexpr std::string_view COMPRESSION = "lz4";
+inline constexpr std::string_view STORAGE_DIRECTORY = "storage";
+inline constexpr std::uint64_t STORAGE_MEMORY_BUDGET_BYTES = 512ULL * 1024ULL * 1024ULL;
+inline constexpr std::uint64_t STORAGE_TARGET_CHUNK_SIZE_BYTES = 64ULL * 1024ULL * 1024ULL;
+inline constexpr std::uint32_t STORAGE_MAX_CONCURRENT_IO = 1;
 
 // Progress
 inline constexpr bool PROGRESS_ENABLED = true;

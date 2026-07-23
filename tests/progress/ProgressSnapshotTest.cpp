@@ -59,7 +59,7 @@ int main()
         ValidatedCheckpointProgress{40, 48, 2};
 
     const ProgressSnapshot snapshot(data);
-    assert(snapshot.schemaVersion() == 2);
+    assert(snapshot.schemaVersion() == 3);
     assert(snapshot.phase() == ProgressPhase::merging);
     assert(snapshot.terminalState() == ProgressTerminalState::running);
     assert(snapshot.targetDigits() == 1'000);

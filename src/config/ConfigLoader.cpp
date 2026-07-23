@@ -77,6 +77,16 @@ Config ConfigLoader::load(
             table,
             "compression",
             config.compression);
+        load_value(table, "storage_directory", config.storage_directory);
+        load_value(
+            table, "storage_memory_budget_bytes",
+            config.storage_memory_budget_bytes);
+        load_value(
+            table, "storage_target_chunk_size_bytes",
+            config.storage_target_chunk_size_bytes);
+        load_value(
+            table, "storage_max_concurrent_io",
+            config.storage_max_concurrent_io);
 
         load_value(
             table,

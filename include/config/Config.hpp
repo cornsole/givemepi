@@ -6,6 +6,8 @@
 
 #include "config/Defaults.hpp"
 
+namespace pi::storage { struct StoragePolicy; }
+
 namespace pi::config
 {
 
@@ -35,6 +37,13 @@ struct Config
     // Out-of-Core Storage
     bool out_of_core_enabled = defaults::OUT_OF_CORE_ENABLED;
     std::string compression = std::string(defaults::COMPRESSION);
+    std::string storage_directory = std::string(defaults::STORAGE_DIRECTORY);
+    std::uint64_t storage_memory_budget_bytes =
+        defaults::STORAGE_MEMORY_BUDGET_BYTES;
+    std::uint64_t storage_target_chunk_size_bytes =
+        defaults::STORAGE_TARGET_CHUNK_SIZE_BYTES;
+    std::uint32_t storage_max_concurrent_io =
+        defaults::STORAGE_MAX_CONCURRENT_IO;
 
     // Progress
     bool progress_enabled = defaults::PROGRESS_ENABLED;
@@ -65,5 +74,9 @@ ProgressFormat parseProgressFormat(std::string_view value);
 
 /// Runs shared validation after defaults, TOML, or CLI overrides.
 void validateConfig(Config& config);
+
+/// Converts validated configuration into the storage subsystem's typed policy.
+[[nodiscard]]
+pi::storage::StoragePolicy makeStoragePolicy(const Config& config);
 
 } // namespace pi::config

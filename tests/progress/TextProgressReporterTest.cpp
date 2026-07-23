@@ -30,6 +30,9 @@ int main()
     data.queuedTasks = 2;
     data.memoryBytes = 4096;
     data.checkpointBytes = 2048;
+    data.storageResidentBytes = 8192;
+    data.storageStoredBytes = 16384;
+    data.storageChunkCount = 3;
     data.lastValidatedCheckpoint =
         ValidatedCheckpointProgress{0, 25, 2};
 
@@ -51,6 +54,8 @@ int main()
     assert(terminalRecord.find("speed=5.00 terms/s eta=15.0s")
         != std::string::npos);
     assert(terminalRecord.find("memory=4.00 KiB") != std::string::npos);
+    assert(terminalRecord.find("storage=8.00 KiB resident/16.00 KiB stored/3 chunks")
+        != std::string::npos);
     assert(terminalRecord.find("last_checkpoint=[0,25)@L2")
         != std::string::npos);
     assert(terminalRecord.ends_with("\x1b[K"));

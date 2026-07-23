@@ -20,6 +20,9 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
       elapsed_(data.elapsed),
       memoryBytes_(data.memoryBytes),
       checkpointBytes_(data.checkpointBytes),
+      storageResidentBytes_(data.storageResidentBytes),
+      storageStoredBytes_(data.storageStoredBytes),
+      storageChunkCount_(data.storageChunkCount),
       lastValidatedCheckpoint_(std::move(data.lastValidatedCheckpoint)),
       failureDetail_(std::move(data.failureDetail))
 {
@@ -142,6 +145,21 @@ std::uint64_t ProgressSnapshot::memoryBytes() const noexcept
 std::uint64_t ProgressSnapshot::checkpointBytes() const noexcept
 {
     return checkpointBytes_;
+}
+
+std::uint64_t ProgressSnapshot::storageResidentBytes() const noexcept
+{
+    return storageResidentBytes_;
+}
+
+std::uint64_t ProgressSnapshot::storageStoredBytes() const noexcept
+{
+    return storageStoredBytes_;
+}
+
+std::uint64_t ProgressSnapshot::storageChunkCount() const noexcept
+{
+    return storageChunkCount_;
 }
 
 

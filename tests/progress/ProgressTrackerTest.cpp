@@ -50,6 +50,7 @@ int main()
     tracker.setTaskCounts(8, 32);
     tracker.setMemoryBytes(4096);
     tracker.setCheckpointBytes(2048);
+    tracker.setStorageProgress(8192, 16384, 3);
     assert(tracker.recordValidatedCheckpoint(
         ValidatedCheckpointProgress{0, 10'000, 0}
     ));
@@ -117,6 +118,9 @@ int main()
     assert(completed.queuedTasks() == 32);
     assert(completed.memoryBytes() == 4096);
     assert(completed.checkpointBytes() == 2048);
+    assert(completed.storageResidentBytes() == 8192);
+    assert(completed.storageStoredBytes() == 16384);
+    assert(completed.storageChunkCount() == 3);
     assert(completed.lastValidatedCheckpoint().has_value());
     assert(completed.elapsed() == completedAgain.elapsed());
     assert(!tracker.addCompletedTerms(0));

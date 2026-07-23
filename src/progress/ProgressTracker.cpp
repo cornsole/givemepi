@@ -118,6 +118,18 @@ void ProgressTracker::setCheckpointBytes(std::uint64_t bytes) noexcept
     }
 }
 
+void ProgressTracker::setStorageProgress(
+    std::uint64_t residentBytes,
+    std::uint64_t storedBytes,
+    std::uint64_t chunkCount
+) noexcept
+{
+    if (!isRunning()) return;
+    storageResidentBytes_.store(residentBytes, std::memory_order_relaxed);
+    storageStoredBytes_.store(storedBytes, std::memory_order_relaxed);
+    storageChunkCount_.store(chunkCount, std::memory_order_relaxed);
+}
+
 
 bool ProgressTracker::setCurrentMergeLevel(std::uint32_t level)
 {
@@ -208,6 +220,9 @@ ProgressSnapshot ProgressTracker::snapshot() const
     data.queuedTasks = queuedTasks_.load(std::memory_order_relaxed);
     data.memoryBytes = memoryBytes_.load(std::memory_order_relaxed);
     data.checkpointBytes = checkpointBytes_.load(std::memory_order_relaxed);
+    data.storageResidentBytes = storageResidentBytes_.load(std::memory_order_relaxed);
+    data.storageStoredBytes = storageStoredBytes_.load(std::memory_order_relaxed);
+    data.storageChunkCount = storageChunkCount_.load(std::memory_order_relaxed);
 
     return ProgressSnapshot(std::move(data));
 }

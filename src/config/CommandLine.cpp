@@ -105,6 +105,25 @@ void CommandLine::applyOverrides(
                 requireValue(arg, i, argc, argv)
             );
         }
+        else if (arg == "--storage-directory")
+        {
+            config.storage_directory = requireValue(arg, i, argc, argv);
+        }
+        else if (arg == "--storage-memory-budget-bytes")
+        {
+            config.storage_memory_budget_bytes = std::stoull(
+                requireValue(arg, i, argc, argv));
+        }
+        else if (arg == "--storage-chunk-size-bytes")
+        {
+            config.storage_target_chunk_size_bytes = std::stoull(
+                requireValue(arg, i, argc, argv));
+        }
+        else if (arg == "--storage-max-concurrent-io")
+        {
+            config.storage_max_concurrent_io = parseUint32(
+                arg, requireValue(arg, i, argc, argv));
+        }
         else if (arg == "--verify")
         {
             config.verification_enabled = true;

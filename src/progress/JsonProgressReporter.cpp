@@ -152,6 +152,10 @@ void JsonProgressReporter::report(
     record << ",\"elapsed_ns\":" << snapshot.elapsed().count();
     record << ",\"memory_bytes\":" << snapshot.memoryBytes();
     record << ",\"checkpoint_bytes\":" << snapshot.checkpointBytes();
+    record << ",\"storage\":{\"resident_bytes\":"
+           << snapshot.storageResidentBytes()
+           << ",\"stored_bytes\":" << snapshot.storageStoredBytes()
+           << ",\"chunk_count\":" << snapshot.storageChunkCount() << '}';
     record << ",\"last_validated_checkpoint\":";
     if (snapshot.lastValidatedCheckpoint().has_value())
     {

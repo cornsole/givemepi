@@ -124,6 +124,9 @@ std::string render(
            << " checkpoints=" << snapshot.completedCheckpointBlocks()
            << '/' << snapshot.totalCheckpointBlocks()
            << " checkpoint_bytes=" << byteCount(snapshot.checkpointBytes());
+    output << " storage=" << byteCount(snapshot.storageResidentBytes())
+           << " resident/" << byteCount(snapshot.storageStoredBytes())
+           << " stored/" << snapshot.storageChunkCount() << " chunks";
 
     if (snapshot.currentMergeLevel().has_value())
     {

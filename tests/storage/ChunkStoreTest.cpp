@@ -1,0 +1,63 @@
+#include "storage/ChunkStore.hpp"
+
+#include "chudnovsky/PrecisionPolicy.hpp"
+#include "bigint/GMPInteger.hpp"
+
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    using namespace pi::checkpoint;
+    using namespace pi::chudnovsky;
+    using namespace pi::storage;
+
+    const auto directory = std::filesystem::temp_directory_path() / "givemepi-pr0025-store-test";
+    std::error_code ec;
+    std::filesystem::remove_all(directory, ec);
+
+    const auto identity = ComputationIdentity::fromPrecisionPlan(PrecisionPolicy::create(1000));
+    const auto location = BlockLocation::create(0, 4, 0, identity);
+    const auto chunkIdentity = ChunkIdentity::create(identity, location);
+    pi::bigint::GMPInteger p(12);
+    pi::bigint::GMPInteger q(5);
+    pi::bigint::GMPInteger t(7);
+    const auto metadata = ChunkCodec::createMetadata(chunkIdentity, p, q, t);
+    const Chunk chunk{metadata, p, q, t};
+
+    StoragePolicy policy;
+    policy.directory = directory;
+    policy.validate();
+    ChunkStore store(policy);
+    const auto id = store.store(chunk);
+
+    const auto loaded = store.load(id);
+    if (!store.contains(id) || !loaded.has_value()
+        || loaded->metadata != metadata
+        || loaded->p.compare(p) != 0 || loaded->q.compare(q) != 0
+        || loaded->t.compare(t) != 0
+        || !store.reloadAndVerify(id).has_value())
+    {
+        std::cerr << "ChunkStore round trip failed\n";
+        return 1;
+    }
+
+    {
+        std::ofstream corrupt(store.chunkPath(id), std::ios::binary | std::ios::app);
+        corrupt.put('\x7f');
+    }
+    bool rejected = false;
+    try { store.verifyChunkIntegrity(id); }
+    catch (const std::runtime_error&) { rejected = true; }
+    if (!rejected || store.removeCorruptedFiles() != 1 || store.contains(id))
+    {
+        std::cerr << "ChunkStore corruption handling failed\n";
+        return 1;
+    }
+
+    std::filesystem::remove_all(directory, ec);
+    std::cout << "ChunkStore OK\n";
+    return 0;
+}

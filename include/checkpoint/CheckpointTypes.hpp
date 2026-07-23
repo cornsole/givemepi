@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <functional>
 
 
 namespace pi::checkpoint
@@ -38,6 +39,17 @@ struct ComputationIdentity
 
     [[nodiscard]]
     bool operator==(const ComputationIdentity&) const noexcept = default;
+
+    [[nodiscard]]
+    bool operator<(const ComputationIdentity& other) const noexcept {
+        if (algorithm != other.algorithm) return algorithm < other.algorithm;
+        if (arithmeticVersion != other.arithmeticVersion) return arithmeticVersion < other.arithmeticVersion;
+        if (formulaVersion != other.formulaVersion) return formulaVersion < other.formulaVersion;
+        if (requestedDigits != other.requestedDigits) return requestedDigits < other.requestedDigits;
+        if (guardDigits != other.guardDigits) return guardDigits < other.guardDigits;
+        if (workingDigits != other.workingDigits) return workingDigits < other.workingDigits;
+        return termCount < other.termCount;
+    }
 };
 
 
@@ -59,6 +71,13 @@ struct BlockLocation
 
     [[nodiscard]]
     bool operator==(const BlockLocation&) const noexcept = default;
+
+    [[nodiscard]]
+    bool operator<(const BlockLocation& other) const noexcept {
+        if (start != other.start) return start < other.start;
+        if (end != other.end) return end < other.end;
+        return treeLevel < other.treeLevel;
+    }
 };
 
 

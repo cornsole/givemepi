@@ -66,6 +66,26 @@ endif()
 
 if(ENABLE_BENCHMARKS)
 
+    add_executable(storage-throughput-benchmark
+        benchmarks/storage/StorageThroughputBenchmark.cpp
+        src/storage/StorageManager.cpp
+        src/storage/ChunkStore.cpp
+        src/storage/ChunkIndex.cpp
+        src/storage/ChunkCodec.cpp
+        src/storage/CompressionCodec.cpp
+        src/storage/StoragePolicy.cpp
+        src/storage/ChunkTypes.cpp
+        src/checkpoint/AtomicFileCommit.cpp
+        src/checkpoint/CRC32C.cpp
+        src/checkpoint/GMPSerialization.cpp
+        src/checkpoint/CheckpointTypes.cpp
+        src/chudnovsky/PrecisionPolicy.cpp
+        src/bigint/GMPInteger.cpp
+    )
+
+    target_include_directories(storage-throughput-benchmark PRIVATE include)
+    target_link_libraries(storage-throughput-benchmark PRIVATE gmp)
+
     add_executable(chudnovsky-benchmark
         benchmarks/chudnovsky/ChudnovskyBenchmark.cpp
 
@@ -444,6 +464,7 @@ add_executable(progress-config-test
     src/config/Config.cpp
     src/config/ConfigLoader.cpp
     src/config/CommandLine.cpp
+    src/storage/StoragePolicy.cpp
 )
 
 add_test(
@@ -712,6 +733,167 @@ add_test(
 target_include_directories(checkpoint-types-test
     PRIVATE
         include
+)
+
+add_executable(chunk-types-test
+    tests/storage/ChunkTypesTest.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+)
+
+add_test(
+    NAME ChunkTypesTest
+    COMMAND chunk-types-test
+)
+
+target_include_directories(chunk-types-test
+    PRIVATE
+        include
+)
+
+add_executable(storage-policy-test
+    tests/storage/StoragePolicyTest.cpp
+    src/storage/StoragePolicy.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+)
+
+add_test(
+    NAME StoragePolicyTest
+    COMMAND storage-policy-test
+)
+
+target_include_directories(storage-policy-test
+    PRIVATE
+        include
+)
+
+add_executable(compression-codec-test
+    tests/storage/CompressionCodecTest.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+)
+
+add_test(
+    NAME CompressionCodecTest
+    COMMAND compression-codec-test
+)
+
+target_include_directories(compression-codec-test
+    PRIVATE
+        include
+)
+
+add_executable(chunk-store-test
+    tests/storage/ChunkStoreTest.cpp
+    src/storage/ChunkStore.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/StoragePolicy.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME ChunkStoreTest COMMAND chunk-store-test)
+
+target_include_directories(chunk-store-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(chunk-store-test PRIVATE gmp)
+
+add_executable(storage-manager-test
+    tests/storage/StorageManagerTest.cpp
+    src/storage/StorageManager.cpp
+    src/storage/ChunkStore.cpp
+    src/storage/ChunkIndex.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/StoragePolicy.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME StorageManagerTest COMMAND storage-manager-test)
+
+target_include_directories(storage-manager-test PRIVATE include)
+target_link_libraries(storage-manager-test PRIVATE gmp)
+
+add_executable(eviction-planner-test
+    tests/storage/EvictionPlannerTest.cpp
+    src/storage/ChunkStore.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/StoragePolicy.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME EvictionPlannerTest COMMAND eviction-planner-test)
+target_include_directories(eviction-planner-test PRIVATE include)
+target_link_libraries(eviction-planner-test PRIVATE gmp)
+
+add_executable(chunk-index-test
+    tests/storage/ChunkIndexTest.cpp
+    src/storage/ChunkIndex.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+)
+
+add_test(NAME ChunkIndexTest COMMAND chunk-index-test)
+
+target_include_directories(chunk-index-test
+    PRIVATE
+        include
+)
+
+add_executable(chunk-codec-test
+    tests/storage/ChunkCodecTest.cpp
+    src/storage/VersionedChunkIndex.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME ChunkCodecTest
+    COMMAND chunk-codec-test
+)
+
+target_include_directories(chunk-codec-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(chunk-codec-test
+    PRIVATE
+        gmp
 )
 
 add_executable(gmp-serialization-test
@@ -1317,6 +1499,30 @@ add_executable(binary-test
     src/scheduler/ReferenceQueue.cpp
 )
 
+
+add_executable(versioned-chunk-index-test
+    tests/storage/VersionedChunkIndexTest.cpp
+    src/storage/VersionedChunkIndex.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME VersionedChunkIndexTest COMMAND versioned-chunk-index-test)
+
+target_include_directories(versioned-chunk-index-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(versioned-chunk-index-test
+    PRIVATE
+        gmp
+)
 add_test(
     NAME BinarySplittingTest
     COMMAND binary-test

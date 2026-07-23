@@ -986,6 +986,148 @@ while a worker is still executing an accepted task, and separately checking
 multiple local queues creates transient snapshots with no single correctness
 boundary.
 
+---
+
+## ADR-0030
+
+Date
+
+2026-07-23
+
+Status
+
+Accepted
+
+Title
+
+Define the Canonical Runtime Chunk Index Contract
+
+Decision
+
+`ChunkIndex` maps one `ChunkIdentity` to exactly one durable
+`ChunkIndexEntry`. Entries are returned in the canonical `ChunkIdentity` order
+defined by computation identity, start, end, and tree level. Adding a duplicate
+identity is rejected. Two entries with the same computation identity and tree
+level must not have overlapping half-open ranges; ranges at different tree
+levels are independent.
+
+Each entry records the plain storage filename, uncompressed and stored sizes,
+CRC32C checksum metadata, and chunk format version. Filenames cannot contain
+path separators or NUL bytes. The aggregate stored size is computed from index
+entries with checked saturation.
+
+The index wire format is versioned, uses explicit big-endian integer fields,
+contains the complete computation identity and block location, and ends with
+a CRC32C over all preceding bytes. Decode validates the checksum, format,
+identity, filename, duplicate, and overlap invariants before publishing an
+index. File saves use the existing durable atomic file commit primitive.
+
+Reason
+
+The runtime index is a publication record, not a history log. Allowing
+duplicate identities or overlapping chunks would make restart recovery
+ambiguous and could feed duplicate mathematical work into a future merge.
+
+Consequence
+
+`ChunkIndex` is now a stable boundary for the next `StorageManager` step.
+Connecting it to `ChunkStore` and adding process-restart integration remain
+separate implementation work; `VersionedChunkIndex` remains available for
+legacy version-history tests and is not the canonical PR-0025 runtime index.
+
+---
+
+## ADR-0031
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Use ChunkCodec as the ChunkStore On-Disk Representation
+
+Decision
+
+`ChunkStore::store` accepts a complete runtime `Chunk` and writes exactly the
+versioned byte sequence produced by `ChunkCodec::encode`. `load` and
+`reloadAndVerify` return decoded `Chunk` values through `ChunkCodec::decode`.
+The filesystem contains one `.chunk` file per identity and no separate
+metadata sidecar. Atomic publication and directory durability remain the
+responsibility of `ChunkStore`; structural, identity, size, CRC32C, compression,
+and canonical GMP checks remain the responsibility of `ChunkCodec`.
+
+The storage policy compression must match the chunk metadata compression.
+Unsupported compression remains rejected until a codec implementation is
+added. A corrupt or incompatible stored file is never returned as a partially
+decoded value; the store boundary reports it as an integrity failure.
+
+Reason
+
+Two independent representations allowed the payload and metadata to diverge
+and duplicated checksum/format logic. One canonical file format makes restart
+reload and future index publication unambiguous.
+
+Consequence
+
+ChunkStore and ChunkCodec now form one tested storage boundary. The next step
+is to publish the same successful store operation into `ChunkIndex` and to
+implement `StorageManager` around both components.
+
+---
+
+## ADR-0032
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Define the Synchronous StorageManager Boundary
+
+Decision
+
+`StorageManager` owns one `ChunkStore` and one durable `ChunkIndex`. Its
+`store` operation rejects an indexed duplicate, durably writes the canonical
+`ChunkCodec` file, builds a candidate index containing the new entry, and
+atomically publishes that index. If index construction or publication fails,
+the newly written chunk is removed and the previously published index remains
+unchanged.
+
+`load` is index-gated: an unindexed chunk is not loadable through the manager.
+The loaded chunk is decoded and checked against the index identity, stored
+size, and checksum before being returned. `remove` removes the indexed file
+and publishes an index without that identity. `snapshot` reports indexed
+chunk count, stored bytes, resident bytes supplied by the caller, and the
+configured memory budget. Eviction planning is delegated to the synchronous
+`ChunkStore` planner and never mutates resident memory.
+
+All operations are synchronous and the manager does not perform automatic
+Binary Splitting eviction. Merge integration and progress reporting remain
+later work.
+
+Reason
+
+The manager is the narrow orchestration boundary needed to connect durable
+chunk bytes, the canonical index, and deterministic memory planning without
+making the arithmetic algorithm aware of filesystem or codec details.
+
+Consequence
+
+Process restart can reconstruct the manager from the durable index and
+canonical chunk files. The next integration step is to reconcile missing or
+corrupted indexed files explicitly and then expose manager counters through
+the progress model.
+
 Counting accepted unfinished work creates one drain invariant across global,
 local, stolen, and active tasks.
 
@@ -1290,3 +1432,195 @@ verification, manifest publication, and terminal progress after the calculator
 finishes arithmetic. Default verification uses eight deterministic samples;
 future large-scale latency work should parallelize independent BBP samples
 without creating threads inside the algorithm.
+
+---
+
+## ADR-0029
+
+Date
+
+2026-07-21
+
+Status
+
+Accepted
+
+Title
+
+Define the Runtime Storage Lifecycle and Ownership Boundary
+
+Decision
+
+PR-0025 runtime storage uses the following lifecycle for a chunk record:
+
+- `resident`: the authoritative `BinaryNode` value is available in memory and
+  has not been committed as a runtime-storage result.
+- `spilling`: a synchronous store operation is serializing and committing the
+  resident value. The original resident value remains available and is not
+  released during this state.
+- `stored`: the complete chunk file and its index entry have been committed
+  durably and the chunk can be loaded independently of the current process
+  memory state.
+- `loading`: a stored chunk is being read, structurally validated, checksum
+  verified, and decoded. No partially decoded value is published to callers.
+- `corrupted`: a discovered stored artifact failed format, identity, range,
+  checksum, or canonical GMP validation. It is not eligible for merge or
+  reload until removed and recomputed.
+- `removed`: the runtime-storage record has no usable durable chunk. Loading
+  it is an explicit not-found failure.
+
+Valid transitions are:
+
+```text
+resident -> spilling -> stored
+resident <- spilling       (store failure; resident value is preserved)
+stored   -> loading -> resident
+stored   -> corrupted
+corrupted -> removed
+stored   -> removed
+```
+
+`loading` failure transitions to `corrupted` for an existing but invalid
+artifact, and to `removed` when the artifact is absent. A failed load never
+replaces an existing resident value. `stored` means that the durable copy is
+available; PR-0025 does not automatically evict the caller's in-memory value.
+Resident-byte accounting and eviction planning are separate concerns from the
+durable chunk state.
+
+The caller owns the in-memory `BinaryNode` and remains responsible for its
+lifetime. `StorageManager` owns chunk metadata, the chunk index, storage
+paths, and codec/backend selection. Storage APIs accept or return values at a
+chunk boundary and never expose file paths or filesystem details to Binary
+Splitting. A successful `store` publishes a chunk only after the complete
+payload, checksum, file synchronization, atomic rename, and index update have
+completed. A failed store leaves the original resident value and previous
+valid index entry unchanged; an unindexed orphan file is never loadable.
+
+Runtime storage is distinct from checkpoint storage. Checkpoints are durable
+resume evidence validated by the checkpoint validation pipeline. Runtime
+chunks are temporary working data used for memory pressure and future merge
+reclamation. Runtime chunks may reuse the canonical P/Q/T codec and CRC32C,
+but their presence alone never makes a checkpoint resumable.
+
+All PR-0025 storage operations are synchronous and are called outside
+scheduler worker tasks. The lifecycle contract is independent of the future
+asynchronous writer, actual Binary Splitting eviction, compression backend,
+and merge-wait integration planned for later PRs.
+
+Reason
+
+Out-of-core storage must not turn a failed disk operation into data loss or
+allow partially written data to enter a merge. Separating durable runtime
+state from resident memory ownership also permits deterministic eviction and
+future asynchronous I/O without changing Binary Splitting or checkpoint
+compatibility rules.
+
+Alternatives
+
+- Release the resident value before a store completes.
+- Treat any file at a deterministic path as loadable.
+- Reuse checkpoint completion state for temporary runtime chunks.
+- Let Binary Splitting manage paths and codec details directly.
+
+Consequence
+
+PR-0025 can implement `StorageManager` and its synchronous local backend
+without changing the Binary Splitting algorithm. The next storage steps must
+preserve the original resident value across store failure, publish only fully
+committed and indexed chunks, and reject corrupted chunks before decode results
+are returned. Actual node eviction and merge integration remain separate PR
+boundaries.
+
+---
+
+## ADR-0033
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Define Deterministic Memory Budget and Eviction Planning
+
+Decision
+
+Resident bytes are the sum of caller-supplied uncompressed sizes and stored
+bytes are the sum of durable encoded file sizes. Both counters saturate at
+`uint64_t` maximum instead of wrapping. Subtraction saturates at zero and
+available budget is zero whenever resident bytes meet or exceed the budget.
+
+Eviction candidates with merge distance zero are protected. Negative,
+infinite, or NaN merge distances and duplicate resident IDs are rejected.
+Candidates are ordered deterministically by descending merge distance,
+descending uncompressed size, then ascending chunk ID. The planner selects
+whole chunks until the requested resident bytes are met; it never performs a
+partial chunk eviction. If the candidates cannot provide enough bytes, the
+plan is explicitly unsatisfied and includes a reason.
+
+Reason
+
+Eviction decisions must be reproducible for the same resident set and merge
+state. Protecting immediately needed chunks avoids invalidating a future
+merge, while whole-chunk selection keeps accounting and state transitions
+unambiguous.
+
+Consequence
+
+The planner is ready for synchronous `StorageManager` callers. It still only
+produces a plan; actual Binary Splitting node release and merge wait behavior
+remain outside PR-0025.
+
+---
+
+## ADR-0034
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Treat Large-Chunk Reload as the Current Performance Investigation Target
+
+Decision
+
+The initial synthetic benchmark uses one uncompressed P/Q/T chunk of roughly
+100 MiB and includes synchronous durable publication, index update, CRC32C,
+and GMP reconstruction. The observed baseline on the current runner was
+163.54 MiB/s for store and 11.08 MiB/s for reload. Store throughput is an
+initial baseline only; reload is the primary investigation target because it
+is roughly one order of magnitude slower.
+
+These numbers are not treated as raw filesystem throughput. The reload value
+includes file read, length and checksum validation, canonical payload parsing,
+and three GMP integer reconstructions. The next benchmark must split those
+phases and compare cold-cache and warm-cache runs before any codec or I/O
+optimization is selected.
+
+Follow-up measurements must also cover multiple chunks, concurrent I/O,
+compression comparisons, peak RSS, and sanitizer runs. A single large chunk
+does not establish scalability or prove that the configured I/O concurrency
+limit is effective.
+
+Reason
+
+The current result proves correctness at the requested data scale, but it
+cannot distinguish storage-device limitations from CPU/GMP decode cost. The
+explicit follow-up matrix prevents optimizing the wrong layer and records the
+memory behavior needed for the out-of-core boundary.
+
+Consequence
+
+PR-0025 keeps the current synchronous correctness path unchanged. Profiling,
+cache-control, multi-chunk concurrency, compression comparison, and RSS/
+sanitizer validation remain tracked follow-up work before performance claims
+are generalized beyond this baseline.
