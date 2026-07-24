@@ -655,3 +655,6 @@
 - Stabilized PR-0027 with a clean 64-test regression run and separated
   concurrent I/O, compression optimization, and NUMA/Huge Pages work into the
   PR-0028 follow-up boundary.
+- Added a staged PR-0028 high-performance roadmap covering reproducible
+  measurement, concurrent I/O, data movement/compression, and NUMA/Huge Pages
+  acceptance gates.

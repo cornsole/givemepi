@@ -322,6 +322,14 @@
 
 [ ] Large-data ASan/UBSan round-trip validation
 
+[ ] PR-0028 High-Performance Measurement Contract
+
+[ ] Independent Reader/Writer Concurrency Benchmark
+
+[ ] I/O, CRC32C, Codec, and GMP Decode Timing Breakdown
+
+[ ] Buffer/Data-Movement Optimization Validation
+
 -----------------
 
 ## Checkpoint
