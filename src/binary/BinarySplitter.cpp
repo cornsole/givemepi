@@ -311,7 +311,8 @@ BinaryNode BinarySplitter::splitParallel(
     std::size_t end,
     scheduler::Scheduler& executor,
     const ParallelSplitOptions& options,
-    BinarySplitObserver* observer
+    BinarySplitObserver* observer,
+    BinaryMergeCoordinator* mergeCoordinator
 )
 {
     validateRange(start, end);
@@ -423,10 +424,23 @@ BinaryNode BinarySplitter::splitParallel(
         nodes.push_back(std::move(result.value()));
     }
 
+    if (mergeCoordinator != nullptr)
+    {
+        mergeCoordinator->observeResidentNodes(nodes, 0);
+        if (nodes.size() > 1)
+        {
+            mergeCoordinator->spillAfterMergeLevel(nodes, 0);
+        }
+    }
+
 
     std::uint32_t mergeLevel = 0;
     while (nodes.size() > 1)
     {
+        if (mergeCoordinator != nullptr)
+        {
+            mergeCoordinator->prepareMergeNodes(nodes, mergeLevel);
+        }
         if (observer != nullptr)
         {
             observer->mergeLevelStarted(mergeLevel);
@@ -448,6 +462,14 @@ BinaryNode BinarySplitter::splitParallel(
             }
 
             nodes = std::move(finalLevel);
+            if (mergeCoordinator != nullptr)
+            {
+                mergeCoordinator->observeResidentNodes(nodes, mergeLevel);
+                if (nodes.size() > 1)
+                {
+                    mergeCoordinator->spillAfterMergeLevel(nodes, mergeLevel);
+                }
+            }
             continue;
         }
 
@@ -507,6 +529,11 @@ BinaryNode BinarySplitter::splitParallel(
         }
 
         nodes = std::move(nextLevel);
+        if (mergeCoordinator != nullptr)
+        {
+            mergeCoordinator->observeResidentNodes(nodes, mergeLevel);
+            mergeCoordinator->spillAfterMergeLevel(nodes, mergeLevel);
+        }
     }
 
 

@@ -621,3 +621,9 @@
   concurrent I/O settings through TOML/CLI configuration into `StoragePolicy`.
 - Extended progress snapshots and reporters with resident storage bytes,
   durable stored bytes, and indexed chunk count.
+- Added a configurable in-memory versus forced out-of-core merge benchmark
+  reporting elapsed time, peak RSS, spill/reload counts, and spilled bytes.
+- Defined the PR-0026 stabilization boundary: synchronous spill/reload and
+  deterministic memory behavior remain in this PR; asynchronous writing,
+  merge wait/backpressure, concurrent I/O, compression optimization, and
+  NUMA/Huge Pages work are explicitly deferred to PR-0027/PR-0028.

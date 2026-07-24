@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 
 namespace pi::scheduler
@@ -14,6 +15,32 @@ class Scheduler;
 
 namespace pi::binary
 {
+
+class BinaryMergeCoordinator
+{
+public:
+    virtual ~BinaryMergeCoordinator() = default;
+
+    /// Observes the currently resident merge-level nodes on the coordinator.
+    /// Implementations may update synchronous storage accounting, but must
+    /// not mutate the supplied nodes during this observation.
+    virtual void observeResidentNodes(
+        std::span<const BinaryNode> nodes,
+        std::uint32_t level
+    ) = 0;
+
+    /// Reloads any spilled nodes before the next merge level.
+    virtual void prepareMergeNodes(
+        std::span<BinaryNode> nodes,
+        std::uint32_t level
+    ) = 0;
+
+    /// Spills selected nodes after a level has produced its resident set.
+    virtual void spillAfterMergeLevel(
+        std::span<BinaryNode> nodes,
+        std::uint32_t level
+    ) = 0;
+};
 
 class BinarySplitObserver
 {
@@ -102,7 +129,8 @@ public:
         std::size_t end,
         scheduler::Scheduler& executor,
         const ParallelSplitOptions& options,
-        BinarySplitObserver* observer = nullptr
+        BinarySplitObserver* observer = nullptr,
+        BinaryMergeCoordinator* mergeCoordinator = nullptr
     );
 
     [[nodiscard]]

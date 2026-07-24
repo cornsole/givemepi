@@ -282,6 +282,20 @@
 
 [x] Large Synthetic P/Q/T Round-trip and Throughput Validation (PR-0025)
 
+[x] In-memory versus Forced Out-of-Core Merge Benchmark (PR-0026)
+
+[x] Synchronous Out-of-Core Merge Stabilization Boundary (PR-0026)
+
+[ ] Asynchronous Storage Writer (PR-0027)
+
+[ ] Merge Wait and Backpressure (PR-0027)
+
+[ ] Concurrent I/O Execution (PR-0027)
+
+[ ] Compression Backend Optimization (PR-0028)
+
+[ ] NUMA and Huge Pages Optimization (PR-0028)
+
 [ ] Separate file-read, CRC32C, and GMP decode timings
 
 [ ] Cold-cache versus warm-cache reload benchmark

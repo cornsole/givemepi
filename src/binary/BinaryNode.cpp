@@ -64,5 +64,17 @@ const bigint::GMPInteger& BinaryNode::T() const noexcept
     return t_;
 }
 
+void BinaryNode::clearValues() noexcept
+{
+    p_ = bigint::GMPInteger{};
+    q_ = bigint::GMPInteger{};
+    t_ = bigint::GMPInteger{};
+}
+
+bool BinaryNode::hasValues() const noexcept
+{
+    return !p_.isZero() || !q_.isZero() || !t_.isZero();
+}
+
 
 } // namespace pi::binary

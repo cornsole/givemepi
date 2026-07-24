@@ -1624,3 +1624,187 @@ PR-0025 keeps the current synchronous correctness path unchanged. Profiling,
 cache-control, multi-chunk concurrency, compression comparison, and RSS/
 sanitizer validation remain tracked follow-up work before performance claims
 are generalized beyond this baseline.
+
+---
+
+## ADR-0035
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Define the PR-0026 BinaryNode Storage Lifecycle
+
+Decision
+
+The storage boundary uses six states: `resident`, `spilling`, `stored`,
+`loading`, `corrupted`, and `removed`. The legal transitions are:
+
+```text
+resident -> spilling -> stored
+resident <- spilling                 (spill failure; original is retained)
+stored -> loading -> resident
+loading -> corrupted                 (artifact exists but validation fails)
+loading -> removed                   (artifact is absent)
+stored -> removed
+corrupted -> removed
+```
+
+The lifecycle object tracks state but owns neither `BinaryNode` memory nor
+filesystem resources. A caller must not release the resident node until the
+spill reaches `stored`. A failed spill returns to `resident`; a successful
+load returns to `resident`; a failed load never returns an unvalidated value.
+`corrupted` artifacts are not loadable again until explicitly removed and
+recomputed.
+
+Reason
+
+The merge coordinator needs an explicit ownership and failure contract before
+it can connect eviction decisions to StorageManager calls. Keeping the state
+machine independent from I/O makes synchronous behavior testable and leaves
+room for a future asynchronous writer without changing the state semantics.
+
+Consequence
+
+The next integration step may attach a lifecycle record to each resident node
+and apply the transitions around `StorageManager::store()` and
+`StorageManager::load()`. Actual node release and merge scheduling remain
+outside this state machine.
+
+---
+
+## ADR-0036
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Connect Merge-Level Observation to StorageManager Accounting
+
+Decision
+
+`BinarySplitter` exposes an optional `BinaryMergeCoordinator` callback on the
+explicit parallel split entry point. The callback observes the immutable
+resident node span after leaf construction and after each merge level. The
+concrete `StorageMergeCoordinator` converts each node's computation identity,
+range, and tree level into a deterministic chunk identity, calculates its
+uncompressed resident size, and publishes the current resident set through
+`StorageManager::snapshot()`.
+
+This first connection is observation-only: it does not store or release
+nodes. That preserves the existing in-memory merge result while establishing
+the exact resident-set boundary required by the next spill implementation.
+Duplicate identities and invalid node ranges are rejected before accounting
+is published.
+
+Reason
+
+The merge coordinator must see the same level boundaries as BinarySplitter,
+but the algorithm must not know filesystem or codec details. An optional
+abstract callback keeps existing callers unchanged and permits the concrete
+storage bridge to depend on StorageManager without forcing every BinaryNode
+consumer to link the storage backend.
+
+Consequence
+
+The next step can attach `NodeLifecycle` records and invoke synchronous
+`StorageManager::store()` only after a successful observation/planning step.
+No current merge path releases resident memory or changes mathematical
+results.
+
+---
+
+## ADR-0037
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Publish Merge Storage State Through ProgressTracker
+
+Decision
+
+`StorageMergeCoordinator` optionally receives a caller-owned
+`ProgressTracker`. At each observed merge level and after spill/reload work it
+publishes resident bytes, durable stored bytes, indexed chunk count, and the
+current merge level. The tracker remains optional so standalone BinarySplitter
+and storage tests do not need a progress lifecycle.
+
+Reason
+
+Storage accounting is useful only when it is sampled at the same boundaries as
+the merge coordinator. Publishing from the coordinator avoids making workers
+format progress or access filesystem details, and keeps the existing progress
+reporters unchanged.
+
+Consequence
+
+Progress output now reflects the synchronous spill/reload boundary. The
+calculator integration still needs to construct the coordinator from runtime
+configuration and pass the caller-owned tracker in the production path.
+
+---
+
+## ADR-0038
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Split Asynchronous and Platform Optimization Work After PR-0026
+
+Decision
+
+PR-0026 is stabilized around a synchronous correctness path: BinarySplitter
+merge boundaries, deterministic memory planning, synchronous store/reload,
+node lifecycle transitions, corruption rejection, progress publication, and
+forced out-of-core regression/performance tests. These boundaries are the
+compatibility surface for subsequent storage work.
+
+The following work is deferred to separate PRs:
+
+- PR-0027: asynchronous storage writer, merge wait/backpressure, cancellation,
+  and concurrent I/O scheduling.
+- PR-0028: compression backend optimization/benchmark selection and
+  NUMA/Huge Pages placement.
+
+Neither deferred PR may change chunk identity, canonical codec bytes, index
+durability, lifecycle failure semantics, or the synchronous correctness path
+without an explicit contract revision and regression coverage.
+
+Reason
+
+Combining asynchronous scheduling and platform-specific memory optimization
+with the first real spill integration would make failures, ownership, and
+performance regressions difficult to isolate. The current synchronous path
+provides a stable reference implementation for measuring those later changes.
+
+Consequence
+
+PR-0026 can be reviewed and released as a correctness/stability milestone.
+The next implementation PR should begin with an asynchronous writer contract
+that preserves the existing store-before-release rule and lifecycle states.

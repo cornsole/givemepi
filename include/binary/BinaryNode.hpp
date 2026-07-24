@@ -52,6 +52,12 @@ public:
     [[nodiscard]]
     const bigint::GMPInteger& T() const noexcept;
 
+    /// Releases the GMP payload while preserving the node's range identity.
+    void clearValues() noexcept;
+
+    /// Returns whether the P/Q/T payload is resident in memory.
+    [[nodiscard]] bool hasValues() const noexcept;
+
 
 private:
 

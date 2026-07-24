@@ -66,6 +66,42 @@ endif()
 
 if(ENABLE_BENCHMARKS)
 
+    add_executable(out-of-core-merge-benchmark
+        benchmarks/storage/OutOfCoreMergeBenchmark.cpp
+        src/storage/StorageMergeCoordinator.cpp
+        src/storage/BinaryNodeChunkAdapter.cpp
+        src/storage/NodeLifecycle.cpp
+        src/storage/StorageManager.cpp
+        src/storage/ChunkStore.cpp
+        src/storage/ChunkIndex.cpp
+        src/storage/ChunkCodec.cpp
+        src/storage/CompressionCodec.cpp
+        src/storage/StoragePolicy.cpp
+        src/storage/ChunkTypes.cpp
+        src/progress/ProgressTracker.cpp
+        src/progress/ProgressSnapshot.cpp
+        src/progress/ProgressState.cpp
+        src/checkpoint/AtomicFileCommit.cpp
+        src/checkpoint/CRC32C.cpp
+        src/checkpoint/GMPSerialization.cpp
+        src/checkpoint/CheckpointTypes.cpp
+        src/chudnovsky/PrecisionPolicy.cpp
+        src/binary/BinaryNode.cpp
+        src/binary/BinarySplitter.cpp
+        src/bigint/GMPInteger.cpp
+        src/scheduler/Task.cpp
+        src/scheduler/TaskHandle.cpp
+        src/scheduler/ThreadPool.cpp
+        src/scheduler/LockFreeQueue.cpp
+        src/scheduler/WorkStealingQueue.cpp
+        src/scheduler/Worker.cpp
+        src/scheduler/Scheduler.cpp
+        src/scheduler/ReferenceQueue.cpp
+    )
+
+    target_include_directories(out-of-core-merge-benchmark PRIVATE include)
+    target_link_libraries(out-of-core-merge-benchmark PRIVATE gmp Threads::Threads)
+
     add_executable(storage-throughput-benchmark
         benchmarks/storage/StorageThroughputBenchmark.cpp
         src/storage/StorageManager.cpp
@@ -146,6 +182,7 @@ set(PI_ENGINE_SOURCES
     src/config/Config.cpp
     src/config/ConfigLoader.cpp
     src/config/CommandLine.cpp
+    src/storage/StoragePolicy.cpp
 
     src/scheduler/ThreadPool.cpp
     src/scheduler/Task.cpp
@@ -832,6 +869,78 @@ add_test(NAME StorageManagerTest COMMAND storage-manager-test)
 
 target_include_directories(storage-manager-test PRIVATE include)
 target_link_libraries(storage-manager-test PRIVATE gmp)
+
+add_executable(binary-node-chunk-adapter-test
+    tests/storage/BinaryNodeChunkAdapterTest.cpp
+    src/storage/BinaryNodeChunkAdapter.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/binary/BinaryNode.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(
+    NAME BinaryNodeChunkAdapterTest
+    COMMAND binary-node-chunk-adapter-test
+)
+
+target_include_directories(binary-node-chunk-adapter-test PRIVATE include)
+target_link_libraries(binary-node-chunk-adapter-test PRIVATE gmp)
+
+add_executable(node-lifecycle-test
+    tests/storage/NodeLifecycleTest.cpp
+    src/storage/NodeLifecycle.cpp
+)
+
+add_test(NAME NodeLifecycleTest COMMAND node-lifecycle-test)
+
+target_include_directories(node-lifecycle-test PRIVATE include)
+
+add_executable(storage-merge-coordinator-test
+    tests/storage/StorageMergeCoordinatorTest.cpp
+    src/storage/StorageMergeCoordinator.cpp
+    src/storage/BinaryNodeChunkAdapter.cpp
+    src/storage/NodeLifecycle.cpp
+    src/storage/StorageManager.cpp
+    src/storage/ChunkStore.cpp
+    src/storage/ChunkIndex.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/StoragePolicy.cpp
+    src/storage/ChunkTypes.cpp
+    src/progress/ProgressTracker.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/binary/BinaryNode.cpp
+    src/binary/BinarySplitter.cpp
+    src/bigint/GMPInteger.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
+)
+
+add_test(
+    NAME StorageMergeCoordinatorTest
+    COMMAND storage-merge-coordinator-test
+)
+
+target_include_directories(storage-merge-coordinator-test PRIVATE include)
+target_link_libraries(storage-merge-coordinator-test PRIVATE gmp Threads::Threads)
 
 add_executable(eviction-planner-test
     tests/storage/EvictionPlannerTest.cpp
