@@ -7,6 +7,7 @@ int main()
 {
     using pi::storage::NodeLifecycle;
     using pi::storage::NodeLifecycleState;
+    using pi::storage::AsyncWriteState;
     using pi::storage::toString;
 
     NodeLifecycle lifecycle;
@@ -17,6 +18,17 @@ int main()
     assert(!lifecycle.beginSpill());
     assert(lifecycle.failSpill());
     assert(lifecycle.state() == NodeLifecycleState::resident);
+
+    assert(lifecycle.beginSpill());
+    assert(!lifecycle.finishAsyncSpill(
+        AsyncWriteState::failed, "writer failed"));
+    assert(lifecycle.state() == NodeLifecycleState::resident);
+    assert(lifecycle.error() == "writer failed");
+    assert(lifecycle.beginSpill());
+    assert(lifecycle.finishAsyncSpill(AsyncWriteState::stored));
+    assert(lifecycle.state() == NodeLifecycleState::stored);
+    assert(lifecycle.beginLoad());
+    assert(lifecycle.completeLoad());
 
     assert(lifecycle.beginSpill());
     assert(lifecycle.completeSpill());

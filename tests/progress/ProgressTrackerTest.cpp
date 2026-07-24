@@ -51,6 +51,7 @@ int main()
     tracker.setMemoryBytes(4096);
     tracker.setCheckpointBytes(2048);
     tracker.setStorageProgress(8192, 16384, 3);
+    tracker.setStorageIoProgress(2, 1, 7, 1, 3, 2, 9, 2);
     assert(tracker.recordValidatedCheckpoint(
         ValidatedCheckpointProgress{0, 10'000, 0}
     ));
@@ -121,6 +122,14 @@ int main()
     assert(completed.storageResidentBytes() == 8192);
     assert(completed.storageStoredBytes() == 16384);
     assert(completed.storageChunkCount() == 3);
+    assert(completed.storageQueuedWrites() == 2);
+    assert(completed.storageActiveWrites() == 1);
+    assert(completed.storageCompletedWrites() == 7);
+    assert(completed.storageFailedWrites() == 1);
+    assert(completed.storageQueuedReads() == 3);
+    assert(completed.storageActiveReads() == 2);
+    assert(completed.storageCompletedReads() == 9);
+    assert(completed.storageFailedReads() == 2);
     assert(completed.lastValidatedCheckpoint().has_value());
     assert(completed.elapsed() == completedAgain.elapsed());
     assert(!tracker.addCompletedTerms(0));

@@ -125,6 +125,15 @@ void JsonProgressReporter::report(
     std::ostringstream record;
     record.imbue(std::locale::classic());
     record << '{';
+    record << R"("storage_io":{"writes":{"queued":)"
+           << snapshot.storageQueuedWrites()
+           << R"(,"active":)" << snapshot.storageActiveWrites()
+           << R"(,"completed":)" << snapshot.storageCompletedWrites()
+           << R"(,"failed":)" << snapshot.storageFailedWrites()
+           << R"(},"reads":{"queued":)" << snapshot.storageQueuedReads()
+           << R"(,"active":)" << snapshot.storageActiveReads()
+           << R"(,"completed":)" << snapshot.storageCompletedReads()
+           << R"(,"failed":)" << snapshot.storageFailedReads() << "},";
     record << "\"schema_version\":" << snapshot.schemaVersion();
     record << ",\"sampled_at\":";
     writeString(record, utcTimestamp(now_()));

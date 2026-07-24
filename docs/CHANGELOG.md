@@ -627,3 +627,31 @@
   deterministic memory behavior remain in this PR; asynchronous writing,
   merge wait/backpressure, concurrent I/O, compression optimization, and
   NUMA/Huge Pages work are explicitly deferred to PR-0027/PR-0028.
+- Wired validated runtime storage configuration into the production calculator
+  path, including StorageManager, StorageMergeCoordinator, and ProgressTracker
+  injection while preserving the disabled out-of-core path.
+- Added a bounded asynchronous chunk writer with worker lifecycle tracking,
+  durable completion handles, queued cancellation, shutdown drain/cancel
+  modes, and serialized StorageManager publication.
+- Extended NodeLifecycle to consume asynchronous stored/failed/cancelled
+  completions while preserving resident payload ownership until durability.
+- Connected the merge coordinator to the bounded writer: spill submissions
+  wait for queue capacity, payloads remain resident until all durable handles
+  complete, and async failures restore the lifecycle to resident.
+- Added a bounded asynchronous chunk reader with queued/loading/loaded/
+  failed/cancelled handles and serialized StorageManager reload access.
+- Connected asynchronous reload to merge preparation: stored nodes are queued,
+  awaited, decoded through the canonical BinaryNode/Chunk adapter, and only
+  then returned to the resident lifecycle.
+- Extended progress snapshots and text/JSON output with asynchronous storage I/O
+  queue, active, completed, and failed counters for writes and reads.
+- Added failure and shutdown coverage for duplicate durable writes, missing
+  reload identities, terminal handle states, and post-shutdown submission
+  rejection.
+- Added an async/sync out-of-core merge benchmark mode. On the current runner,
+  1,000,000 digits under a forced 1 MiB budget completed in 0.512 s sync and
+  0.544 s async, with 15 spills and 15 reloads in both modes. The async run
+  used 27 MiB peak RSS versus 23 MiB sync; this is a baseline, not a target.
+- Stabilized PR-0027 with a clean 64-test regression run and separated
+  concurrent I/O, compression optimization, and NUMA/Huge Pages work into the
+  PR-0028 follow-up boundary.

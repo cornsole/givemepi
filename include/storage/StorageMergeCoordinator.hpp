@@ -4,6 +4,8 @@
 #include "checkpoint/CheckpointTypes.hpp"
 #include "storage/StorageManager.hpp"
 #include "storage/NodeLifecycle.hpp"
+#include "storage/AsyncWriter.hpp"
+#include "storage/AsyncReader.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -34,7 +36,9 @@ public:
     StorageMergeCoordinator(
         StorageManager& manager,
         checkpoint::ComputationIdentity computation,
-        progress::ProgressTracker* progress = nullptr
+        progress::ProgressTracker* progress = nullptr,
+        AsyncChunkWriter* asyncWriter = nullptr,
+        AsyncChunkReader* asyncReader = nullptr
     );
 
     void observeResidentNodes(
@@ -65,6 +69,8 @@ private:
     StorageManager& manager_;
     checkpoint::ComputationIdentity computation_;
     progress::ProgressTracker* progress_ = nullptr;
+    AsyncChunkWriter* asyncWriter_ = nullptr;
+    AsyncChunkReader* asyncReader_ = nullptr;
     std::vector<ResidentMergeNode> residentNodes_;
     std::uint64_t spillCount_ = 0;
     std::uint64_t reloadCount_ = 0;

@@ -52,9 +52,13 @@ int main()
     reporter.report(ProgressSnapshot(data), metrics);
 
     const std::string record = output.str();
-    assert(record.starts_with(
-        "{\"schema_version\":3,\"sampled_at\":\"1970-01-01T00:00:00Z\""
-    ));
+    assert(record.starts_with("{\"storage_io\":{\"writes\":{"));
+    assert(record.find(
+        "\"storage_io\":{\"writes\":{\"queued\":0,\"active\":0"
+    ) != std::string::npos);
+    assert(record.find(
+        "\"schema_version\":3,\"sampled_at\":\"1970-01-01T00:00:00Z\""
+    ) != std::string::npos);
     assert(record.find("\"phase\":\"merging\"") != std::string::npos);
     assert(record.find("\"terminal_state\":\"running\"")
         != std::string::npos);
@@ -86,7 +90,7 @@ int main()
 
     const std::string allRecords = output.str();
     const std::size_t failedStart = allRecords.rfind(
-        "{\"schema_version\""
+        "\"schema_version\""
     );
     const std::string second = allRecords.substr(failedStart);
     assert(second.find(

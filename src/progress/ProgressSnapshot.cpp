@@ -23,6 +23,14 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
       storageResidentBytes_(data.storageResidentBytes),
       storageStoredBytes_(data.storageStoredBytes),
       storageChunkCount_(data.storageChunkCount),
+      storageQueuedWrites_(data.storageQueuedWrites),
+      storageActiveWrites_(data.storageActiveWrites),
+      storageCompletedWrites_(data.storageCompletedWrites),
+      storageFailedWrites_(data.storageFailedWrites),
+      storageQueuedReads_(data.storageQueuedReads),
+      storageActiveReads_(data.storageActiveReads),
+      storageCompletedReads_(data.storageCompletedReads),
+      storageFailedReads_(data.storageFailedReads),
       lastValidatedCheckpoint_(std::move(data.lastValidatedCheckpoint)),
       failureDetail_(std::move(data.failureDetail))
 {
@@ -160,6 +168,46 @@ std::uint64_t ProgressSnapshot::storageStoredBytes() const noexcept
 std::uint64_t ProgressSnapshot::storageChunkCount() const noexcept
 {
     return storageChunkCount_;
+}
+
+std::uint64_t ProgressSnapshot::storageQueuedWrites() const noexcept
+{
+    return storageQueuedWrites_;
+}
+
+std::uint64_t ProgressSnapshot::storageActiveWrites() const noexcept
+{
+    return storageActiveWrites_;
+}
+
+std::uint64_t ProgressSnapshot::storageCompletedWrites() const noexcept
+{
+    return storageCompletedWrites_;
+}
+
+std::uint64_t ProgressSnapshot::storageFailedWrites() const noexcept
+{
+    return storageFailedWrites_;
+}
+
+std::uint64_t ProgressSnapshot::storageQueuedReads() const noexcept
+{
+    return storageQueuedReads_;
+}
+
+std::uint64_t ProgressSnapshot::storageActiveReads() const noexcept
+{
+    return storageActiveReads_;
+}
+
+std::uint64_t ProgressSnapshot::storageCompletedReads() const noexcept
+{
+    return storageCompletedReads_;
+}
+
+std::uint64_t ProgressSnapshot::storageFailedReads() const noexcept
+{
+    return storageFailedReads_;
 }
 
 

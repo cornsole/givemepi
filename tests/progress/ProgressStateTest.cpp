@@ -17,7 +17,7 @@ int main()
     using pi::progress::terminalState;
     using pi::progress::toString;
 
-    static_assert(PROGRESS_SCHEMA_VERSION == 2);
+    static_assert(PROGRESS_SCHEMA_VERSION == 3);
     static_assert(!isTerminal(ProgressPhase::initializing));
     static_assert(isTerminal(ProgressPhase::completed));
     static_assert(isTerminal(ProgressPhase::failed));

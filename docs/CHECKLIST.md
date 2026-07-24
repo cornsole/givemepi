@@ -286,11 +286,25 @@
 
 [x] Synchronous Out-of-Core Merge Stabilization Boundary (PR-0026)
 
-[ ] Asynchronous Storage Writer (PR-0027)
+[x] Production StorageMergeCoordinator Wiring (PR-0027)
 
-[ ] Merge Wait and Backpressure (PR-0027)
+[x] Asynchronous Storage Writer Contract (PR-0027)
 
-[ ] Concurrent I/O Execution (PR-0027)
+[x] Bounded Asynchronous I/O Queue and Writer Runner (PR-0027)
+
+[x] Asynchronous NodeLifecycle Completion Transition (PR-0027)
+
+[x] Merge Wait and Backpressure (PR-0027)
+
+[x] Asynchronous Reload Reader and Merge Integration (PR-0027)
+
+[x] Asynchronous Storage I/O Progress Telemetry (PR-0027)
+
+[x] Asynchronous I/O Failure and Shutdown Tests (PR-0027)
+
+[x] Async Spill/Reload Performance Baseline (PR-0027)
+
+[ ] Concurrent I/O Execution (PR-0028)
 
 [ ] Compression Backend Optimization (PR-0028)
 

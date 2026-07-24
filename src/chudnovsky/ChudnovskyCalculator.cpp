@@ -282,7 +282,8 @@ PiCalculationResult ChudnovskyCalculator::calculateParallel(
     const PiCalculationRequest& request,
     scheduler::Scheduler& executor,
     const binary::ParallelSplitOptions& splitOptions,
-    progress::ProgressTracker* progress
+    progress::ProgressTracker* progress,
+    binary::BinaryMergeCoordinator* mergeCoordinator
 )
 {
     try
@@ -300,7 +301,8 @@ PiCalculationResult ChudnovskyCalculator::calculateParallel(
             precision.termCount,
             executor,
             splitOptions,
-            &observer
+            &observer,
+            mergeCoordinator
         );
         const auto splitEnd = Clock::now();
         completeTerms(progress, precision.termCount);

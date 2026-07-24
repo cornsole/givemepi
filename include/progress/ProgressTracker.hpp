@@ -75,6 +75,17 @@ public:
         std::uint64_t chunkCount
     ) noexcept;
 
+    void setStorageIoProgress(
+        std::uint64_t queuedWrites,
+        std::uint64_t activeWrites,
+        std::uint64_t completedWrites,
+        std::uint64_t failedWrites,
+        std::uint64_t queuedReads,
+        std::uint64_t activeReads,
+        std::uint64_t completedReads,
+        std::uint64_t failedReads
+    ) noexcept;
+
     /// Publishes the current merge level on the low-frequency metadata path.
     ///
     /// Returns false after termination. Time and memory: O(1).
@@ -119,6 +130,14 @@ private:
     std::atomic<std::uint64_t> storageResidentBytes_{0};
     std::atomic<std::uint64_t> storageStoredBytes_{0};
     std::atomic<std::uint64_t> storageChunkCount_{0};
+    std::atomic<std::uint64_t> storageQueuedWrites_{0};
+    std::atomic<std::uint64_t> storageActiveWrites_{0};
+    std::atomic<std::uint64_t> storageCompletedWrites_{0};
+    std::atomic<std::uint64_t> storageFailedWrites_{0};
+    std::atomic<std::uint64_t> storageQueuedReads_{0};
+    std::atomic<std::uint64_t> storageActiveReads_{0};
+    std::atomic<std::uint64_t> storageCompletedReads_{0};
+    std::atomic<std::uint64_t> storageFailedReads_{0};
 
     mutable std::mutex metadataMutex_;
     std::optional<std::uint32_t> currentMergeLevel_;

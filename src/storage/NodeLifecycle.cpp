@@ -30,6 +30,7 @@ NodeLifecycleState NodeLifecycle::state() const noexcept
 bool NodeLifecycle::beginSpill() noexcept
 {
     if (state_ != NodeLifecycleState::resident) return false;
+    error_.reset();
     state_ = NodeLifecycleState::spilling;
     return true;
 }
@@ -46,6 +47,34 @@ bool NodeLifecycle::failSpill() noexcept
     if (state_ != NodeLifecycleState::spilling) return false;
     state_ = NodeLifecycleState::resident;
     return true;
+}
+
+bool NodeLifecycle::finishAsyncSpill(
+    AsyncWriteState result,
+    std::string_view detail
+)
+{
+    if (state_ != NodeLifecycleState::spilling) return false;
+    if (result == AsyncWriteState::stored)
+    {
+        state_ = NodeLifecycleState::stored;
+        error_.reset();
+        return true;
+    }
+    if (result != AsyncWriteState::failed
+        && result != AsyncWriteState::cancelled)
+    {
+        return false;
+    }
+
+    state_ = NodeLifecycleState::resident;
+    if (!detail.empty()) error_ = std::string(detail);
+    return false;
+}
+
+const std::optional<std::string>& NodeLifecycle::error() const noexcept
+{
+    return error_;
 }
 
 bool NodeLifecycle::beginLoad() noexcept

@@ -1787,10 +1787,11 @@ compatibility surface for subsequent storage work.
 
 The following work is deferred to separate PRs:
 
-- PR-0027: asynchronous storage writer, merge wait/backpressure, cancellation,
-  and concurrent I/O scheduling.
-- PR-0028: compression backend optimization/benchmark selection and
-  NUMA/Huge Pages placement.
+- PR-0027: asynchronous storage writer/reader, merge wait/backpressure,
+  cancellation, progress telemetry, failure handling, and baseline
+  performance validation.
+- PR-0028: concurrent I/O scheduling, compression backend
+  optimization/benchmark selection, and NUMA/Huge Pages placement.
 
 Neither deferred PR may change chunk identity, canonical codec bytes, index
 durability, lifecycle failure semantics, or the synchronous correctness path
@@ -1806,5 +1807,104 @@ provides a stable reference implementation for measuring those later changes.
 Consequence
 
 PR-0026 can be reviewed and released as a correctness/stability milestone.
-The next implementation PR should begin with an asynchronous writer contract
-that preserves the existing store-before-release rule and lifecycle states.
+The first task of PR-0027 is to construct `StorageManager` and
+`StorageMergeCoordinator` from the validated runtime configuration and inject
+the caller-owned `ProgressTracker` into the production calculator path. Only
+after that wiring is covered by regression tests should PR-0027 begin the
+asynchronous writer contract, preserving the existing store-before-release
+rule and lifecycle states.
+
+The production wiring portion is now implemented and covered by calculator
+build and regression execution. The bounded writer, merge integration, and
+reload reader are tracked as the remaining PR-0027 asynchronous work.
+
+---
+
+## ADR-0039
+
+Date
+
+2026-07-24
+
+Status
+
+Accepted
+
+Title
+
+Define the Asynchronous Chunk Writer Contract
+
+Decision
+
+One asynchronous write request follows this lifecycle:
+
+```text
+queued -> writing -> stored
+queued -> cancelled
+queued -> failed
+writing -> failed
+```
+
+Only `stored`, reached after complete payload write, file synchronization,
+atomic rename, and index publication, establishes a durable copy. The caller
+must retain the resident BinaryNode while a request is `queued` or `writing`.
+Queued requests may be cancelled; active writes drain or fail so cancellation
+cannot report success before durability is known. Failed requests carry owned
+diagnostic text and never imply a durable copy.
+
+The initial contract is represented by `AsyncWriteLifecycle`. It contains no
+thread, queue, filesystem, or payload ownership so the later bounded writer
+can implement scheduling without changing lifecycle semantics.
+
+Reason
+
+Asynchronous I/O must preserve the synchronous store-before-release guarantee.
+Making durability and cancellation states explicit prevents a future writer
+from releasing resident memory when a request was merely accepted by a queue.
+
+Consequence
+
+The next implementation step is a bounded request queue and writer runner
+that drives this lifecycle and propagates completion/failure to the merge
+coordinator and progress telemetry.
+
+The bounded queue and writer runner are now implemented and connected to the
+merge coordinator. Asynchronous reload is covered by the corresponding reader
+and merge preparation integration; concurrent I/O scheduling remains a later
+PR-0028 item.
+
+NodeLifecycle now consumes the writer completion state: `stored` transitions
+to durable storage, while `failed` and `cancelled` return to `resident` with
+the original value preserved.
+
+The merge coordinator now submits spill candidates to the bounded writer,
+waits for capacity before submission, waits for durable completion handles,
+and clears node payloads only after successful completion. Queue shutdown or
+write failure leaves affected nodes resident and propagates the failure.
+
+The same boundary now exists for reload. `AsyncChunkReader` owns a bounded
+request queue and worker lifecycle; each request calls the validated
+`StorageManager::load` path, and `prepareMergeNodes` waits for every queued
+handle before decoding and restoring P/Q/T. A failed request never exposes a
+partially initialized BinaryNode. The synchronous reload path remains the
+fallback when no reader is injected; production out-of-core construction now
+owns both async workers and injects them into the merge coordinator using the
+configured maximum-concurrent-I/O value.
+
+Failure and shutdown regression coverage verifies duplicate publication
+failure, missing indexed reload failure, terminal counters, and rejection of
+new requests after worker shutdown.
+
+The Release benchmark now accepts `out-of-core async` to compare the bounded
+writer/reader path with the synchronous coordinator. A current 1,000,000-digit
+forced-1-MiB run measured 0.512 s sync versus 0.544 s async, with identical
+15-spill/15-reload counts and correct P-bit output. Async peak RSS was 27 MiB
+versus 23 MiB sync. The small regression is expected for the current
+single-worker queue and remains a tuning baseline until concurrent I/O and
+larger multi-chunk workloads are measured.
+
+Progress reports the asynchronous storage boundary separately from scheduler
+task counts. Writer and reader queue depth, active operations, completed
+operations, and failures are published through `ProgressTracker` and exposed
+by both progress reporters; storage byte and chunk telemetry remains
+unchanged.

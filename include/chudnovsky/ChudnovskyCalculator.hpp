@@ -81,7 +81,8 @@ public:
         const PiCalculationRequest& request,
         scheduler::Scheduler& executor,
         const binary::ParallelSplitOptions& splitOptions,
-        progress::ProgressTracker* progress = nullptr
+        progress::ProgressTracker* progress = nullptr,
+        binary::BinaryMergeCoordinator* mergeCoordinator = nullptr
     );
 };
 

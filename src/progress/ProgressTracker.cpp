@@ -130,6 +130,28 @@ void ProgressTracker::setStorageProgress(
     storageChunkCount_.store(chunkCount, std::memory_order_relaxed);
 }
 
+void ProgressTracker::setStorageIoProgress(
+    std::uint64_t queuedWrites,
+    std::uint64_t activeWrites,
+    std::uint64_t completedWrites,
+    std::uint64_t failedWrites,
+    std::uint64_t queuedReads,
+    std::uint64_t activeReads,
+    std::uint64_t completedReads,
+    std::uint64_t failedReads
+) noexcept
+{
+    if (!isRunning()) return;
+    storageQueuedWrites_.store(queuedWrites, std::memory_order_relaxed);
+    storageActiveWrites_.store(activeWrites, std::memory_order_relaxed);
+    storageCompletedWrites_.store(completedWrites, std::memory_order_relaxed);
+    storageFailedWrites_.store(failedWrites, std::memory_order_relaxed);
+    storageQueuedReads_.store(queuedReads, std::memory_order_relaxed);
+    storageActiveReads_.store(activeReads, std::memory_order_relaxed);
+    storageCompletedReads_.store(completedReads, std::memory_order_relaxed);
+    storageFailedReads_.store(failedReads, std::memory_order_relaxed);
+}
+
 
 bool ProgressTracker::setCurrentMergeLevel(std::uint32_t level)
 {
@@ -223,6 +245,14 @@ ProgressSnapshot ProgressTracker::snapshot() const
     data.storageResidentBytes = storageResidentBytes_.load(std::memory_order_relaxed);
     data.storageStoredBytes = storageStoredBytes_.load(std::memory_order_relaxed);
     data.storageChunkCount = storageChunkCount_.load(std::memory_order_relaxed);
+    data.storageQueuedWrites = storageQueuedWrites_.load(std::memory_order_relaxed);
+    data.storageActiveWrites = storageActiveWrites_.load(std::memory_order_relaxed);
+    data.storageCompletedWrites = storageCompletedWrites_.load(std::memory_order_relaxed);
+    data.storageFailedWrites = storageFailedWrites_.load(std::memory_order_relaxed);
+    data.storageQueuedReads = storageQueuedReads_.load(std::memory_order_relaxed);
+    data.storageActiveReads = storageActiveReads_.load(std::memory_order_relaxed);
+    data.storageCompletedReads = storageCompletedReads_.load(std::memory_order_relaxed);
+    data.storageFailedReads = storageFailedReads_.load(std::memory_order_relaxed);
 
     return ProgressSnapshot(std::move(data));
 }

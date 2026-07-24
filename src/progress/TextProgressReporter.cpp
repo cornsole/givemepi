@@ -127,6 +127,14 @@ std::string render(
     output << " storage=" << byteCount(snapshot.storageResidentBytes())
            << " resident/" << byteCount(snapshot.storageStoredBytes())
            << " stored/" << snapshot.storageChunkCount() << " chunks";
+    output << " io=write[" << snapshot.storageActiveWrites() << " active/"
+           << snapshot.storageQueuedWrites() << " queued/"
+           << snapshot.storageCompletedWrites() << " done/"
+           << snapshot.storageFailedWrites() << " failed]"
+           << " read[" << snapshot.storageActiveReads() << " active/"
+           << snapshot.storageQueuedReads() << " queued/"
+           << snapshot.storageCompletedReads() << " done/"
+           << snapshot.storageFailedReads() << " failed]";
 
     if (snapshot.currentMergeLevel().has_value())
     {

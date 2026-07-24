@@ -1,5 +1,9 @@
 #pragma once
 
+#include "storage/AsyncWriter.hpp"
+
+#include <optional>
+#include <string>
 #include <string_view>
 
 namespace pi::storage
@@ -38,6 +42,18 @@ public:
     [[nodiscard]] bool completeSpill() noexcept;
     [[nodiscard]] bool failSpill() noexcept;
 
+    /// Applies an asynchronous writer completion without releasing the
+    /// resident value before durable publication.
+    ///
+    /// Returns true only when the request reached stored. Failed or cancelled
+    /// writes return to resident and preserve the original value.
+    [[nodiscard]] bool finishAsyncSpill(
+        AsyncWriteState result,
+        std::string_view detail = {}
+    );
+
+    [[nodiscard]] const std::optional<std::string>& error() const noexcept;
+
     [[nodiscard]] bool beginLoad() noexcept;
     [[nodiscard]] bool completeLoad() noexcept;
     /// `artifactExists=true` means validation failed; false means it vanished.
@@ -47,6 +63,7 @@ public:
 
 private:
     NodeLifecycleState state_;
+    std::optional<std::string> error_;
 };
 
 } // namespace pi::storage

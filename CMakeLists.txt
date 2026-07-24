@@ -69,6 +69,8 @@ if(ENABLE_BENCHMARKS)
     add_executable(out-of-core-merge-benchmark
         benchmarks/storage/OutOfCoreMergeBenchmark.cpp
         src/storage/StorageMergeCoordinator.cpp
+        src/storage/AsyncWriter.cpp
+        src/storage/AsyncReader.cpp
         src/storage/BinaryNodeChunkAdapter.cpp
         src/storage/NodeLifecycle.cpp
         src/storage/StorageManager.cpp
@@ -183,6 +185,17 @@ set(PI_ENGINE_SOURCES
     src/config/ConfigLoader.cpp
     src/config/CommandLine.cpp
     src/storage/StoragePolicy.cpp
+    src/storage/BinaryNodeChunkAdapter.cpp
+    src/storage/NodeLifecycle.cpp
+    src/storage/StorageMergeCoordinator.cpp
+    src/storage/AsyncWriter.cpp
+    src/storage/AsyncReader.cpp
+    src/storage/StorageManager.cpp
+    src/storage/ChunkStore.cpp
+    src/storage/ChunkIndex.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/ChunkTypes.cpp
 
     src/scheduler/ThreadPool.cpp
     src/scheduler/Task.cpp
@@ -904,6 +917,8 @@ target_include_directories(node-lifecycle-test PRIVATE include)
 add_executable(storage-merge-coordinator-test
     tests/storage/StorageMergeCoordinatorTest.cpp
     src/storage/StorageMergeCoordinator.cpp
+    src/storage/AsyncWriter.cpp
+    src/storage/AsyncReader.cpp
     src/storage/BinaryNodeChunkAdapter.cpp
     src/storage/NodeLifecycle.cpp
     src/storage/StorageManager.cpp
@@ -941,6 +956,72 @@ add_test(
 
 target_include_directories(storage-merge-coordinator-test PRIVATE include)
 target_link_libraries(storage-merge-coordinator-test PRIVATE gmp Threads::Threads)
+
+add_executable(async-writer-contract-test
+    tests/storage/AsyncWriterContractTest.cpp
+    src/storage/AsyncWriter.cpp
+    src/storage/StorageManager.cpp
+    src/storage/ChunkStore.cpp
+    src/storage/ChunkIndex.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/StoragePolicy.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME AsyncWriterContractTest COMMAND async-writer-contract-test)
+target_include_directories(async-writer-contract-test PRIVATE include)
+target_link_libraries(async-writer-contract-test PRIVATE gmp Threads::Threads)
+
+add_executable(async-writer-test
+    tests/storage/AsyncWriterTest.cpp
+    src/storage/AsyncWriter.cpp
+    src/storage/StorageManager.cpp
+    src/storage/ChunkStore.cpp
+    src/storage/ChunkIndex.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/StoragePolicy.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME AsyncWriterTest COMMAND async-writer-test)
+target_include_directories(async-writer-test PRIVATE include)
+target_link_libraries(async-writer-test PRIVATE gmp Threads::Threads)
+
+add_executable(async-reader-test
+    tests/storage/AsyncReaderTest.cpp
+    src/storage/AsyncReader.cpp
+    src/storage/StorageManager.cpp
+    src/storage/ChunkStore.cpp
+    src/storage/ChunkIndex.cpp
+    src/storage/ChunkCodec.cpp
+    src/storage/CompressionCodec.cpp
+    src/storage/StoragePolicy.cpp
+    src/storage/ChunkTypes.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/bigint/GMPInteger.cpp
+)
+
+add_test(NAME AsyncReaderTest COMMAND async-reader-test)
+target_include_directories(async-reader-test PRIVATE include)
+target_link_libraries(async-reader-test PRIVATE gmp Threads::Threads)
 
 add_executable(eviction-planner-test
     tests/storage/EvictionPlannerTest.cpp

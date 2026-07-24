@@ -6,6 +6,8 @@
 #include "progress/ProgressReportingRunner.hpp"
 #include "progress/TextProgressReporter.hpp"
 #include "scheduler/Scheduler.hpp"
+#include "storage/StorageMergeCoordinator.hpp"
+#include "storage/StorageManager.hpp"
 #include "verification/BBPSamplePolicy.hpp"
 #include "verification/FinalVerifier.hpp"
 #include "verification/VerificationManifest.hpp"
@@ -38,6 +40,41 @@ int main(int argc, char* argv[])
             precision.termCount,
             0
         });
+
+        std::unique_ptr<pi::storage::StorageManager> storageManager;
+        std::unique_ptr<pi::storage::AsyncChunkWriter> asyncWriter;
+        std::unique_ptr<pi::storage::AsyncChunkReader> asyncReader;
+        std::unique_ptr<pi::storage::StorageMergeCoordinator>
+            mergeCoordinator;
+        if (config.out_of_core_enabled)
+        {
+            const auto storagePolicy =
+                pi::config::makeStoragePolicy(config);
+            storageManager = std::make_unique<pi::storage::StorageManager>(
+                storagePolicy);
+            const auto ioWorkers = std::max<std::uint32_t>(
+                1,
+                storagePolicy.max_concurrent_io);
+            const auto ioQueueCapacity = std::max<std::size_t>(
+                1,
+                static_cast<std::size_t>(ioWorkers) * 8);
+            asyncWriter = std::make_unique<pi::storage::AsyncChunkWriter>(
+                *storageManager,
+                ioQueueCapacity,
+                ioWorkers);
+            asyncReader = std::make_unique<pi::storage::AsyncChunkReader>(
+                *storageManager,
+                ioQueueCapacity,
+                ioWorkers);
+            mergeCoordinator =
+                std::make_unique<pi::storage::StorageMergeCoordinator>(
+                    *storageManager,
+                    pi::checkpoint::ComputationIdentity::fromPrecisionPlan(
+                        precision),
+                    &tracker,
+                    asyncWriter.get(),
+                    asyncReader.get());
+        }
 
         std::unique_ptr<pi::progress::IProgressReporter> reporter;
         std::unique_ptr<pi::progress::ProgressReportingRunner> runner;
@@ -95,7 +132,8 @@ int main(int argc, char* argv[])
                 },
                 scheduler,
                 pi::binary::ParallelSplitOptions{32, 4},
-                &tracker
+                &tracker,
+                mergeCoordinator.get()
                 )
             );
             scheduler.stop();

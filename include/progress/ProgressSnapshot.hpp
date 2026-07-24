@@ -41,6 +41,14 @@ struct ProgressSnapshotData
     std::uint64_t storageResidentBytes = 0;
     std::uint64_t storageStoredBytes = 0;
     std::uint64_t storageChunkCount = 0;
+    std::uint64_t storageQueuedWrites = 0;
+    std::uint64_t storageActiveWrites = 0;
+    std::uint64_t storageCompletedWrites = 0;
+    std::uint64_t storageFailedWrites = 0;
+    std::uint64_t storageQueuedReads = 0;
+    std::uint64_t storageActiveReads = 0;
+    std::uint64_t storageCompletedReads = 0;
+    std::uint64_t storageFailedReads = 0;
     std::optional<ValidatedCheckpointProgress> lastValidatedCheckpoint;
     std::optional<std::string> failureDetail;
 };
@@ -78,6 +86,14 @@ public:
     [[nodiscard]] std::uint64_t storageResidentBytes() const noexcept;
     [[nodiscard]] std::uint64_t storageStoredBytes() const noexcept;
     [[nodiscard]] std::uint64_t storageChunkCount() const noexcept;
+    [[nodiscard]] std::uint64_t storageQueuedWrites() const noexcept;
+    [[nodiscard]] std::uint64_t storageActiveWrites() const noexcept;
+    [[nodiscard]] std::uint64_t storageCompletedWrites() const noexcept;
+    [[nodiscard]] std::uint64_t storageFailedWrites() const noexcept;
+    [[nodiscard]] std::uint64_t storageQueuedReads() const noexcept;
+    [[nodiscard]] std::uint64_t storageActiveReads() const noexcept;
+    [[nodiscard]] std::uint64_t storageCompletedReads() const noexcept;
+    [[nodiscard]] std::uint64_t storageFailedReads() const noexcept;
 
     [[nodiscard]]
     const std::optional<ValidatedCheckpointProgress>&
@@ -105,6 +121,14 @@ private:
     std::uint64_t storageResidentBytes_;
     std::uint64_t storageStoredBytes_;
     std::uint64_t storageChunkCount_;
+    std::uint64_t storageQueuedWrites_;
+    std::uint64_t storageActiveWrites_;
+    std::uint64_t storageCompletedWrites_;
+    std::uint64_t storageFailedWrites_;
+    std::uint64_t storageQueuedReads_;
+    std::uint64_t storageActiveReads_;
+    std::uint64_t storageCompletedReads_;
+    std::uint64_t storageFailedReads_;
     std::optional<ValidatedCheckpointProgress> lastValidatedCheckpoint_;
     std::optional<std::string> failureDetail_;
 };

@@ -32,7 +32,10 @@ int main()
         computation.requestedDigits,
         computation.termCount,
         0});
-    StorageMergeCoordinator coordinator(manager, computation, &progress);
+    AsyncChunkWriter asyncWriter(manager, 1, 1);
+    AsyncChunkReader asyncReader(manager, 1, 1);
+    StorageMergeCoordinator coordinator(
+        manager, computation, &progress, &asyncWriter, &asyncReader);
 
     pi::scheduler::Scheduler baselineScheduler(2, 32);
     baselineScheduler.start();

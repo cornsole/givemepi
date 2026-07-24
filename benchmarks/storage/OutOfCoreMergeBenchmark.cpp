@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <sys/resource.h>
@@ -42,6 +43,11 @@ bool outOfCore(int argc, char* argv[])
     return argc < 4 || std::string_view(argv[3]) == "out-of-core";
 }
 
+bool asynchronousIo(int argc, char* argv[])
+{
+    return argc >= 5 && std::string_view(argv[4]) == "async";
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -56,6 +62,7 @@ int main(int argc, char* argv[])
         const std::uint64_t digits = parseDigits(argc, argv);
         const std::uint64_t budgetMiB = parseBudgetMiB(argc, argv);
         const bool useStorage = outOfCore(argc, argv);
+        const bool useAsyncIo = useStorage && asynchronousIo(argc, argv);
         if (digits == 0 || budgetMiB == 0)
         {
             throw std::invalid_argument("digits and budget must be positive");
@@ -74,7 +81,19 @@ int main(int argc, char* argv[])
         std::error_code ec;
         std::filesystem::remove_all(policy.directory, ec);
         StorageManager manager(policy);
-        StorageMergeCoordinator coordinator(manager, computation);
+        std::optional<AsyncChunkWriter> asyncWriter;
+        std::optional<AsyncChunkReader> asyncReader;
+        if (useAsyncIo)
+        {
+            asyncWriter.emplace(manager, 8, 1);
+            asyncReader.emplace(manager, 8, 1);
+        }
+        StorageMergeCoordinator coordinator(
+            manager,
+            computation,
+            nullptr,
+            useAsyncIo ? &*asyncWriter : nullptr,
+            useAsyncIo ? &*asyncReader : nullptr);
 
         const auto started = std::chrono::steady_clock::now();
         pi::scheduler::Scheduler scheduler(4, 256);
@@ -94,6 +113,7 @@ int main(int argc, char* argv[])
         const auto snapshot = manager.snapshot();
         std::cout << std::fixed << std::setprecision(3)
                   << "mode=" << (useStorage ? "out-of-core" : "in-memory")
+                  << " io=" << (useAsyncIo ? "async" : "sync")
                   << " digits=" << digits
                   << " terms=" << precision.termCount
                   << " elapsed_seconds=" << elapsed
