@@ -51,20 +51,20 @@ flowchart TD
 
 PiEngine의 π 급수는 Chudnovsky 공식을 사용합니다.
 
-$$
+```math
 \frac{1}{\pi}
 =
 12\sum_{k=0}^{\infty}
 \frac{(-1)^k(6k)!(13591409+545140134k)}
 {(3k)!(k!)^3(640320)^{3k+\frac{3}{2}}}
-$$
+```
 
 한 항은 약 14.18자리의 정밀도를 추가합니다. 목표가 $D$자리라면 필요한 항의
 수는 대략 다음과 같습니다.
 
-$$
+```math
 N=\left\lceil\frac{D}{14.1816474627}\right\rceil
-$$
+```
 
 직접 앞에서부터 항을 더하지 않고 Binary Splitting으로 평가하여 큰 정수의
 불필요한 성장을 줄이고 독립적인 하위 범위를 병렬 작업으로 만듭니다.
@@ -74,17 +74,17 @@ $$
 범위 $[a,b)$의 결과는 세 개의 큰 정수 $P(a,b)$, $Q(a,b)$, $T(a,b)$로
 표현합니다. 중간점 $m$에서 왼쪽과 오른쪽 결과는 다음처럼 병합됩니다.
 
-$$
+```math
 P(a,b)=P(a,m)P(m,b)
-$$
+```
 
-$$
+```math
 Q(a,b)=Q(a,m)Q(m,b)
-$$
+```
 
-$$
+```math
 T(a,b)=T(a,m)Q(m,b)+P(a,m)T(m,b)
-$$
+```
 
 현재 P/Q/T 자료구조, Chudnovsky leaf, `[start, end)` 범위 검증, cutoff
 기반 staged parallel DAG와 parallel merge가 구현되어 있습니다. 최종 integer
