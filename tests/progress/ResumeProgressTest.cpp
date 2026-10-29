@@ -19,17 +19,25 @@ pi::checkpoint::AcceptedCheckpoint accepted(
     std::uint64_t fileSize
 )
 {
+    const pi::checkpoint::BlockLocation location =
+        pi::checkpoint::BlockLocation::create(start, end, level, identity);
     return pi::checkpoint::AcceptedCheckpoint{
         std::filesystem::path("block.checkpoint"),
         fileSize,
         pi::checkpoint::CheckpointBlock{
             identity,
-            pi::checkpoint::BlockLocation::create(
-                start, end, level, identity
-            ),
+            location,
             pi::bigint::GMPInteger(1),
             pi::bigint::GMPInteger(1),
             pi::bigint::GMPInteger(1)
+        },
+        pi::checkpoint::ManifestEntry{
+            location,
+            "block.checkpoint",
+            0,
+            pi::checkpoint::ChecksumAlgorithm::crc32c,
+            0,
+            pi::checkpoint::CompletionState::complete
         }
     };
 }

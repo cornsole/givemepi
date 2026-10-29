@@ -2404,3 +2404,55 @@ hardware evidence.
 Consequence
 
 PR-0029 is ready for commit. Further work belongs to the next PR.
+
+---
+
+## ADR-0052
+
+Date
+
+2026-10-29
+
+Status
+
+Accepted
+
+Title
+
+Use an Interval-Gated Merge Frontier for Production Checkpoint and Resume
+
+Decision
+
+PR-0030 combines durable checkpoint emission and verified resume because each
+side is incomplete without the other in the production CLI. The existing
+version-1 checkpoint codecs, manifest validation, modular verification,
+quarantine, resume planner, and progress restoration remain the trust boundary.
+
+The durable state is a sorted, non-overlapping merge frontier. The first
+completed stage is committed; later stage frontiers replace it only after the
+configured checkpoint interval has elapsed. New parent files are committed
+before the manifest is atomically replaced, and superseded child files are
+removed afterward. Publication occurs on the coordinator thread after a stage
+joins and before storage spill releases resident P/Q/T values.
+
+Reason
+
+Leaf-only checkpoints minimize writes but repeat all expensive merge work after
+a crash. Persisting every merge level minimizes recomputation but multiplies
+bytes and durability syncs. The interval-gated frontier bounds sync frequency,
+preserves the most recent worthwhile merge work, and fits the existing flat
+manifest because it never contains overlapping parent and child ranges.
+
+This is narrower than the combined finalization, checkpoint, resume, and
+progress PR rejected by ADR-0026. Finalization, validation, planning, and
+progress components already exist; PR-0030 only connects checkpoint emission
+and resume into one production lifecycle.
+
+Consequences
+
+Checkpoint block and manifest format version 1, computation identity, checksum
+coverage, deterministic naming, and modular verification do not change.
+Worker tasks perform no filesystem I/O. Resume may reuse blocks produced with a
+different worker count or cutoff, while uncovered ranges are recalculated and
+must form one complete adjacent frontier before merging. Runtime storage chunks
+remain ineligible as resume evidence.

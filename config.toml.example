@@ -32,6 +32,12 @@ checkpoint = true
 # Save checkpoint every N seconds.
 checkpoint_interval = 300
 
+# Directory containing durable checkpoint blocks and manifests.
+checkpoint_directory = "checkpoints"
+
+# Directory receiving rejected or corrupt checkpoint files.
+checkpoint_quarantine_directory = "checkpoint-quarantine"
+
 ###############################################################################
 # Memory
 ###############################################################################

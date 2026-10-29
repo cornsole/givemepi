@@ -180,6 +180,85 @@ std::size_t boundedBlockCount(
     );
 }
 
+std::uint32_t maximumTreeLevel(std::size_t termCount) noexcept
+{
+    std::uint32_t level = 0;
+    std::size_t capacity = 1;
+    while (capacity < termCount)
+    {
+        if (capacity > std::numeric_limits<std::size_t>::max() / 2)
+        {
+            return level + 1;
+        }
+        capacity *= 2;
+        ++level;
+    }
+    return level;
+}
+
+
+bool acceptsStagedWork(
+    scheduler::Scheduler& executor
+)
+{
+    return executor.running()
+        && executor.workerCount() != 0
+        && !executor.ownsCurrentWorker();
+}
+
+
+void sortAndValidateFrontier(
+    std::vector<BinaryFrontierNode>& frontier,
+    std::size_t start,
+    std::size_t end
+)
+{
+    std::sort(
+        frontier.begin(),
+        frontier.end(),
+        [](const BinaryFrontierNode& left, const BinaryFrontierNode& right)
+        {
+            return left.node.start() < right.node.start();
+        }
+    );
+
+
+    std::size_t coveredEnd = start;
+
+    for (const BinaryFrontierNode& seed : frontier)
+    {
+        if (seed.node.start() >= seed.node.end())
+        {
+            throw std::invalid_argument(
+                "Binary Splitting frontier node requires start < end"
+            );
+        }
+
+        if (seed.node.start() < start || seed.node.end() > end)
+        {
+            throw std::invalid_argument(
+                "Binary Splitting frontier node is outside the split range"
+            );
+        }
+
+        if (seed.node.start() < coveredEnd)
+        {
+            throw std::invalid_argument(
+                "Binary Splitting frontier nodes overlap"
+            );
+        }
+
+        if (!seed.node.hasValues())
+        {
+            throw std::invalid_argument(
+                "Binary Splitting frontier node is not resident"
+            );
+        }
+
+        coveredEnd = seed.node.end();
+    }
+}
+
 } // namespace
 
 BinaryNode BinarySplitter::merge(
@@ -187,6 +266,14 @@ BinaryNode BinarySplitter::merge(
     const BinaryNode& right
 )
 {
+    if (left.end() != right.start())
+    {
+        throw std::invalid_argument(
+            "Binary Splitting merge requires adjacent nodes"
+        );
+    }
+
+
     BinaryNode result(
         left.start(),
         right.end()
@@ -273,22 +360,6 @@ BinaryNode BinarySplitter::splitSequential(
 
 BinaryNode BinarySplitter::splitParallel(
     std::size_t start,
-    std::size_t end
-)
-{
-    // Placeholder.
-    // Scheduler-based parallel execution will be introduced
-    // after task synchronization support is available.
-
-    return splitSequential(
-        start,
-        end
-    );
-}
-
-
-BinaryNode BinarySplitter::splitParallel(
-    std::size_t start,
     std::size_t end,
     scheduler::Scheduler& executor,
     std::size_t sequentialCutoff
@@ -312,7 +383,9 @@ BinaryNode BinarySplitter::splitParallel(
     scheduler::Scheduler& executor,
     const ParallelSplitOptions& options,
     BinarySplitObserver* observer,
-    BinaryMergeCoordinator* mergeCoordinator
+    BinaryMergeCoordinator* mergeCoordinator,
+    std::vector<BinaryFrontierNode> initialFrontier,
+    BinaryCheckpointCoordinator* checkpointCoordinator
 )
 {
     validateRange(start, end);
@@ -331,69 +404,123 @@ BinaryNode BinarySplitter::splitParallel(
         );
     }
 
+    sortAndValidateFrontier(initialFrontier, start, end);
+
 
     const std::size_t termCount = end - start;
+    const bool parallelExecution = acceptsStagedWork(executor);
 
-    if (termCount <= options.sequentialCutoff
-        || !executor.running()
-        || executor.workerCount() == 0
-        || executor.ownsCurrentWorker())
+    if (initialFrontier.empty()
+        && (termCount <= options.sequentialCutoff
+            || !parallelExecution
+            || boundedBlockCount(
+                termCount,
+                options.sequentialCutoff,
+                executor.workerCount(),
+                options.tasksPerWorker
+            ) < 2))
     {
         BinaryNode result = splitSequentialValidated(start, end);
         if (observer != nullptr)
         {
             observer->termsCompleted(termCount);
         }
-        return result;
-    }
-
-
-    const std::size_t blockCount = boundedBlockCount(
-        termCount,
-        options.sequentialCutoff,
-        executor.workerCount(),
-        options.tasksPerWorker
-    );
-
-    if (blockCount < 2)
-    {
-        BinaryNode result = splitSequentialValidated(start, end);
-        if (observer != nullptr)
+        if (checkpointCoordinator != nullptr)
         {
-            observer->termsCompleted(termCount);
+            constexpr std::uint32_t treeLevel = 0;
+            checkpointCoordinator->commitFrontier(
+                std::span<const BinaryNode>(&result, 1),
+                std::span<const std::uint32_t>(&treeLevel, 1)
+            );
         }
         return result;
     }
 
 
-    std::vector<std::optional<BinaryNode>> leafResults(blockCount);
-    std::vector<scheduler::TaskHandle> handles;
-    handles.reserve(blockCount);
-
-    const std::size_t baseBlockSize = termCount / blockCount;
-    const std::size_t largerBlockCount = termCount % blockCount;
-    std::size_t blockStart = start;
-
-    for (std::size_t index = 0; index < blockCount; ++index)
+    // Lay out the contiguous frontier: seeds keep their slot and level,
+    // every uncovered gap is partitioned into level-0 leaf blocks.
+    struct PendingBlock
     {
-        const std::size_t blockSize =
-            baseBlockSize + (index < largerBlockCount ? 1 : 0);
-        const std::size_t blockEnd = blockStart + blockSize;
+        std::size_t index;
+        std::size_t start;
+        std::size_t end;
+    };
 
-        scheduler::TaskHandle handle = executor.submit(
-            scheduler::Task(
-                [&leafResults, index, blockStart, blockEnd, observer]()
-                {
-                    leafResults[index].emplace(
-                        splitSequentialValidated(blockStart, blockEnd)
-                    );
-                    if (observer != nullptr)
-                    {
-                        observer->termsCompleted(blockEnd - blockStart);
-                    }
-                }
+    std::vector<std::optional<BinaryNode>> slots;
+    std::vector<std::uint32_t> treeLevels;
+    std::vector<PendingBlock> pendingBlocks;
+
+    const auto appendGap = [&](std::size_t gapStart, std::size_t gapEnd)
+    {
+        const std::size_t gapSize = gapEnd - gapStart;
+        const std::size_t blockCount = parallelExecution
+            ? boundedBlockCount(
+                gapSize,
+                options.sequentialCutoff,
+                executor.workerCount(),
+                options.tasksPerWorker
             )
-        );
+            : 1;
+        const std::size_t baseBlockSize = gapSize / blockCount;
+        const std::size_t largerBlockCount = gapSize % blockCount;
+        std::size_t blockStart = gapStart;
+
+        for (std::size_t block = 0; block < blockCount; ++block)
+        {
+            const std::size_t blockEnd = blockStart
+                + baseBlockSize + (block < largerBlockCount ? 1 : 0);
+            pendingBlocks.push_back(
+                PendingBlock{slots.size(), blockStart, blockEnd}
+            );
+            slots.emplace_back();
+            treeLevels.push_back(0);
+            blockStart = blockEnd;
+        }
+    };
+
+    std::size_t coveredEnd = start;
+
+    for (BinaryFrontierNode& seed : initialFrontier)
+    {
+        if (coveredEnd < seed.node.start())
+        {
+            appendGap(coveredEnd, seed.node.start());
+        }
+
+        coveredEnd = seed.node.end();
+        slots.emplace_back(std::move(seed.node));
+        treeLevels.push_back(seed.treeLevel);
+    }
+
+    if (coveredEnd < end)
+    {
+        appendGap(coveredEnd, end);
+    }
+
+    initialFrontier.clear();
+
+
+    std::vector<scheduler::TaskHandle> handles;
+    handles.reserve(pendingBlocks.size());
+
+    for (const PendingBlock& block : pendingBlocks)
+    {
+        const auto computeBlock = [&slots, block, observer]()
+        {
+            slots[block.index].emplace(
+                splitSequentialValidated(block.start, block.end)
+            );
+            if (observer != nullptr)
+            {
+                observer->termsCompleted(block.end - block.start);
+            }
+        };
+
+        scheduler::TaskHandle handle;
+        if (parallelExecution)
+        {
+            handle = executor.submit(scheduler::Task(computeBlock));
+        }
 
         if (handle.valid())
         {
@@ -401,40 +528,46 @@ BinaryNode BinarySplitter::splitParallel(
         }
         else
         {
-            leafResults[index].emplace(
-                splitSequentialValidated(blockStart, blockEnd)
-            );
-            if (observer != nullptr)
-            {
-                observer->termsCompleted(blockEnd - blockStart);
-            }
+            computeBlock();
         }
-
-        blockStart = blockEnd;
     }
 
     waitForStage(handles);
 
 
     std::vector<BinaryNode> nodes;
-    nodes.reserve(blockCount);
+    nodes.reserve(slots.size());
 
-    for (std::optional<BinaryNode>& result : leafResults)
+    for (std::optional<BinaryNode>& slot : slots)
     {
-        nodes.push_back(std::move(result.value()));
+        nodes.push_back(std::move(slot.value()));
     }
 
-    if (mergeCoordinator != nullptr)
+    slots.clear();
+
+
+    // Each stage: storage accounting, durable checkpoint, then spill.
+    const auto completeStage =
+        [&](std::uint32_t mergeLevel, bool computedNodes)
     {
-        mergeCoordinator->observeResidentNodes(nodes, 0);
-        if (nodes.size() > 1)
+        if (mergeCoordinator != nullptr)
         {
-            mergeCoordinator->spillAfterMergeLevel(nodes, 0);
+            mergeCoordinator->observeResidentNodes(nodes, mergeLevel);
         }
-    }
-
+        if (checkpointCoordinator != nullptr && computedNodes)
+        {
+            checkpointCoordinator->commitFrontier(nodes, treeLevels);
+        }
+        if (mergeCoordinator != nullptr && nodes.size() > 1)
+        {
+            mergeCoordinator->spillAfterMergeLevel(nodes, mergeLevel);
+        }
+    };
 
     std::uint32_t mergeLevel = 0;
+    completeStage(mergeLevel, !pendingBlocks.empty());
+
+
     while (nodes.size() > 1)
     {
         if (mergeCoordinator != nullptr)
@@ -448,31 +581,6 @@ BinaryNode BinarySplitter::splitParallel(
         ++mergeLevel;
         const std::size_t pairCount = nodes.size() / 2;
 
-        if (pairCount == 1)
-        {
-            std::vector<BinaryNode> finalLevel;
-            finalLevel.reserve(1 + nodes.size() % 2);
-            finalLevel.push_back(
-                merge(nodes[0], nodes[1])
-            );
-
-            if (nodes.size() % 2 != 0)
-            {
-                finalLevel.push_back(std::move(nodes.back()));
-            }
-
-            nodes = std::move(finalLevel);
-            if (mergeCoordinator != nullptr)
-            {
-                mergeCoordinator->observeResidentNodes(nodes, mergeLevel);
-                if (nodes.size() > 1)
-                {
-                    mergeCoordinator->spillAfterMergeLevel(nodes, mergeLevel);
-                }
-            }
-            continue;
-        }
-
         std::vector<std::optional<BinaryNode>> mergeResults(
             pairCount
         );
@@ -482,20 +590,21 @@ BinaryNode BinarySplitter::splitParallel(
         for (std::size_t pair = 0; pair < pairCount; ++pair)
         {
             const std::size_t leftIndex = pair * 2;
+            const auto mergePair = [&nodes, &mergeResults, pair, leftIndex]()
+            {
+                mergeResults[pair].emplace(
+                    BinarySplitter::merge(
+                        nodes[leftIndex],
+                        nodes[leftIndex + 1]
+                    )
+                );
+            };
 
-            scheduler::TaskHandle handle = executor.submit(
-                scheduler::Task(
-                    [&nodes, &mergeResults, pair, leftIndex]()
-                    {
-                        mergeResults[pair].emplace(
-                            BinarySplitter::merge(
-                                nodes[leftIndex],
-                                nodes[leftIndex + 1]
-                            )
-                        );
-                    }
-                )
-            );
+            scheduler::TaskHandle handle;
+            if (parallelExecution && pairCount > 1)
+            {
+                handle = executor.submit(scheduler::Task(mergePair));
+            }
 
             if (handle.valid())
             {
@@ -503,12 +612,7 @@ BinaryNode BinarySplitter::splitParallel(
             }
             else
             {
-                mergeResults[pair].emplace(
-                    merge(
-                        nodes[leftIndex],
-                        nodes[leftIndex + 1]
-                    )
-                );
+                mergePair();
             }
         }
 
@@ -516,24 +620,34 @@ BinaryNode BinarySplitter::splitParallel(
 
 
         std::vector<BinaryNode> nextLevel;
+        std::vector<std::uint32_t> nextTreeLevels;
         nextLevel.reserve(pairCount + nodes.size() % 2);
+        nextTreeLevels.reserve(pairCount + nodes.size() % 2);
 
-        for (std::optional<BinaryNode>& result : mergeResults)
+        for (std::size_t pair = 0; pair < pairCount; ++pair)
         {
-            nextLevel.push_back(std::move(result.value()));
+            nextLevel.push_back(std::move(mergeResults[pair].value()));
+            const std::uint32_t childLevel =
+                std::max(treeLevels[pair * 2], treeLevels[pair * 2 + 1]);
+            nextTreeLevels.push_back(
+                std::min(
+                    childLevel == std::numeric_limits<std::uint32_t>::max()
+                        ? childLevel
+                        : childLevel + 1,
+                    maximumTreeLevel(termCount)
+                )
+            );
         }
 
         if (nodes.size() % 2 != 0)
         {
             nextLevel.push_back(std::move(nodes.back()));
+            nextTreeLevels.push_back(treeLevels.back());
         }
 
         nodes = std::move(nextLevel);
-        if (mergeCoordinator != nullptr)
-        {
-            mergeCoordinator->observeResidentNodes(nodes, mergeLevel);
-            mergeCoordinator->spillAfterMergeLevel(nodes, mergeLevel);
-        }
+        treeLevels = std::move(nextTreeLevels);
+        completeStage(mergeLevel, true);
     }
 
 

@@ -2,6 +2,7 @@
 
 #include "bigint/GMPInteger.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -41,6 +42,29 @@ public:
     [[nodiscard]]
     static SerializedGMPInteger encode(
         const bigint::GMPInteger& value
+    );
+
+    /**
+     * Returns the canonical sign of value.
+     */
+    [[nodiscard]]
+    static IntegerSign sign(const bigint::GMPInteger& value) noexcept;
+
+    /**
+     * Returns the minimal canonical magnitude length of value in bytes.
+     */
+    [[nodiscard]]
+    static std::size_t magnitudeSize(const bigint::GMPInteger& value);
+
+    /**
+     * Writes the canonical magnitude of value directly into destination
+     * without copying the GMP limbs.
+     *
+     * @throws std::invalid_argument unless destination has magnitudeSize().
+     */
+    static void exportMagnitude(
+        const bigint::GMPInteger& value,
+        std::span<std::uint8_t> destination
     );
 
     /**

@@ -62,6 +62,15 @@ Config ConfigLoader::load(
             table,
             "checkpoint_interval",
             config.checkpoint_interval_seconds);
+        load_value(
+            table,
+            "checkpoint_directory",
+            config.checkpoint_directory);
+
+        load_value(
+            table,
+            "checkpoint_quarantine_directory",
+            config.checkpoint_quarantine_directory);
 
         load_value(
             table,

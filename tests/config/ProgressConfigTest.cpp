@@ -62,6 +62,10 @@ int main()
         file << "progress = false\n"
              << "progress_interval = 750\n"
              << "progress_format = \"json\"\n"
+             << "checkpoint = true\n"
+             << "checkpoint_interval = 60\n"
+             << "checkpoint_directory = \"runtime-checkpoints\"\n"
+             << "checkpoint_quarantine_directory = \"runtime-quarantine\"\n"
              << "storage_directory = \"runtime-storage\"\n"
              << "storage_memory_budget_bytes = 1048576\n"
              << "storage_target_chunk_size_bytes = 262144\n"
@@ -76,6 +80,10 @@ int main()
     assert(!config.progress_enabled);
     assert(config.progress_interval_ms == 750);
     assert(config.progress_format == ProgressFormat::json);
+    assert(config.checkpoint_enabled);
+    assert(config.checkpoint_interval_seconds == 60);
+    assert(config.checkpoint_directory == "runtime-checkpoints");
+    assert(config.checkpoint_quarantine_directory == "runtime-quarantine");
     assert(config.storage_directory == "runtime-storage");
     assert(config.storage_memory_budget_bytes == 1048576);
     assert(config.storage_target_chunk_size_bytes == 262144);
@@ -101,7 +109,10 @@ int main()
         "--storage-max-concurrent-io", "4",
         "--verify",
         "--bbp-samples", "12",
-        "--verification-manifest", "override.verify"
+        "--verification-manifest", "override.verify",
+        "--checkpoint-directory", "cli-checkpoints",
+        "--checkpoint-quarantine-directory", "cli-quarantine",
+        "--checkpoint-interval", "15",
     });
     assert(config.progress_enabled);
     assert(config.progress_interval_ms == 125);
@@ -113,6 +124,9 @@ int main()
     assert(config.verification_enabled);
     assert(config.bbp_sample_count == 12);
     assert(config.verification_manifest_file == "override.verify");
+    assert(config.checkpoint_directory == "cli-checkpoints");
+    assert(config.checkpoint_quarantine_directory == "cli-quarantine");
+    assert(config.checkpoint_interval_seconds == 15);
 
     Config disabled;
     apply(disabled, {"pi-engine", "--no-progress"});
@@ -144,6 +158,11 @@ int main()
     assert(throws<std::runtime_error>([]() {
         Config invalid;
         apply(invalid, {"pi-engine", "--bbp-samples", "33"});
+    }));
+    assert(throws<std::runtime_error>([]() {
+        Config invalid;
+        invalid.checkpoint_directory.clear();
+        pi::config::validateConfig(invalid);
     }));
     assert(throws<std::invalid_argument>([]() {
         Config invalid;

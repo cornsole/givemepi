@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 
 namespace pi::scheduler
@@ -82,7 +83,9 @@ public:
         scheduler::Scheduler& executor,
         const binary::ParallelSplitOptions& splitOptions,
         progress::ProgressTracker* progress = nullptr,
-        binary::BinaryMergeCoordinator* mergeCoordinator = nullptr
+        binary::BinaryMergeCoordinator* mergeCoordinator = nullptr,
+        std::vector<binary::BinaryFrontierNode> initialFrontier = {},
+        binary::BinaryCheckpointCoordinator* checkpointCoordinator = nullptr
     );
 };
 

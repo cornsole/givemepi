@@ -16,6 +16,8 @@ struct AcceptedCheckpoint
     std::filesystem::path path;
     std::uint64_t fileSize;
     CheckpointBlock block;
+    /// The manifest entry that admitted this block; reusable by the writer.
+    ManifestEntry manifestEntry;
 };
 
 

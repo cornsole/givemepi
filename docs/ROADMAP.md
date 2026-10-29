@@ -101,7 +101,7 @@ Storage
 [x] PR-0026 Synchronous Out-of-Core Stabilization
 [x] PR-0027 Asynchronous Storage Pipeline
 [x] PR-0028 Concurrent Storage Pipeline Implementation
-[ ] PR-0029 Measurement and Bottleneck Optimization
+[x] PR-0029 Measurement and Bottleneck Optimization
 
 ----------------------
 
@@ -119,6 +119,8 @@ Checkpoint
 [x] Manifest Consistency Validation (PR-0022)
 [x] Resume from Verified Blocks Only (PR-0022)
 [x] Corrupt Block Quarantine and Recalculation (PR-0022)
+[x] Production Checkpoint Emission and Verified Resume (PR-0030)
+
 
 ----------------------
 

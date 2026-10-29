@@ -262,6 +262,7 @@ set(PI_ENGINE_SOURCES
     src/checkpoint/ModularPQTVerifier.cpp
     src/checkpoint/CheckpointQuarantine.cpp
     src/checkpoint/CheckpointResumePlanner.cpp
+    src/checkpoint/CheckpointFrontierWriter.cpp
 
     src/progress/ProgressState.cpp
     src/progress/ProgressSnapshot.cpp
@@ -1470,6 +1471,54 @@ target_include_directories(checkpoint-resume-planner-test
 )
 
 target_link_libraries(checkpoint-resume-planner-test
+    PRIVATE
+        gmp
+        Threads::Threads
+)
+
+add_executable(checkpoint-frontier-writer-test
+    tests/checkpoint/CheckpointFrontierWriterTest.cpp
+    src/checkpoint/CheckpointFrontierWriter.cpp
+    src/checkpoint/CheckpointResumePlanner.cpp
+    src/checkpoint/CheckpointQuarantine.cpp
+    src/checkpoint/ModularPQTVerifier.cpp
+    src/checkpoint/CheckpointManifestValidator.cpp
+    src/checkpoint/ManifestEntryValidator.cpp
+    src/checkpoint/CheckpointFileInspector.cpp
+    src/checkpoint/CheckpointBlockValidator.cpp
+    src/checkpoint/CheckpointValidation.cpp
+    src/checkpoint/CheckpointStore.cpp
+    src/checkpoint/CheckpointManifest.cpp
+    src/checkpoint/AtomicFileCommit.cpp
+    src/checkpoint/CheckpointBlockCodec.cpp
+    src/checkpoint/CRC32C.cpp
+    src/checkpoint/GMPSerialization.cpp
+    src/checkpoint/CheckpointTypes.cpp
+    src/chudnovsky/PrecisionPolicy.cpp
+    src/binary/BinaryNode.cpp
+    src/binary/BinarySplitter.cpp
+    src/bigint/GMPInteger.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
+    src/scheduler/ReferenceQueue.cpp
+)
+
+add_test(
+    NAME CheckpointFrontierWriterTest
+    COMMAND checkpoint-frontier-writer-test
+)
+
+target_include_directories(checkpoint-frontier-writer-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(checkpoint-frontier-writer-test
     PRIVATE
         gmp
         Threads::Threads

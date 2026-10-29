@@ -19,13 +19,15 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0019 | Cutoff-based parallel Binary Splitting | Complete |
 | PR-0020 | End-to-end Chudnovsky calculation | Complete |
 | PR-0021 | P/Q/T checkpoint block foundation | Complete |
-| PR-0022 | Checkpoint integrity verification | Planned |
-| PR-0023 | Progress snapshot and reporting | Planned |
+| PR-0022 | Checkpoint integrity verification | Complete |
+| PR-0023 | Progress snapshot and reporting | Complete |
+| PR-0024 | Final output verification | Complete |
 | PR-0025 | Runtime storage foundation | Complete |
 | PR-0026 | Synchronous out-of-core stabilization | Complete |
 | PR-0027 | Asynchronous storage pipeline | Complete |
 | PR-0028 | Concurrent storage pipeline implementation | Complete |
 | PR-0029 | Measurement and bottleneck optimization | Complete |
+| PR-0030 | Durable checkpoint emission and verified resume | Complete |
 
 ---
 
@@ -1010,7 +1012,7 @@ The remaining work is maintained in this file; separate agent-authored
      matrix summaries and raw populations are recorded above.
    - Marked changes as accepted, correctness-only, or deferred. NUMA/Huge
      Pages/affinity remains explicitly deferred because the current host has
-     one NUMA node and no HugeTLB pool. PR-0029 is frozen pending commit.
+     one NUMA node and no HugeTLB pool. PR-0029 is complete and committed.
 
 #### Common acceptance gates
 
@@ -1025,7 +1027,114 @@ The remaining work is maintained in this file; separate agent-authored
 
 ### Next Contributor TODO
 
-PR-0029 is complete and frozen pending commit. Preserve the raw benchmark
-populations and do not add further optimization scope here; NUMA/Huge Pages/
-affinity work belongs to a later PR if suitable hardware and measurements
-justify it.
+PR-0029 is complete and committed as `828f287`. Preserve the benchmark
+acceptance decisions and do not add further optimization scope here. Begin
+PR-0030 with durable checkpoint emission and verified resume; NUMA/Huge Pages/
+affinity requires a separate PR, suitable hardware, and benchmark evidence.
+
+---
+
+## PR-0030: Durable Checkpoint Emission and Verified Resume
+
+### Goal
+
+Connect the existing version-1 checkpoint, integrity, quarantine, resume
+planning, and progress restoration components to the production calculation
+path without changing canonical checkpoint bytes or computation identity.
+
+### Checkpoint Policy
+
+The production path maintains a non-overlapping merge frontier. The first
+completed Binary Splitting stage is committed, then later completed stages
+replace the durable frontier only after `checkpoint_interval_seconds` has
+elapsed. Each commit:
+
+1. writes new parent blocks through the existing atomic block store;
+2. atomically replaces the manifest with the current sorted frontier;
+3. removes superseded child files on a best-effort basis.
+
+Checkpoint publication runs on the coordinating thread after a stage joins and
+before out-of-core spill can release P/Q/T values. Worker tasks never perform
+filesystem I/O. Unchanged odd frontier nodes retain their existing entries and
+are not rewritten.
+
+### Resume Contract
+
+At startup, resume uses `CheckpointResumePlanner` as the only trust boundary.
+Only structurally valid, checksum-valid, manifest-consistent, and independently
+verified P/Q/T blocks seed the Binary Splitting frontier. Rejected blocks are
+quarantined, temporary files are ignored, and every uncovered range is
+recalculated. Accepted and recalculated ranges must form one sorted, gap-free,
+non-overlapping `[0, termCount)` frontier before merging.
+
+Changing worker count, cutoff, or tasks-per-worker does not change computation
+identity. A resumed run may therefore rebalance uncovered ranges while reusing
+valid blocks produced by a different execution policy.
+
+### Work Sequence
+
+1. Add a leveled initial-frontier input and coordinator checkpoint callback to
+   staged Binary Splitting.
+2. Implement interval-gated frontier publication on `CheckpointStore` without
+   copying GMP payloads or rereading newly written blocks.
+3. Preserve accepted manifest entries and inject accepted P/Q/T blocks into the
+   staged merge DAG.
+4. Restore progress from accepted blocks before entering the splitting phase.
+5. Wire checkpoint and quarantine directories, checkpoint enablement, interval,
+   and resume enablement through TOML and CLI configuration.
+6. Connect planning, writing, resumed calculation, output, and final
+   verification in `pi-engine`.
+7. Verify fresh, partial, complete, corrupt, identity-mismatched, and
+   interrupted restart paths with and without out-of-core storage.
+
+### Compatibility and Failure Rules
+
+- Keep checkpoint block and manifest format version 1 byte-compatible.
+- Keep `ComputationIdentity`, deterministic filenames, checksum coverage, and
+  modular P/Q/T verification unchanged.
+- A block write or manifest publication failure fails a checkpoint-enabled run;
+  the last published manifest remains the resume authority.
+- A crash before manifest replacement leaves the prior frontier authoritative.
+- A crash after manifest replacement may leave obsolete child files, which are
+  rejected as unexpected and quarantined on the next resume.
+- Checkpoints disabled preserves the existing calculation path and result.
+- Runtime storage chunks never become checkpoint or resume evidence.
+
+### Definition of Done
+
+- `--checkpoint` creates durable blocks and a valid frontier manifest.
+- `--resume` reuses only planner-accepted blocks and recalculates only uncovered
+  ranges.
+- Fresh and resumed runs produce identical decimal output and SHA-256.
+- Progress restoration counts only accepted blocks and newly computed terms.
+- Corrupt, partial, unexpected, and identity-mismatched files cannot enter the
+  merge tree.
+- Checkpoint publication precedes spill and performs no worker-thread I/O.
+- The full test suite and an actual interrupted-run resume smoke pass.
+- README, roadmap, checklist, changelog, and decisions match the implementation.
+
+### Out of Scope
+
+- checkpoint or manifest format version 2;
+- reuse of runtime storage chunks as checkpoint evidence;
+- NUMA, Huge Pages, affinity, or unrelated storage optimization;
+- changing final-output or verification-manifest formats.
+
+### Verification
+
+- Debug build completed for all targets.
+- All 65 CTest tests passed, including the new frontier writer and seeded
+  Binary Splitting coverage.
+- The five changed-path tests passed under the ASan/UBSan build with leak
+  detection disabled.
+- A 1,000,000-digit process was terminated immediately after its first
+  manifest commit, resumed from 16 accepted blocks, and produced byte-identical
+  output to an uninterrupted calculation.
+- Fresh and resumed 100,000-digit out-of-core runs with a forced 1 MiB memory
+  budget produced identical output and verification SHA-256.
+
+### Next Contributor TODO
+
+PR-0030 is complete. Preserve checkpoint format version 1, computation
+identity, checkpoint-before-spill ordering, and the verified-resume trust
+boundary. Select the next PR boundary with the user before implementation.

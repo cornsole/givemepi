@@ -11,10 +11,10 @@ PiEngine은 현대적인 C++20으로 만드는 고성능 CPU 기반 원주율 �
 > **Checkpointable Parallel Chudnovsky Binary Splitting**
 
 > [!IMPORTANT]
-> 현재 실행 파일은 설정과 기반 모듈을 검증하는 개발 단계입니다. Scheduler,
-> GMP wrapper, Chudnovsky leaf, 병렬 Binary Splitting, integer fixed-point
-> finalization API는 구현되어 있습니다. 현재 `pi-engine` 실행 파일에는 이
-> 계산 API가 아직 연결되지 않아 CLI에서는 최종 π 자릿수를 생성하지 않습니다.
+> `pi-engine`은 병렬 Chudnovsky 계산, out-of-core 저장, interval-gated
+> checkpoint 생성, 검증된 block 기반 resume, 진행 보고, 최종 결과 기록과
+> 검증을 하나의 실행 경로로 연결합니다. 손상되거나 manifest에 없는 block은
+> 계산에 사용하지 않고 격리한 뒤 해당 범위를 다시 계산합니다.
 
 ## 목표
 
@@ -87,8 +87,8 @@ T(a,b)=T(a,m)Q(m,b)+P(a,m)T(m,b)
 ```
 
 현재 P/Q/T 자료구조, Chudnovsky leaf, `[start, end)` 범위 검증, cutoff
-기반 staged parallel DAG와 parallel merge가 구현되어 있습니다. 최종 integer
-fixed-point pi 계산과 decimal formatting은 PR-0020 범위입니다.
+기반 staged parallel DAG와 parallel merge, integer fixed-point 최종 계산과
+decimal formatting이 구현되어 있습니다.
 
 분할 트리의 깊이는 $O(\log N)$입니다. $M(n)$을 $n$비트 정수 곱셈 비용이라고
 할 때 전체 급수 계산 비용은 큰 정수 곱셈에 지배되며, Binary Splitting 기반
@@ -158,7 +158,7 @@ active/queued task, 처리 속도, ETA, 메모리, checkpoint bytes, 마지막 �
 
 | 영역 | 상태 | 현재 범위 |
 | --- | --- | --- |
-| 설정과 CLI | 기반 완료 | TOML/default/CLI override 및 유효 설정 출력 |
+| 설정과 CLI | 완료 | TOML/default/CLI override, 병렬 계산, 결과 기록과 검증 |
 | Platform | 기반 완료 | CPUID와 AVX/AVX2/AVX-512 기능 탐지 |
 | Memory | 기반 완료 | Arena, pool, alignment, scratch buffer |
 | Scheduler | 완료 | lifecycle, drain, MPMC queue, local routing, work stealing |
@@ -167,9 +167,10 @@ active/queued task, 처리 속도, ETA, 메모리, checkpoint bytes, 마지막 �
 | Chudnovsky leaf | 완료 | leaf 공식, 범위 검증, known P/Q/T와 pi 앞자리 검증 |
 | 병렬 Binary Splitting | 완료 | 명시적 cutoff, bounded leaf block, 단계별 merge, fallback |
 | Chudnovsky finalization | 완료 | precision plan, integer sqrt/division, rounded decimal API |
-| Checkpoint·무결성 | 계획됨 | versioned block, atomic commit, checksum, modular 검증 |
-| Progress reporting | 계획됨 | snapshot, CLI text/JSON, 향후 reporter 확장 |
-| 최종 결과 검증 | 계획됨 | output hash, BBP spot check, known digits |
+| Storage·out-of-core | 완료 | 동기·비동기 spill/reload, concurrent I/O, LZ4 |
+| Checkpoint·무결성 | 구현·검증 완료 | interval-gated merge frontier, atomic manifest, verified resume, quarantine |
+| Progress reporting | 완료 | immutable snapshot, CLI text/JSON, resume 복구 구성요소 |
+| 최종 결과 검증 | 완료 | streaming hash, BBP spot check, known digits, manifest |
 
 세부 구현 순서는 [Implementation Plan](docs/IMPLEMENTATION_PLAN.md), 완료 상태는
 [Roadmap](docs/ROADMAP.md)과 [Checklist](docs/CHECKLIST.md), 설계 근거는
@@ -209,10 +210,19 @@ cmake --build build
 build/pi-engine
 ```
 
-현재 개발 단계의 실행 파일은 적용된 설정을 출력합니다.
+실행 파일은 π를 계산해 결과 파일에 기록하고, 기본 설정에서는 결과 검증과 manifest 저장까지 수행합니다.
 
 ```bash
 ./build/pi-engine --digits 1000000 --threads 0
+```
+
+Checkpoint 위치와 주기는 TOML 또는 CLI에서 지정할 수 있습니다.
+
+```bash
+./build/pi-engine --checkpoint --resume \
+  --checkpoint-directory checkpoints \
+  --checkpoint-quarantine-directory checkpoint-quarantine \
+  --checkpoint-interval 300
 ```
 
 ## 테스트

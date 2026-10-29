@@ -96,17 +96,17 @@ void appendU64(std::vector<std::uint8_t>& output, std::uint64_t value)
 
 
 std::size_t checkedPayloadSize(
-    const SerializedGMPInteger& p,
-    const SerializedGMPInteger& q,
-    const SerializedGMPInteger& t
+    std::size_t pSize,
+    std::size_t qSize,
+    std::size_t tSize
 )
 {
-    std::size_t total = CheckpointBlockCodec::version1HeaderSize;
+    std::size_t total = 0;
 
-    for (const std::size_t size : {
-            p.magnitude.size(), q.magnitude.size(), t.magnitude.size()})
+    for (const std::size_t size : {pSize, qSize, tSize})
     {
-        if (size > std::numeric_limits<std::size_t>::max() - total)
+        if (size > std::numeric_limits<std::size_t>::max()
+                - CheckpointBlockCodec::version1HeaderSize - total)
         {
             throw std::overflow_error("Checkpoint block size overflow");
         }
@@ -215,52 +215,78 @@ std::vector<std::uint8_t> CheckpointBlockCodec::encode(
     const CheckpointBlock& block
 )
 {
-    block.identity.validate();
-    block.location.validate(block.identity);
+    return encode(
+        block.identity, block.location, block.p, block.q, block.t
+    ).bytes;
+}
 
-    const SerializedGMPInteger p = GMPSerialization::encode(block.p);
-    const SerializedGMPInteger q = GMPSerialization::encode(block.q);
-    const SerializedGMPInteger t = GMPSerialization::encode(block.t);
+
+EncodedCheckpointBlock CheckpointBlockCodec::encode(
+    const ComputationIdentity& identity,
+    const BlockLocation& location,
+    const bigint::GMPInteger& p,
+    const bigint::GMPInteger& q,
+    const bigint::GMPInteger& t
+)
+{
+    identity.validate();
+    location.validate(identity);
+
+    const std::size_t pSize = GMPSerialization::magnitudeSize(p);
+    const std::size_t qSize = GMPSerialization::magnitudeSize(q);
+    const std::size_t tSize = GMPSerialization::magnitudeSize(t);
+    const std::size_t payloadSize = checkedPayloadSize(pSize, qSize, tSize);
 
     std::vector<std::uint8_t> output;
-    output.reserve(checkedPayloadSize(p, q, t));
+    output.reserve(version1HeaderSize + payloadSize);
     output.insert(output.end(), blockMagic.begin(), blockMagic.end());
     appendU16(output, formatVersion);
     appendU16(output, version1HeaderSize);
     appendU32(output, 0); // flags
-    appendU16(output, static_cast<std::uint16_t>(block.identity.algorithm));
-    appendU16(output, block.identity.arithmeticVersion);
-    appendU16(output, block.identity.formulaVersion);
+    appendU16(output, static_cast<std::uint16_t>(identity.algorithm));
+    appendU16(output, identity.arithmeticVersion);
+    appendU16(output, identity.formulaVersion);
     appendU16(output, 0); // reserved
-    appendU64(output, block.identity.requestedDigits);
-    appendU32(output, block.identity.guardDigits);
+    appendU64(output, identity.requestedDigits);
+    appendU32(output, identity.guardDigits);
     appendU32(output, 0); // reserved
-    appendU64(output, block.identity.workingDigits);
-    appendU64(output, block.identity.termCount);
-    appendU64(output, block.location.start);
-    appendU64(output, block.location.end);
-    appendU32(output, block.location.treeLevel);
+    appendU64(output, identity.workingDigits);
+    appendU64(output, identity.termCount);
+    appendU64(output, location.start);
+    appendU64(output, location.end);
+    appendU32(output, location.treeLevel);
     appendU16(output, static_cast<std::uint16_t>(ChecksumAlgorithm::crc32c));
     appendU16(output, checksumSize);
     appendU32(output, 0); // checksum value slot
-    appendU8(output, static_cast<std::uint8_t>(p.sign));
-    appendU8(output, static_cast<std::uint8_t>(q.sign));
-    appendU8(output, static_cast<std::uint8_t>(t.sign));
+    appendU8(output, static_cast<std::uint8_t>(GMPSerialization::sign(p)));
+    appendU8(output, static_cast<std::uint8_t>(GMPSerialization::sign(q)));
+    appendU8(output, static_cast<std::uint8_t>(GMPSerialization::sign(t)));
     appendU8(output, 0); // reserved
-    appendU64(output, p.magnitude.size());
-    appendU64(output, q.magnitude.size());
-    appendU64(output, t.magnitude.size());
+    appendU64(output, pSize);
+    appendU64(output, qSize);
+    appendU64(output, tSize);
 
     if (output.size() != version1HeaderSize)
     {
         throw std::logic_error("Checkpoint header size invariant failed");
     }
 
-    output.insert(output.end(), p.magnitude.begin(), p.magnitude.end());
-    output.insert(output.end(), q.magnitude.begin(), q.magnitude.end());
-    output.insert(output.end(), t.magnitude.begin(), t.magnitude.end());
-    storeU32(output, checksumOffset, blockChecksum(output));
-    return output;
+    output.resize(version1HeaderSize + payloadSize);
+    std::uint8_t* const payload = output.data() + version1HeaderSize;
+    GMPSerialization::exportMagnitude(p, std::span(payload, pSize));
+    GMPSerialization::exportMagnitude(q, std::span(payload + pSize, qSize));
+    GMPSerialization::exportMagnitude(
+        t, std::span(payload + pSize + qSize, tSize)
+    );
+
+    const std::uint32_t checksum = blockChecksum(output);
+    storeU32(output, checksumOffset, checksum);
+    return EncodedCheckpointBlock{
+        std::move(output),
+        static_cast<std::uint64_t>(payloadSize),
+        ChecksumAlgorithm::crc32c,
+        checksum
+    };
 }
 
 

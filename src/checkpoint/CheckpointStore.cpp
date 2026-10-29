@@ -53,13 +53,34 @@ std::filesystem::path CheckpointStore::save(
     const CheckpointBlock& block
 ) const
 {
-    const std::filesystem::path destination = blockPath(
-        block.identity, block.location
-    );
+    return save(
+        block.identity, block.location, block.p, block.q, block.t
+    ).path;
+}
+
+
+StoredCheckpointBlock CheckpointStore::save(
+    const ComputationIdentity& identity,
+    const BlockLocation& location,
+    const bigint::GMPInteger& p,
+    const bigint::GMPInteger& q,
+    const bigint::GMPInteger& t,
+    AtomicCommitObserver observer
+) const
+{
+    std::filesystem::path destination = blockPath(identity, location);
     std::filesystem::create_directories(directory_);
-    const std::vector<std::uint8_t> bytes = CheckpointBlockCodec::encode(block);
-    AtomicFileCommit::write(destination, bytes);
-    return destination;
+    const EncodedCheckpointBlock encoded = CheckpointBlockCodec::encode(
+        identity, location, p, q, t
+    );
+    AtomicFileCommit::write(destination, encoded.bytes, observer);
+    return StoredCheckpointBlock{
+        std::move(destination),
+        static_cast<std::uint64_t>(encoded.bytes.size()),
+        encoded.payloadSize,
+        encoded.checksumAlgorithm,
+        encoded.checksum
+    };
 }
 
 
@@ -129,14 +150,15 @@ std::filesystem::path CheckpointStore::manifestPath(
 
 
 std::filesystem::path CheckpointStore::saveManifest(
-    const CheckpointManifest& manifest
+    const CheckpointManifest& manifest,
+    AtomicCommitObserver observer
 ) const
 {
     const std::filesystem::path destination = manifestPath(manifest.identity);
     std::filesystem::create_directories(directory_);
     const std::vector<std::uint8_t> bytes =
         CheckpointManifestCodec::encode(manifest);
-    AtomicFileCommit::write(destination, bytes);
+    AtomicFileCommit::write(destination, bytes, observer);
     return destination;
 }
 

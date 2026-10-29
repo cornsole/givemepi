@@ -30,6 +30,10 @@ struct Config
     bool checkpoint_enabled = defaults::CHECKPOINT_ENABLED;
     std::uint32_t checkpoint_interval_seconds =
         defaults::CHECKPOINT_INTERVAL_SECONDS;
+    std::string checkpoint_directory =
+        std::string(defaults::CHECKPOINT_DIRECTORY);
+    std::string checkpoint_quarantine_directory =
+        std::string(defaults::CHECKPOINT_QUARANTINE_DIRECTORY);
 
     // Memory
     bool huge_pages_enabled = defaults::HUGE_PAGES_ENABLED;

@@ -314,7 +314,7 @@
 
 [x] LZ4 Compression Backend and Durable Round-trip (PR-0028)
 
-[ ] NUMA, Huge Pages, and Affinity Optimization (PR-0029)
+[ ] NUMA, Huge Pages, and Affinity Optimization (deferred; separate PR requiring suitable hardware)
 
 [x] Separate file-read, CRC32C, and GMP decode timings (PR-0029)
 
@@ -385,6 +385,10 @@
 [x] Corrupt Block Quarantine
 
 [x] Corrupt Block Recalculation
+
+[x] Production Checkpoint Emission (PR-0030)
+
+[x] Production Verified Resume Integration (PR-0030)
 
 [x] CRC
 

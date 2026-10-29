@@ -18,6 +18,9 @@ public:
     ///   --output <path>
     ///   --checkpoint
     ///   --no-checkpoint
+    ///   --checkpoint-interval <seconds>
+    ///   --checkpoint-directory <path>
+    ///   --checkpoint-quarantine-directory <path>
     ///   --resume
     ///   --no-resume
     ///   --progress

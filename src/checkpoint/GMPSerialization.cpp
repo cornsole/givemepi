@@ -13,45 +13,53 @@ SerializedGMPInteger GMPSerialization::encode(
     const bigint::GMPInteger& value
 )
 {
+    std::vector<std::uint8_t> magnitude(magnitudeSize(value));
+    exportMagnitude(value, magnitude);
+    return SerializedGMPInteger{sign(value), std::move(magnitude)};
+}
+
+
+IntegerSign GMPSerialization::sign(const bigint::GMPInteger& value) noexcept
+{
     const int rawSign = mpz_sgn(*value.raw());
+    if (rawSign == 0) return IntegerSign::zero;
+    return rawSign > 0 ? IntegerSign::positive : IntegerSign::negative;
+}
 
-    if (rawSign == 0)
+
+std::size_t GMPSerialization::magnitudeSize(const bigint::GMPInteger& value)
+{
+    if (mpz_sgn(*value.raw()) == 0) return 0;
+
+    // Base 2 is exact in mpz_sizeinbase, so this is the minimal byte count.
+    const std::size_t bitCount = mpz_sizeinbase(*value.raw(), 2);
+    if (bitCount > std::numeric_limits<std::size_t>::max() - 7)
+        throw std::overflow_error("Canonical GMP magnitude size overflow");
+    return (bitCount + 7) / 8;
+}
+
+
+void GMPSerialization::exportMagnitude(
+    const bigint::GMPInteger& value,
+    std::span<std::uint8_t> destination
+)
+{
+    if (destination.size() != magnitudeSize(value))
     {
-        return SerializedGMPInteger{IntegerSign::zero, {}};
+        throw std::invalid_argument(
+            "Canonical magnitude destination has the wrong size"
+        );
     }
+    if (destination.empty()) return;
 
-    const auto exportMagnitude = [](const mpz_t* source)
+    // mpz_export ignores the sign and emits |value|, so negative values need
+    // no temporary GMP copy.
+    std::size_t written = 0;
+    mpz_export(destination.data(), &written, 1, 1, 1, 0, *value.raw());
+    if (written != destination.size())
     {
-        const std::size_t bitCount = mpz_sizeinbase(*source, 2);
-
-        if (bitCount > std::numeric_limits<std::size_t>::max() - 7)
-            throw std::overflow_error("Canonical GMP magnitude size overflow");
-
-        std::vector<std::uint8_t> magnitude((bitCount + 7) / 8);
-        std::size_t written = 0;
-        mpz_export(magnitude.data(), &written, 1, 1, 1, 0, *source);
-        magnitude.resize(written);
-        return magnitude;
-    };
-
-    std::vector<std::uint8_t> magnitude;
-    if (rawSign > 0)
-    {
-        // mpz_export already emits the absolute magnitude for a non-negative
-        // value, so avoid copying the GMP limb array on the hot path.
-        magnitude = exportMagnitude(value.raw());
+        throw std::logic_error("Canonical magnitude export size mismatch");
     }
-    else
-    {
-        bigint::GMPInteger absolute(value);
-        absolute.negate();
-        magnitude = exportMagnitude(absolute.raw());
-    }
-
-    return SerializedGMPInteger{
-        rawSign > 0 ? IntegerSign::positive : IntegerSign::negative,
-        std::move(magnitude)
-    };
 }
 
 

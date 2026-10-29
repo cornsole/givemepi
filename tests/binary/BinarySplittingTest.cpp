@@ -6,8 +6,11 @@
 
 #include <gmp.h>
 
+#include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -17,9 +20,15 @@
 #include <set>
 #include <stdexcept>
 #include <thread>
+#include <utility>
+#include <vector>
 
 
+using pi::binary::BinaryCheckpointCoordinator;
+using pi::binary::BinaryFrontierNode;
+using pi::binary::BinaryMergeCoordinator;
 using pi::binary::BinaryNode;
+using pi::binary::BinarySplitObserver;
 using pi::binary::BinarySplitter;
 using pi::binary::ParallelSplitOptions;
 using pi::scheduler::IQueue;
@@ -260,6 +269,262 @@ bool nodesEqual(
         && left.T().compare(right.T()) == 0;
 }
 
+
+struct SeedSpec
+{
+    std::size_t start;
+    std::size_t end;
+    std::uint32_t treeLevel;
+};
+
+
+std::vector<BinaryFrontierNode> makeFrontier(
+    std::initializer_list<SeedSpec> specs
+)
+{
+    std::vector<BinaryFrontierNode> frontier;
+    frontier.reserve(specs.size());
+
+    for (const SeedSpec& spec : specs)
+    {
+        frontier.push_back(
+            BinaryFrontierNode{
+                BinarySplitter::splitSequential(spec.start, spec.end),
+                spec.treeLevel
+            }
+        );
+    }
+
+    return frontier;
+}
+
+
+enum class StageEvent
+{
+    observe,
+    prepare,
+    spill,
+    commit
+};
+
+
+class RecordingMergeCoordinator final : public BinaryMergeCoordinator
+{
+public:
+
+    explicit RecordingMergeCoordinator(
+        std::vector<StageEvent>& events
+    )
+        : events_(events)
+    {
+    }
+
+
+    void observeResidentNodes(
+        std::span<const BinaryNode>,
+        std::uint32_t
+    ) override
+    {
+        events_.push_back(StageEvent::observe);
+    }
+
+
+    void prepareMergeNodes(
+        std::span<BinaryNode>,
+        std::uint32_t
+    ) override
+    {
+        events_.push_back(StageEvent::prepare);
+    }
+
+
+    void spillAfterMergeLevel(
+        std::span<BinaryNode>,
+        std::uint32_t
+    ) override
+    {
+        events_.push_back(StageEvent::spill);
+    }
+
+
+private:
+
+    std::vector<StageEvent>& events_;
+};
+
+
+struct CommitRecord
+{
+    bool aligned;
+    bool contiguous;
+    bool resident;
+    bool onCallerThread;
+    std::vector<std::uint32_t> treeLevels;
+};
+
+
+class RecordingCheckpointCoordinator final
+    : public BinaryCheckpointCoordinator
+{
+public:
+
+    RecordingCheckpointCoordinator(
+        std::size_t start,
+        std::size_t end,
+        std::vector<StageEvent>& events
+    )
+        : start_(start),
+          end_(end),
+          callerThread_(std::this_thread::get_id()),
+          events_(events)
+    {
+    }
+
+
+    void commitFrontier(
+        std::span<const BinaryNode> nodes,
+        std::span<const std::uint32_t> treeLevels
+    ) override
+    {
+        events_.push_back(StageEvent::commit);
+
+        std::size_t expectedStart = start_;
+        bool resident = true;
+
+        for (const BinaryNode& node : nodes)
+        {
+            if (node.start() != expectedStart)
+            {
+                expectedStart = end_ + 1;
+                break;
+            }
+
+            resident = resident && node.hasValues();
+            expectedStart = node.end();
+        }
+
+        commits.push_back(
+            CommitRecord{
+                nodes.size() == treeLevels.size(),
+                !nodes.empty() && expectedStart == end_,
+                resident,
+                std::this_thread::get_id() == callerThread_,
+                std::vector<std::uint32_t>(
+                    treeLevels.begin(),
+                    treeLevels.end()
+                )
+            }
+        );
+    }
+
+
+    std::vector<CommitRecord> commits;
+
+
+private:
+
+    const std::size_t start_;
+    const std::size_t end_;
+    const std::thread::id callerThread_;
+    std::vector<StageEvent>& events_;
+};
+
+
+class CountingObserver final : public BinarySplitObserver
+{
+public:
+
+    void termsCompleted(std::size_t count) noexcept override
+    {
+        terms.fetch_add(count, std::memory_order_relaxed);
+    }
+
+
+    void mergeLevelStarted(std::uint32_t) noexcept override
+    {
+    }
+
+
+    std::atomic<std::size_t> terms{0};
+};
+
+
+bool commitsValid(
+    const RecordingCheckpointCoordinator& checkpoint
+)
+{
+    for (const CommitRecord& commit : checkpoint.commits)
+    {
+        if (!commit.aligned
+            || !commit.contiguous
+            || !commit.resident
+            || !commit.onCallerThread)
+        {
+            return false;
+        }
+    }
+
+    return !checkpoint.commits.empty();
+}
+
+
+/// Every stage observation is followed by its commit before any spill.
+bool commitsPrecedeSpills(
+    const std::vector<StageEvent>& events,
+    bool firstStageCommits
+)
+{
+    bool firstStage = true;
+
+    for (std::size_t index = 0; index < events.size(); ++index)
+    {
+        if (events[index] != StageEvent::observe)
+        {
+            continue;
+        }
+
+        const bool expectCommit = !firstStage || firstStageCommits;
+        const bool nextIsCommit = index + 1 < events.size()
+            && events[index + 1] == StageEvent::commit;
+        firstStage = false;
+
+        if (expectCommit != nextIsCommit)
+        {
+            return false;
+        }
+    }
+
+    return !firstStage;
+}
+
+
+bool rejectsFrontier(
+    Scheduler& executor,
+    std::vector<BinaryFrontierNode> frontier
+)
+{
+    try
+    {
+        static_cast<void>(
+            BinarySplitter::splitParallel(
+                0,
+                40,
+                executor,
+                ParallelSplitOptions{2, 4},
+                nullptr,
+                nullptr,
+                std::move(frontier)
+            )
+        );
+    }
+    catch (const std::invalid_argument&)
+    {
+        return true;
+    }
+
+    return false;
+}
+
 } // namespace
 
 
@@ -267,8 +532,7 @@ int main()
 {
     const SplitFunction splitFunctions[] = {
         &BinarySplitter::split,
-        &BinarySplitter::splitSequential,
-        &BinarySplitter::splitParallel
+        &BinarySplitter::splitSequential
     };
 
 
@@ -481,10 +745,14 @@ int main()
             16
         );
 
+    Scheduler stoppedScheduler(2, 64);
+
     const BinaryNode parallelRecursiveRange =
         BinarySplitter::splitParallel(
             0,
-            16
+            16,
+            stoppedScheduler,
+            2
         );
 
 
@@ -497,8 +765,6 @@ int main()
         return 1;
     }
 
-
-    Scheduler stoppedScheduler(2, 64);
 
     if (!nodesEqual(
             recursiveRange,
@@ -741,6 +1007,334 @@ int main()
     }
 
 
+    bool rejectedNonAdjacentMerge = false;
+
+    try
+    {
+        static_cast<void>(
+            BinarySplitter::merge(
+                BinarySplitter::splitSequential(0, 2),
+                BinarySplitter::splitSequential(3, 5)
+            )
+        );
+    }
+    catch (const std::invalid_argument&)
+    {
+        rejectedNonAdjacentMerge = true;
+    }
+
+    if (!rejectedNonAdjacentMerge)
+    {
+        std::cerr
+            << "Non-adjacent merge was accepted\n";
+
+        return 1;
+    }
+
+
+    const BinaryNode frontierReference =
+        BinarySplitter::splitSequential(
+            0,
+            40
+        );
+
+    Scheduler frontierScheduler(4, 256);
+    frontierScheduler.start();
+
+    std::vector<StageEvent> emptyEvents;
+    RecordingMergeCoordinator emptyMerge(emptyEvents);
+    RecordingCheckpointCoordinator emptyCheckpoint(0, 40, emptyEvents);
+    CountingObserver emptyObserver;
+
+    const BinaryNode emptyFrontierResult =
+        BinarySplitter::splitParallel(
+            0,
+            40,
+            frontierScheduler,
+            ParallelSplitOptions{2, 4},
+            &emptyObserver,
+            &emptyMerge,
+            {},
+            &emptyCheckpoint
+        );
+
+    if (!nodesEqual(frontierReference, emptyFrontierResult)
+        || emptyObserver.terms.load() != 40
+        || !commitsValid(emptyCheckpoint)
+        || !commitsPrecedeSpills(emptyEvents, true)
+        || emptyCheckpoint.commits.front().treeLevels
+            != std::vector<std::uint32_t>(
+                emptyCheckpoint.commits.front().treeLevels.size(),
+                0
+            ))
+    {
+        std::cerr
+            << "Empty frontier resume failed\n";
+
+        return 1;
+    }
+
+
+    std::vector<StageEvent> fullEvents;
+    RecordingMergeCoordinator fullMerge(fullEvents);
+    RecordingCheckpointCoordinator fullCheckpoint(0, 40, fullEvents);
+    CountingObserver fullObserver;
+
+    const BinaryNode fullFrontierResult =
+        BinarySplitter::splitParallel(
+            0,
+            40,
+            frontierScheduler,
+            ParallelSplitOptions{2, 4},
+            &fullObserver,
+            &fullMerge,
+            makeFrontier({
+                {30, 40, 1},
+                {20, 30, 3},
+                {10, 20, 0},
+                {0, 10, 2}
+            }),
+            &fullCheckpoint
+        );
+
+    const std::vector<StageEvent> expectedFullEvents = {
+        StageEvent::observe,
+        StageEvent::spill,
+        StageEvent::prepare,
+        StageEvent::observe,
+        StageEvent::commit,
+        StageEvent::spill,
+        StageEvent::prepare,
+        StageEvent::observe,
+        StageEvent::commit
+    };
+
+    if (!nodesEqual(frontierReference, fullFrontierResult)
+        || fullObserver.terms.load() != 0
+        || !commitsValid(fullCheckpoint)
+        || fullEvents != expectedFullEvents
+        || fullCheckpoint.commits.size() != 2
+        || fullCheckpoint.commits[0].treeLevels
+            != std::vector<std::uint32_t>{3, 4}
+        || fullCheckpoint.commits[1].treeLevels
+            != std::vector<std::uint32_t>{5})
+    {
+        std::cerr
+            << "Full frontier resume failed\n";
+
+        return 1;
+    }
+
+
+    std::vector<StageEvent> partialEvents;
+    RecordingMergeCoordinator partialMerge(partialEvents);
+    RecordingCheckpointCoordinator partialCheckpoint(
+        0,
+        40,
+        partialEvents
+    );
+    CountingObserver partialObserver;
+
+    const BinaryNode partialFrontierResult =
+        BinarySplitter::splitParallel(
+            0,
+            40,
+            frontierScheduler,
+            ParallelSplitOptions{2, 4},
+            &partialObserver,
+            &partialMerge,
+            makeFrontier({
+                {30, 33, 0},
+                {5, 12, 4}
+            }),
+            &partialCheckpoint
+        );
+
+    if (!nodesEqual(frontierReference, partialFrontierResult)
+        || partialObserver.terms.load() != 30
+        || !commitsValid(partialCheckpoint)
+        || !commitsPrecedeSpills(partialEvents, true)
+        || partialCheckpoint.commits.back().treeLevels.size() != 1
+        || partialCheckpoint.commits.back().treeLevels.front() <= 4)
+    {
+        std::cerr
+            << "Partial mixed-level frontier resume failed\n";
+
+        return 1;
+    }
+
+
+    const ParallelSplitOptions changedPolicies[] = {
+        ParallelSplitOptions{1, 1},
+        ParallelSplitOptions{3, 8},
+        ParallelSplitOptions{64, 4}
+    };
+
+    for (const ParallelSplitOptions& policy : changedPolicies)
+    {
+        CountingObserver policyObserver;
+
+        const BinaryNode policyResult =
+            BinarySplitter::splitParallel(
+                0,
+                40,
+                frontierScheduler,
+                policy,
+                &policyObserver,
+                nullptr,
+                makeFrontier({
+                    {0, 4, 1},
+                    {17, 18, 0},
+                    {18, 25, 2}
+                })
+            );
+
+        const BinaryNode stoppedPolicyResult =
+            BinarySplitter::splitParallel(
+                0,
+                40,
+                stoppedScheduler,
+                policy,
+                nullptr,
+                nullptr,
+                makeFrontier({
+                    {0, 4, 1},
+                    {17, 18, 0},
+                    {18, 25, 2}
+                })
+            );
+
+        if (!nodesEqual(frontierReference, policyResult)
+            || !nodesEqual(frontierReference, stoppedPolicyResult)
+            || policyObserver.terms.load() != 28)
+        {
+            std::cerr
+                << "Changed worker policy frontier resume failed\n";
+
+            return 1;
+        }
+    }
+
+
+    std::vector<BinaryFrontierNode> wholeFrontier = makeFrontier({
+        {0, 40, 6}
+    });
+    std::vector<StageEvent> wholeEvents;
+    RecordingCheckpointCoordinator wholeCheckpoint(0, 40, wholeEvents);
+
+    if (!nodesEqual(
+            frontierReference,
+            BinarySplitter::splitParallel(
+                0,
+                40,
+                frontierScheduler,
+                ParallelSplitOptions{2, 4},
+                nullptr,
+                nullptr,
+                std::move(wholeFrontier),
+                &wholeCheckpoint
+            )
+        )
+        || !wholeCheckpoint.commits.empty())
+    {
+        std::cerr
+            << "Complete frontier resume failed\n";
+
+        return 1;
+    }
+
+
+    std::vector<BinaryFrontierNode> nonResidentFrontier = makeFrontier({
+        {0, 10, 0}
+    });
+    nonResidentFrontier.front().node.clearValues();
+
+    std::vector<BinaryFrontierNode> emptyRangeFrontier;
+    emptyRangeFrontier.push_back(
+        BinaryFrontierNode{BinaryNode(5, 5), 0}
+    );
+
+    if (!rejectsFrontier(
+            frontierScheduler,
+            makeFrontier({{0, 10, 0}, {9, 20, 0}})
+        )
+        || !rejectsFrontier(
+            frontierScheduler,
+            makeFrontier({{4, 8, 0}, {4, 8, 0}})
+        )
+        || !rejectsFrontier(
+            frontierScheduler,
+            makeFrontier({{35, 41, 0}})
+        )
+        || !rejectsFrontier(
+            stoppedScheduler,
+            makeFrontier({{30, 45, 0}})
+        )
+        || !rejectsFrontier(
+            frontierScheduler,
+            std::move(nonResidentFrontier)
+        )
+        || !rejectsFrontier(
+            frontierScheduler,
+            std::move(emptyRangeFrontier)
+        ))
+    {
+        std::cerr
+            << "Invalid frontier was accepted\n";
+
+        return 1;
+    }
+
+    struct FallbackCase
+    {
+        Scheduler& executor;
+        std::size_t sequentialCutoff;
+    };
+
+    const FallbackCase fallbackCases[] = {
+        FallbackCase{frontierScheduler, 64},
+        FallbackCase{stoppedScheduler, 2}
+    };
+
+    for (const FallbackCase& fallback : fallbackCases)
+    {
+        std::vector<StageEvent> fallbackEvents;
+        RecordingCheckpointCoordinator fallbackCheckpoint(
+            0,
+            40,
+            fallbackEvents
+        );
+        CountingObserver fallbackObserver;
+
+        const BinaryNode fallbackResult =
+            BinarySplitter::splitParallel(
+                0,
+                40,
+                fallback.executor,
+                ParallelSplitOptions{fallback.sequentialCutoff, 4},
+                &fallbackObserver,
+                nullptr,
+                {},
+                &fallbackCheckpoint
+            );
+
+        if (!nodesEqual(frontierReference, fallbackResult)
+            || fallbackObserver.terms.load() != 40
+            || !commitsValid(fallbackCheckpoint)
+            || fallbackCheckpoint.commits.size() != 1
+            || fallbackCheckpoint.commits.front().treeLevels
+                != std::vector<std::uint32_t>{0})
+        {
+            std::cerr
+                << "Sequential fallback checkpoint failed\n";
+
+            return 1;
+        }
+    }
+
+    frontierScheduler.stop();
+
+
     const BinaryNode defaultRange =
         BinarySplitter::split(
             0,
@@ -750,7 +1344,9 @@ int main()
     const BinaryNode parallelCompatibleRange =
         BinarySplitter::splitParallel(
             0,
-            3
+            3,
+            stoppedScheduler,
+            1
         );
 
 
@@ -907,7 +1503,9 @@ int main()
     BinaryNode parallelResult =
         BinarySplitter::splitParallel(
             0,
-            8
+            8,
+            stoppedScheduler,
+            1
         );
 
 

@@ -16,6 +16,9 @@ inline constexpr std::uint32_t THREADS = 0;
 // Checkpoint
 inline constexpr bool CHECKPOINT_ENABLED = true;
 inline constexpr std::uint32_t CHECKPOINT_INTERVAL_SECONDS = 300;
+inline constexpr std::string_view CHECKPOINT_DIRECTORY = "checkpoints";
+inline constexpr std::string_view CHECKPOINT_QUARANTINE_DIRECTORY =
+    "checkpoint-quarantine";
 
 // Memory
 inline constexpr bool HUGE_PAGES_ENABLED = true;

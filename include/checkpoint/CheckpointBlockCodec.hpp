@@ -28,6 +28,16 @@ struct CheckpointBlock
 };
 
 
+/// Encoded version-1 block bytes plus the manifest metadata they imply.
+struct EncodedCheckpointBlock
+{
+    std::vector<std::uint8_t> bytes;
+    std::uint64_t payloadSize;
+    ChecksumAlgorithm checksumAlgorithm;
+    std::uint32_t checksum;
+};
+
+
 class CheckpointBlockCodec
 {
 public:
@@ -38,6 +48,19 @@ public:
     [[nodiscard]]
     static std::vector<std::uint8_t> encode(
         const CheckpointBlock& block
+    );
+
+    /**
+     * Encodes version-1 bytes directly from borrowed P/Q/T values without
+     * copying GMP payloads, returning manifest metadata alongside the bytes.
+     */
+    [[nodiscard]]
+    static EncodedCheckpointBlock encode(
+        const ComputationIdentity& identity,
+        const BlockLocation& location,
+        const bigint::GMPInteger& p,
+        const bigint::GMPInteger& q,
+        const bigint::GMPInteger& t
     );
 
     [[nodiscard]]

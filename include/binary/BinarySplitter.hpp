@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 
 namespace pi::scheduler
@@ -56,6 +57,29 @@ public:
 };
 
 
+/// One resident node from a verified checkpoint frontier and its tree level.
+struct BinaryFrontierNode
+{
+    BinaryNode node;
+    std::uint32_t treeLevel = 0;
+};
+
+
+class BinaryCheckpointCoordinator
+{
+public:
+    virtual ~BinaryCheckpointCoordinator() = default;
+
+    /// Receives the complete contiguous frontier after each completed stage,
+    /// on the coordinating thread and before any storage spill. treeLevels is
+    /// index-aligned with nodes. Implementations must not mutate the nodes.
+    virtual void commitFrontier(
+        std::span<const BinaryNode> nodes,
+        std::span<const std::uint32_t> treeLevels
+    ) = 0;
+};
+
+
 struct ParallelSplitOptions
 {
     std::size_t sequentialCutoff;
@@ -90,17 +114,6 @@ public:
     );
 
     /**
-     * Computes [start, end) through the parallel-compatible entry point.
-     *
-     * @throws std::invalid_argument if start is greater than or equal to end.
-     */
-    [[nodiscard]]
-    static BinaryNode splitParallel(
-        std::size_t start,
-        std::size_t end
-    );
-
-    /**
      * Computes [start, end) through a staged parallel Binary Splitting DAG.
      *
      * Input: a running scheduler and a non-zero minimum sequential block size.
@@ -121,7 +134,15 @@ public:
     /**
      * Computes [start, end) using an explicit parallel execution policy.
      *
-     * @throws std::invalid_argument if either policy value is zero.
+     * initialFrontier supplies resident, non-overlapping nodes inside the
+     * range; only the uncovered gaps are computed and reported to observer.
+     * Gap leaf blocks have tree level 0 and merged levels increase toward the
+     * computation's format-valid maximum. checkpointCoordinator receives the
+     * frontier after every stage that computed new nodes, before spill.
+     *
+     * @throws std::invalid_argument if either policy value is zero or the
+     *         initial frontier is out of range, overlapping, empty-ranged, or
+     *         not resident.
      */
     [[nodiscard]]
     static BinaryNode splitParallel(
@@ -130,9 +151,16 @@ public:
         scheduler::Scheduler& executor,
         const ParallelSplitOptions& options,
         BinarySplitObserver* observer = nullptr,
-        BinaryMergeCoordinator* mergeCoordinator = nullptr
+        BinaryMergeCoordinator* mergeCoordinator = nullptr,
+        std::vector<BinaryFrontierNode> initialFrontier = {},
+        BinaryCheckpointCoordinator* checkpointCoordinator = nullptr
     );
 
+    /**
+     * Merges adjacent nodes left = [a, b) and right = [b, c).
+     *
+     * @throws std::invalid_argument if left.end() != right.start().
+     */
     [[nodiscard]]
     static BinaryNode merge(
         const BinaryNode& left,

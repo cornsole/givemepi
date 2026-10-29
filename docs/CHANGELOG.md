@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added PR-0030 production checkpoint and resume integration: an
+  interval-gated, non-overlapping merge frontier is committed before storage
+  spill, and verified checkpoint blocks seed only the uncovered staged
+  Binary Splitting work on restart.
+- Added checkpoint and quarantine directory configuration plus CLI interval
+  control, planner rejection diagnostics, manifest-entry reuse, and
+  copy-free checkpoint encoding from resident P/Q/T values.
+- Added seeded mixed-level Binary Splitting, adjacent-range enforcement,
+  checkpoint-before-spill coordination, crash-safe frontier replacement, and
+  permanent checkpoint writer/resume regression coverage.
+
 - Added CRC/read/GMP hot-path optimizations for PR-0029: runtime-selected
   SSE4.2 CRC32C with a portable fallback, exact-size single-read chunk loading,
   and copy-free positive GMP magnitude export. Canonical bytes, checksum
@@ -40,6 +51,10 @@
   successful. This is a combined effect because the PR-0028 baseline has no
   stage telemetry; individual CRC/read/GMP percentage attribution is not
   claimed.
+- Aligned the documented PR-0029 completion state with commit `828f287` and
+  approved PR-0030 as the production checkpoint emission and verified resume
+  integration boundary.
+
 
 - Added a version-1 runtime chunk codec with explicit big-endian metadata,
   canonical P/Q/T signed-magnitude payloads, CRC32C coverage, checked lengths,
@@ -116,6 +131,16 @@
 - Added manifest-hash revalidation for stored outputs, explicit BBP
   inconclusive and mutation coverage, reporter verification-phase assertions,
   and a 128 MiB bounded-memory streaming inspection and SHA-256 regression.
+
+### Verification
+
+- Built all Debug targets and passed all 65 CTest tests.
+- Passed the five checkpoint/resume changed-path tests under ASan/UBSan with
+  leak detection disabled.
+- Terminated a 1,000,000-digit run after the first manifest commit, resumed
+  from 16 accepted blocks, and matched the uninterrupted output byte-for-byte.
+- Matched fresh and resumed 100,000-digit forced-1-MiB out-of-core output and
+  verification SHA-256.
 
 ### Fixed
 

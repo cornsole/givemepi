@@ -56,6 +56,14 @@ void validateConfig(Config& config)
             "Config validation failed: checkpoint interval must be greater than 0."
         );
     }
+    if ((config.checkpoint_enabled || config.resume_enabled)
+        && (config.checkpoint_directory.empty()
+            || config.checkpoint_quarantine_directory.empty()))
+    {
+        throw std::runtime_error(
+            "Config validation failed: checkpoint directories must not be empty."
+        );
+    }
     if (config.progress_interval_ms == 0)
     {
         throw std::runtime_error(

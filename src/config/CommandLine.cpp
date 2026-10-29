@@ -76,6 +76,22 @@ void CommandLine::applyOverrides(
         {
             config.checkpoint_enabled = false;
         }
+        else if (arg == "--checkpoint-directory")
+        {
+            config.checkpoint_directory = requireValue(arg, i, argc, argv);
+        }
+        else if (arg == "--checkpoint-quarantine-directory")
+        {
+            config.checkpoint_quarantine_directory =
+                requireValue(arg, i, argc, argv);
+        }
+        else if (arg == "--checkpoint-interval")
+        {
+            config.checkpoint_interval_seconds = parseUint32(
+                arg,
+                requireValue(arg, i, argc, argv)
+            );
+        }
         else if (arg == "--resume")
         {
             config.resume_enabled = true;

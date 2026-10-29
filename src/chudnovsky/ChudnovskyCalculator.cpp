@@ -283,7 +283,9 @@ PiCalculationResult ChudnovskyCalculator::calculateParallel(
     scheduler::Scheduler& executor,
     const binary::ParallelSplitOptions& splitOptions,
     progress::ProgressTracker* progress,
-    binary::BinaryMergeCoordinator* mergeCoordinator
+    binary::BinaryMergeCoordinator* mergeCoordinator,
+    std::vector<binary::BinaryFrontierNode> initialFrontier,
+    binary::BinaryCheckpointCoordinator* checkpointCoordinator
 )
 {
     try
@@ -302,7 +304,9 @@ PiCalculationResult ChudnovskyCalculator::calculateParallel(
             executor,
             splitOptions,
             &observer,
-            mergeCoordinator
+            mergeCoordinator,
+            std::move(initialFrontier),
+            checkpointCoordinator
         );
         const auto splitEnd = Clock::now();
         completeTerms(progress, precision.termCount);

@@ -1,9 +1,12 @@
+#include "checkpoint/CheckpointFrontierWriter.hpp"
+#include "checkpoint/CheckpointResumePlanner.hpp"
 #include "chudnovsky/ChudnovskyCalculator.hpp"
 #include "chudnovsky/PrecisionPolicy.hpp"
 #include "config/CommandLine.hpp"
 #include "config/ConfigLoader.hpp"
 #include "progress/JsonProgressReporter.hpp"
 #include "progress/ProgressReportingRunner.hpp"
+#include "progress/ResumeProgress.hpp"
 #include "progress/TextProgressReporter.hpp"
 #include "scheduler/Scheduler.hpp"
 #include "storage/StorageMergeCoordinator.hpp"
@@ -18,11 +21,48 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <thread>
+#include <utility>
+#include <vector>
 #include <unistd.h>
+
+namespace
+{
+
+std::uint64_t plannedCheckpointBlocks(
+    const pi::checkpoint::CheckpointResumePlan& plan,
+    const pi::binary::ParallelSplitOptions& options,
+    std::size_t workerCount,
+    bool enabled
+)
+{
+    if (!enabled)
+    {
+        return 0;
+    }
+
+    std::uint64_t total = plan.acceptedBlocks.size();
+    const std::size_t maximumBlocks = workerCount
+        > std::numeric_limits<std::size_t>::max() / options.tasksPerWorker
+        ? std::numeric_limits<std::size_t>::max()
+        : workerCount * options.tasksPerWorker;
+
+    for (const pi::checkpoint::MissingRange& range : plan.rangesToRecalculate)
+    {
+        const std::uint64_t termCount = range.end - range.start;
+        const std::uint64_t requestedBlocks =
+            1 + (termCount - 1) / options.sequentialCutoff;
+        total += std::min<std::uint64_t>(requestedBlocks, maximumBlocks);
+    }
+    return total;
+}
+
+} // namespace
+
 
 
 int main(int argc, char* argv[])
@@ -35,11 +75,105 @@ int main(int argc, char* argv[])
 
         const pi::chudnovsky::PrecisionPlan precision =
             pi::chudnovsky::PrecisionPolicy::create(config.digits);
+        const pi::checkpoint::ComputationIdentity checkpointIdentity =
+            pi::checkpoint::ComputationIdentity::fromPrecisionPlan(precision);
+        const std::size_t hardwareThreads = std::max<std::size_t>(
+            1,
+            std::thread::hardware_concurrency()
+        );
+        const std::size_t workerCount = config.threads == 0
+            ? hardwareThreads
+            : config.threads;
+        const pi::binary::ParallelSplitOptions splitOptions{32, 4};
+
+        pi::checkpoint::CheckpointResumePlan resumePlan;
+        if (config.resume_enabled)
+        {
+            resumePlan = pi::checkpoint::CheckpointResumePlanner(
+                config.checkpoint_directory,
+                config.checkpoint_quarantine_directory
+            ).create(checkpointIdentity);
+            for (const pi::checkpoint::RejectedCheckpoint& rejected
+                 : resumePlan.rejectedBlocks)
+            {
+                std::cerr << "checkpoint rejected: "
+                          << rejected.path.string() << '\n';
+                for (const auto& diagnostic
+                     : rejected.validation.diagnostics())
+                {
+                    std::cerr << "  "
+                              << pi::checkpoint::toString(diagnostic.stage)
+                              << '/'
+                              << pi::checkpoint::toString(diagnostic.reason)
+                              << ": " << diagnostic.detail << '\n';
+                }
+            }
+        }
+        else
+        {
+            resumePlan.rangesToRecalculate.push_back({
+                0,
+                checkpointIdentity.termCount
+            });
+        }
+
         pi::progress::ProgressTracker tracker({
             precision.requestedDigits,
             precision.termCount,
-            0
+            plannedCheckpointBlocks(
+                resumePlan,
+                splitOptions,
+                workerCount,
+                config.checkpoint_enabled || config.resume_enabled
+            )
         });
+        if (config.resume_enabled)
+        {
+            if (!tracker.transitionTo(
+                    pi::progress::ProgressPhase::validatingCheckpoints)
+                || !pi::progress::ResumeProgressRestorer::restore(
+                    resumePlan, tracker))
+            {
+                throw std::runtime_error(
+                    "Validated checkpoint progress could not be restored"
+                );
+            }
+        }
+
+        std::vector<pi::binary::BinaryFrontierNode> initialFrontier;
+        std::vector<pi::checkpoint::ManifestEntry> acceptedEntries;
+        initialFrontier.reserve(resumePlan.acceptedBlocks.size());
+        acceptedEntries.reserve(resumePlan.acceptedBlocks.size());
+        for (pi::checkpoint::AcceptedCheckpoint& accepted
+             : resumePlan.acceptedBlocks)
+        {
+            pi::binary::BinaryNode node(
+                static_cast<std::size_t>(accepted.block.location.start),
+                static_cast<std::size_t>(accepted.block.location.end)
+            );
+            node.P() = std::move(accepted.block.p);
+            node.Q() = std::move(accepted.block.q);
+            node.T() = std::move(accepted.block.t);
+            initialFrontier.push_back({
+                std::move(node),
+                accepted.block.location.treeLevel
+            });
+            acceptedEntries.push_back(std::move(accepted.manifestEntry));
+        }
+
+        std::unique_ptr<pi::checkpoint::CheckpointFrontierWriter>
+            checkpointWriter;
+        if (config.checkpoint_enabled)
+        {
+            checkpointWriter = std::make_unique<
+                pi::checkpoint::CheckpointFrontierWriter
+            >(
+                config.checkpoint_directory,
+                checkpointIdentity,
+                std::chrono::seconds(config.checkpoint_interval_seconds),
+                std::move(acceptedEntries)
+            );
+        }
 
         std::unique_ptr<pi::storage::StorageManager> storageManager;
         std::unique_ptr<pi::storage::AsyncChunkWriter> asyncWriter;
@@ -69,8 +203,7 @@ int main(int argc, char* argv[])
             mergeCoordinator =
                 std::make_unique<pi::storage::StorageMergeCoordinator>(
                     *storageManager,
-                    pi::checkpoint::ComputationIdentity::fromPrecisionPlan(
-                        precision),
+                    checkpointIdentity,
                     &tracker,
                     asyncWriter.get(),
                     asyncReader.get());
@@ -106,13 +239,6 @@ int main(int argc, char* argv[])
             }
         }
 
-        const std::size_t hardwareThreads = std::max<std::size_t>(
-            1,
-            std::thread::hardware_concurrency()
-        );
-        const std::size_t workerCount = config.threads == 0
-            ? hardwareThreads
-            : config.threads;
         const std::size_t queueCapacity = std::max<std::size_t>(
             1024,
             workerCount * 8
@@ -131,9 +257,11 @@ int main(int argc, char* argv[])
                     true
                 },
                 scheduler,
-                pi::binary::ParallelSplitOptions{32, 4},
+                splitOptions,
                 &tracker,
-                mergeCoordinator.get()
+                mergeCoordinator.get(),
+                std::move(initialFrontier),
+                checkpointWriter.get()
                 )
             );
             scheduler.stop();
