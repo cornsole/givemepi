@@ -42,7 +42,8 @@ checkpoint_quarantine_directory = "checkpoint-quarantine"
 # Memory
 ###############################################################################
 
-# Attempt to use Huge Pages if supported.
+# Reserved setting. The current runtime loads this value but does not yet
+# apply a Huge Pages allocation policy.
 huge_pages = true
 
 ###############################################################################
@@ -52,10 +53,19 @@ huge_pages = true
 # Enable disk-backed storage for large computations.
 out_of_core = true
 
-# Compression algorithm.
-# Current planned values:
-#   "lz4"
+# Compression algorithm: "none" or "lz4".
 compression = "lz4"
+
+# Directory for out-of-core chunks and index metadata.
+storage_directory = "storage"
+
+# Resident memory budget and target chunk size in bytes.
+# The target chunk size must not exceed the memory budget.
+storage_memory_budget_bytes = 536870912
+storage_target_chunk_size_bytes = 67108864
+
+# Maximum number of concurrent storage I/O operations.
+storage_max_concurrent_io = 1
 
 ###############################################################################
 # Progress
@@ -75,6 +85,19 @@ progress_format = "text"
 
 # Output file.
 output = "pi.txt"
+
+###############################################################################
+# Final Verification
+###############################################################################
+
+# Verify the completed decimal output.
+verification = true
+
+# Number of deterministic BBP samples (1-32).
+bbp_samples = 8
+
+# Optional manifest path. Empty uses "<output>.verify".
+verification_manifest = ""
 
 ###############################################################################
 # Resume

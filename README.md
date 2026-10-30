@@ -128,7 +128,7 @@ benchmark 이후 최적화합니다.
 ### 5. 체크포인트와 무결성
 
 대규모 계산은 재귀 호출 스택이 아니라 독립적으로 병합 가능한 P/Q/T 범위를
-체크포인트로 저장할 계획입니다.
+체크포인트로 저장합니다.
 
 각 블록은 다음 정보를 포함합니다.
 
@@ -211,6 +211,7 @@ telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 4입니�
 - CMake 3.20 이상
 - C++20 컴파일러(GCC 또는 Clang)
 - GMP 개발 패키지
+- LZ4 개발 패키지(`liblz4`; Debian/Ubuntu `liblz4-dev`, Arch `lz4`)
 - POSIX thread 지원 환경
 - Git
 
@@ -219,8 +220,8 @@ telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 4입니�
 프로젝트 루트에서 실행합니다.
 
 ```bash
-cmake -S . -B build
-cmake --build build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
 ```
 
 빌드가 완료되면 다음 실행 파일이 생성됩니다.
@@ -229,15 +230,49 @@ cmake --build build
 build/pi-engine
 ```
 
-실행 파일은 π를 계산해 결과 파일에 기록하고, 기본 설정에서는 결과 검증과 manifest 저장까지 수행합니다.
+실행 파일은 π를 계산해 결과 파일에 기록하고, 기본 설정에서는 결과 검증과
+verification manifest 저장까지 수행합니다. `--threads 0`은 사용 가능한 hardware
+thread 수를 자동 선택합니다.
 
 ```bash
 ./build/pi-engine --digits 1000000 --threads 0
 ```
 
-Checkpoint 위치와 주기는 TOML 또는 CLI에서 지정할 수 있습니다. 기본값은
-checkpoint와 resume 활성화, `checkpoints`/`checkpoint-quarantine` 디렉터리,
-300초 interval입니다.
+기본 출력은 `pi.txt`, verification manifest는 `pi.txt.verify`입니다. 출력 경로를
+바꾸면 manifest 기본 경로도 `<output>.verify`가 됩니다.
+
+```bash
+./build/pi-engine \
+  --digits 1000000 \
+  --output /data/pi/pi.txt \
+  --verification-manifest /data/pi/pi.verify \
+  --bbp-samples 8
+```
+
+`--no-verify`로 최종 검증을 끌 수 있습니다. `--bbp-samples`는 1~32이며 기본값은
+8입니다.
+
+### 설정 우선순위
+
+실행 시 현재 작업 디렉터리의 `config.toml`을 읽습니다. 파일이 없으면 내장
+기본값을 사용하고, CLI 옵션은 TOML 값을 덮어씁니다.
+
+```bash
+cp config.toml.example config.toml
+./build/pi-engine --digits 1000000
+```
+
+> [!WARNING]
+> 현재 알 수 없는 CLI 옵션은 오류 없이 무시됩니다. 예를 들어 `--digit` 오타는
+> `--digits`로 처리되지 않고 기본 자릿수로 실행될 수 있으므로 실행 전 옵션명을
+> 확인해야 합니다.
+
+### Checkpoint와 resume
+
+기본값은 checkpoint와 resume 활성화, `checkpoints`와
+`checkpoint-quarantine` 디렉터리, 300초 interval입니다. 같은 계산 identity로
+다시 실행하면 검증을 통과한 durable block만 자동 재사용하고, 손상되거나
+manifest에 없는 block은 quarantine한 뒤 해당 범위를 다시 계산합니다.
 
 ```bash
 ./build/pi-engine --checkpoint --resume \
@@ -246,13 +281,41 @@ checkpoint와 resume 활성화, `checkpoints`/`checkpoint-quarantine` 디렉터�
   --checkpoint-interval 300
 ```
 
-진행 상태는 기본으로 500 ms마다 text 형식으로 출력되며, CLI에서 바꿀 수
-있습니다.
+기존 checkpoint를 사용하지 않고 새 계산을 시작하거나 checkpoint 자체를
+비활성화할 수 있습니다.
 
 ```bash
-./build/pi-engine --progress --progress-interval 500 --progress-format json
+./build/pi-engine --checkpoint --no-resume --digits 1000000
+./build/pi-engine --no-checkpoint --no-resume --digits 1000000
+```
+
+### Progress 출력
+
+진행 상태는 기본으로 500 ms마다 text 형식으로 **stderr**에 출력됩니다. JSON
+형식은 한 줄당 하나의 schema version 4 record인 JSONL입니다.
+
+```bash
+./build/pi-engine --progress --progress-interval 500 --progress-format json \
+  2>progress.jsonl
 ./build/pi-engine --no-progress
 ```
+
+### Out-of-core 저장
+
+Out-of-core 저장은 기본 활성화되어 `storage/`를 사용합니다. 기본 memory budget은
+512 MiB, 목표 chunk 크기는 64 MiB, 최대 동시 I/O는 1, compression은 LZ4입니다.
+
+```bash
+./build/pi-engine \
+  --storage-directory /data/pi/storage \
+  --storage-memory-budget-bytes 536870912 \
+  --storage-chunk-size-bytes 67108864 \
+  --storage-max-concurrent-io 1
+```
+
+Chunk 크기는 memory budget 이하여야 합니다. `out_of_core` 활성화와
+`compression = "none" | "lz4"` 선택은 현재 `config.toml`에서만 바꿀 수
+있습니다.
 
 ## 테스트
 
