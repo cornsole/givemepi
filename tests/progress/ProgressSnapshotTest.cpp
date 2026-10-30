@@ -35,7 +35,7 @@ int main()
     using pi::progress::ProgressSnapshot;
     using pi::progress::ProgressSnapshotData;
     using pi::progress::ProgressTerminalState;
-    using pi::progress::ValidatedCheckpointProgress;
+    using pi::progress::CheckpointRangeProgress;
 
     static_assert(std::is_same_v<
         decltype(std::declval<const ProgressSnapshot&>().failureDetail()),
@@ -49,6 +49,7 @@ int main()
     data.completedTerms = 48;
     data.totalCheckpointBlocks = 10;
     data.completedCheckpointBlocks = 6;
+    data.durableCheckpointBlocks = 3;
     data.currentMergeLevel = 3;
     data.activeTasks = 4;
     data.queuedTasks = 2;
@@ -56,10 +57,12 @@ int main()
     data.memoryBytes = 4096;
     data.checkpointBytes = 2048;
     data.lastValidatedCheckpoint =
-        ValidatedCheckpointProgress{40, 48, 2};
+        CheckpointRangeProgress{40, 48, 2};
+    data.lastCommittedCheckpoint =
+        CheckpointRangeProgress{48, 74, 1};
 
     const ProgressSnapshot snapshot(data);
-    assert(snapshot.schemaVersion() == 3);
+    assert(snapshot.schemaVersion() == 4);
     assert(snapshot.phase() == ProgressPhase::merging);
     assert(snapshot.terminalState() == ProgressTerminalState::running);
     assert(snapshot.targetDigits() == 1'000);
@@ -67,21 +70,26 @@ int main()
     assert(snapshot.completedTerms() == 48);
     assert(snapshot.totalCheckpointBlocks() == 10);
     assert(snapshot.completedCheckpointBlocks() == 6);
+    assert(snapshot.durableCheckpointBlocks() == 3);
     assert(snapshot.currentMergeLevel() == 3);
     assert(snapshot.activeTasks() == 4);
     assert(snapshot.queuedTasks() == 2);
     assert(snapshot.elapsed() == 1500ms);
     assert(snapshot.memoryBytes() == 4096);
     assert(snapshot.checkpointBytes() == 2048);
-    const ValidatedCheckpointProgress expectedCheckpoint{40, 48, 2};
+    const CheckpointRangeProgress expectedCheckpoint{40, 48, 2};
     assert(snapshot.lastValidatedCheckpoint() == expectedCheckpoint);
+    const CheckpointRangeProgress expectedCommit{48, 74, 1};
+    assert(snapshot.lastCommittedCheckpoint() == expectedCommit);
     assert(!snapshot.failureDetail().has_value());
 
     data.completedTerms = 49;
     data.lastValidatedCheckpoint =
-        ValidatedCheckpointProgress{48, 49, 0};
+        CheckpointRangeProgress{48, 49, 0};
+    data.lastCommittedCheckpoint.reset();
     assert(snapshot.completedTerms() == 48);
     assert(snapshot.lastValidatedCheckpoint() == expectedCheckpoint);
+    assert(snapshot.lastCommittedCheckpoint() == expectedCommit);
 
     ProgressSnapshotData failed;
     failed.phase = ProgressPhase::failed;
@@ -113,9 +121,16 @@ int main()
 
     ProgressSnapshotData invalidRange;
     invalidRange.lastValidatedCheckpoint =
-        ValidatedCheckpointProgress{10, 10, 0};
+        CheckpointRangeProgress{10, 10, 0};
     assert(throws<std::invalid_argument>([&invalidRange]() {
         static_cast<void>(ProgressSnapshot(invalidRange));
+    }));
+
+    ProgressSnapshotData invalidCommit;
+    invalidCommit.lastCommittedCheckpoint =
+        CheckpointRangeProgress{12, 11, 0};
+    assert(throws<std::invalid_argument>([&invalidCommit]() {
+        static_cast<void>(ProgressSnapshot(invalidCommit));
     }));
 
     ProgressSnapshotData invalidFailure;

@@ -1,5 +1,6 @@
 #include "checkpoint/CheckpointFrontierWriter.hpp"
 
+#include "checkpoint/CheckpointBlockCodec.hpp"
 #include "checkpoint/CheckpointManifestValidator.hpp"
 
 #include <algorithm>
@@ -27,13 +28,15 @@ CheckpointFrontierWriter::CheckpointFrontierWriter(
     ComputationIdentity identity,
     std::chrono::seconds interval,
     std::vector<ManifestEntry> acceptedEntries,
-    AtomicCommitObserver commitObserver
+    AtomicCommitObserver commitObserver,
+    progress::ProgressTracker* tracker
 )
     : store_(std::move(checkpointDirectory)),
       identity_(identity),
       interval_(interval),
       entries_(std::move(acceptedEntries)),
-      commitObserver_(commitObserver)
+      commitObserver_(commitObserver),
+      tracker_(tracker)
 {
     identity_.validate();
     if (interval.count() < 0)
@@ -142,6 +145,11 @@ void CheckpointFrontierWriter::commitFrontier(
         );
     }
 
+    if (!initialFrontierWork_.has_value())
+    {
+        initialFrontierWork_ = newNodes.size();
+    }
+
     for (const std::size_t index : newNodes)
     {
         const binary::BinaryNode& node = nodes[index];
@@ -157,6 +165,36 @@ void CheckpointFrontierWriter::commitFrontier(
     }
 
     static_cast<void>(store_.saveManifest(manifest, commitObserver_));
+
+    if (tracker_ != nullptr)
+    {
+        // Version-1 block files are exactly header plus payload, so the
+        // referenced bytes follow from manifest metadata without I/O.
+        std::uint64_t checkpointBytes = 0;
+        for (const ManifestEntry& entry : manifest.entries)
+        {
+            checkpointBytes +=
+                CheckpointBlockCodec::version1HeaderSize + entry.payloadSize;
+        }
+
+        std::optional<progress::CheckpointRangeProgress> lastCommitted;
+        if (!newNodes.empty())
+        {
+            const BlockLocation& last =
+                manifest.entries[newNodes.back()].location;
+            lastCommitted = progress::CheckpointRangeProgress{
+                last.start, last.end, last.treeLevel
+            };
+        }
+
+        static_cast<void>(tracker_->publishCheckpointProgress({
+            initialFrontierWorkPublished_ ? 0 : *initialFrontierWork_,
+            manifest.entries.size(),
+            checkpointBytes,
+            lastCommitted
+        }));
+    }
+    initialFrontierWorkPublished_ = true;
 
     // The new manifest is authoritative; superseded children are now
     // unreferenced. Failure to delete only leaves files the planner

@@ -1,6 +1,6 @@
 #include "progress/ProgressTracker.hpp"
 
-#include <limits>
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
@@ -74,16 +74,33 @@ bool ProgressTracker::addCompletedTerms(std::uint64_t count) noexcept
 }
 
 
-bool ProgressTracker::addCompletedCheckpointBlocks(
-    std::uint64_t count
-) noexcept
+bool ProgressTracker::publishCheckpointProgress(
+    const CheckpointProgressUpdate& update
+)
 {
-    return isRunning()
-        && addWithinLimit(
-            completedCheckpointBlocks_,
-            count,
-            plan_.totalCheckpointBlocks
-        );
+    if (update.lastCommitted.has_value()
+        && (update.lastCommitted->startTerm >= update.lastCommitted->endTerm
+            || update.lastCommitted->endTerm > plan_.totalTerms))
+    {
+        return false;
+    }
+
+    std::lock_guard lock(metadataMutex_);
+    if (isTerminal(phase_.load(std::memory_order_relaxed)))
+    {
+        return false;
+    }
+
+    const std::uint64_t remaining =
+        plan_.totalCheckpointBlocks - completedCheckpointBlocks_;
+    completedCheckpointBlocks_ += std::min(update.completedBlocks, remaining);
+    durableCheckpointBlocks_ = update.durableBlocks;
+    checkpointBytes_ = update.checkpointBytes;
+    if (update.lastCommitted.has_value())
+    {
+        lastCommittedCheckpoint_ = update.lastCommitted;
+    }
+    return true;
 }
 
 
@@ -109,14 +126,6 @@ void ProgressTracker::setMemoryBytes(std::uint64_t bytes) noexcept
     }
 }
 
-
-void ProgressTracker::setCheckpointBytes(std::uint64_t bytes) noexcept
-{
-    if (isRunning())
-    {
-        checkpointBytes_.store(bytes, std::memory_order_relaxed);
-    }
-}
 
 void ProgressTracker::setStorageProgress(
     std::uint64_t residentBytes,
@@ -178,7 +187,7 @@ bool ProgressTracker::clearCurrentMergeLevel()
 
 
 bool ProgressTracker::recordValidatedCheckpoint(
-    ValidatedCheckpointProgress checkpoint
+    CheckpointRangeProgress checkpoint
 )
 {
     if (checkpoint.startTerm >= checkpoint.endTerm
@@ -224,7 +233,11 @@ ProgressSnapshot ProgressTracker::snapshot() const
         std::lock_guard lock(metadataMutex_);
         data.phase = phase_.load(std::memory_order_acquire);
         data.currentMergeLevel = currentMergeLevel_;
+        data.completedCheckpointBlocks = completedCheckpointBlocks_;
+        data.durableCheckpointBlocks = durableCheckpointBlocks_;
+        data.checkpointBytes = checkpointBytes_;
         data.lastValidatedCheckpoint = lastValidatedCheckpoint_;
+        data.lastCommittedCheckpoint = lastCommittedCheckpoint_;
         data.failureDetail = failureDetail_;
 
         const auto endpoint = finishedAt_.value_or(
@@ -236,12 +249,9 @@ ProgressSnapshot ProgressTracker::snapshot() const
     }
 
     data.completedTerms = completedTerms_.load(std::memory_order_relaxed);
-    data.completedCheckpointBlocks =
-        completedCheckpointBlocks_.load(std::memory_order_relaxed);
     data.activeTasks = activeTasks_.load(std::memory_order_relaxed);
     data.queuedTasks = queuedTasks_.load(std::memory_order_relaxed);
     data.memoryBytes = memoryBytes_.load(std::memory_order_relaxed);
-    data.checkpointBytes = checkpointBytes_.load(std::memory_order_relaxed);
     data.storageResidentBytes = storageResidentBytes_.load(std::memory_order_relaxed);
     data.storageStoredBytes = storageStoredBytes_.load(std::memory_order_relaxed);
     data.storageChunkCount = storageChunkCount_.load(std::memory_order_relaxed);

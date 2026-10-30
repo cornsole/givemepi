@@ -120,6 +120,7 @@ Checkpoint
 [x] Resume from Verified Blocks Only (PR-0022)
 [x] Corrupt Block Quarantine and Recalculation (PR-0022)
 [x] Production Checkpoint Emission and Verified Resume (PR-0030)
+[x] Live Checkpoint Telemetry and Automated CLI Resume Regression (PR-0031)
 
 
 ----------------------
@@ -138,6 +139,7 @@ Progress
 [x] TOML and CLI Progress Controls (PR-0023)
 [x] Post-Override Configuration Validation (PR-0023)
 [x] Resume Progress Reconstruction (PR-0023)
+[x] Durable Checkpoint Gauge, Last-Committed Range, and JSON Schema v4 (PR-0031)
 
 ----------------------
 

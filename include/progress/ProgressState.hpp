@@ -8,7 +8,7 @@ namespace pi::progress
 {
 
 /// Version of the public progress snapshot and reporter schema.
-inline constexpr std::uint32_t PROGRESS_SCHEMA_VERSION = 3;
+inline constexpr std::uint32_t PROGRESS_SCHEMA_VERSION = 4;
 
 
 /// High-level phase of one pi computation.

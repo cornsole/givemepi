@@ -28,6 +28,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0028 | Concurrent storage pipeline implementation | Complete |
 | PR-0029 | Measurement and bottleneck optimization | Complete |
 | PR-0030 | Durable checkpoint emission and verified resume | Complete |
+| PR-0031 | Live checkpoint telemetry and CLI resume regression | Complete |
 
 ---
 
@@ -1138,3 +1139,99 @@ valid blocks produced by a different execution policy.
 PR-0030 is complete. Preserve checkpoint format version 1, computation
 identity, checkpoint-before-spill ordering, and the verified-resume trust
 boundary. Select the next PR boundary with the user before implementation.
+
+---
+
+## PR-0031: Live Checkpoint Telemetry and CLI Resume Regression
+
+### Goal
+
+Publish truthful checkpoint progress after every durable frontier commit and
+turn the manually exercised interrupted-resume path into a permanent CLI
+regression test.
+
+### Architecture Contract
+
+Checkpoint work completion remains a monotonic counter: blocks accepted by
+verified resume plus newly calculated initial-frontier blocks. Its fixed total
+is the same accepted-plus-recalculated work plan already computed before
+execution.
+
+Durable checkpoint block count is a separate gauge equal to the current
+manifest entry count. It may decrease as child blocks are replaced by merged
+parents. Checkpoint bytes are the exact sum of the block files referenced by
+the current manifest; unreferenced files and the manifest file itself are not
+included.
+
+`lastValidatedCheckpoint` remains resume evidence only. A separate
+`lastCommittedCheckpoint` records the last newly written block after successful
+manifest publication. Fresh writes must never be presented as independently
+validated resume input.
+
+The frontier writer publishes one coherent checkpoint telemetry update only
+after the manifest has been atomically replaced. Publication stays on the
+Binary Splitting coordinating thread. Worker threads perform no filesystem I/O
+or progress formatting.
+
+The public JSON progress schema advances to version 4 for the durable-block
+gauge and last-committed range. Checkpoint block and manifest format version 1,
+computation identity, checkpoint-before-spill ordering, and the verified-resume
+trust boundary remain unchanged.
+
+### Work Sequence
+
+1. Add coherent checkpoint progress publication to `ProgressTracker`.
+2. Restore durable block count and bytes from verified resume input.
+3. Connect `CheckpointFrontierWriter` to the tracker.
+4. Publish work completion, durable block count, exact referenced bytes, and
+   the last newly committed range after manifest publication.
+5. Update text and JSON reporters and increment the progress schema version.
+6. Add unit coverage for fresh, resumed, interval-gated, and failed commits.
+7. Add an end-to-end CLI regression that interrupts after the first manifest,
+   resumes with the same identity, and compares output with an uninterrupted
+   calculation.
+8. Reconcile implemented Chunk progress and LZ4 compression checklist entries.
+9. Update the changelog, roadmap, checklist, and decision record.
+
+### Acceptance
+
+- Fresh JSON progress reports non-zero checkpoint work, durable block count,
+  and checkpoint bytes after the first committed frontier.
+- Durable block count and bytes reflect the currently published manifest after
+  child replacement; failed or interval-gated commits do not change telemetry.
+- Resume initializes validated work, durable count, bytes, and last-validated
+  range, then live commits continue from that state without exceeding the
+  fixed work total.
+- The last committed range changes only after a manifest containing a newly
+  written block becomes authoritative.
+- The interrupted CLI run resumes successfully and produces byte-identical
+  decimal output and verification hash to an uninterrupted run.
+- Changed-path sanitizer tests, the complete Debug build, and the full CTest
+  suite pass.
+
+### Out of Scope
+
+- checkpoint or manifest format changes;
+- logger integration;
+- benchmark or release workflow automation;
+- final-output streaming;
+- NUMA, Huge Pages, affinity, SIMD, ASM, or FFT optimization.
+
+### Verification
+
+- Built all Debug targets.
+- All 66 CTest tests passed, including the real-process
+  `CheckpointResumeCliTest`.
+- All eight changed-path tests passed under ASan/UBSan with leak detection
+  disabled.
+- The automated 1,000,000-digit CLI scenario observed the first authoritative
+  manifest, terminated that process, resumed with the same computation
+  identity, and matched uninterrupted decimal bytes and verification SHA-256.
+
+### Next Contributor TODO
+
+PR-0031 is complete. Preserve the distinction between monotonic checkpoint
+work, the current durable frontier, resume-validated evidence, and freshly
+committed ranges. Keep progress JSON schema version 4, checkpoint/manifest
+format version 1, and the verified-resume trust boundary stable. Select the
+next PR boundary with the user before implementation.

@@ -2456,3 +2456,68 @@ Worker tasks perform no filesystem I/O. Resume may reuse blocks produced with a
 different worker count or cutoff, while uncovered ranges are recalculated and
 must form one complete adjacent frontier before merging. Runtime storage chunks
 remain ineligible as resume evidence.
+
+---
+
+## ADR-0053
+
+Date
+
+2026-10-30
+
+Status
+
+Accepted
+
+Title
+
+Separate Checkpoint Work, Validated, Committed, and Durable Telemetry
+
+Decision
+
+PR-0031 publishes live checkpoint telemetry from the production frontier
+writer while keeping checkpoint block and manifest format version 1 unchanged.
+Four distinct concepts are exposed and never conflated:
+
+- Work: `completedCheckpointBlocks` is a monotonic counter of verified
+  accepted resume blocks plus newly calculated initial-frontier blocks. Its
+  fixed total remains accepted plus planned recalculated leaf blocks, so live
+  commits never exceed it.
+- Validated: `lastValidatedCheckpoint` is resume evidence only. It is set from
+  blocks that passed structural, checksum, manifest, and independent modular
+  P/Q/T verification during resume, and fresh writes never update it.
+- Committed: `lastCommittedCheckpoint` is the deterministic last newly written
+  block of a frontier, set only after the manifest that references it has been
+  atomically published. It is not labeled or reported as validated.
+- Durable: `durableCheckpointBlocks` is a gauge equal to the current manifest
+  entry count, and `checkpointBytes` is the exact sum of the block files that
+  manifest references, excluding the manifest file and unreferenced files.
+  The durable count may decrease when merged parents replace their children.
+
+The writer publishes one coherent checkpoint update through a non-owning,
+optional `ProgressTracker` pointer on the Binary Splitting coordinating thread
+after manifest replacement. Failed, interval-gated, and identical commits
+leave checkpoint telemetry unchanged. The JSON progress schema advances from
+version 3 to 4. The manually exercised interrupted-resume path becomes an
+automated Linux CLI regression that runs the real `pi-engine` executable.
+
+Reason
+
+A single counter cannot simultaneously be monotonic work, a durable on-disk
+gauge, and trusted resume evidence: merges shrink the manifest while work only
+grows, and a freshly written block has not passed resume verification.
+Publishing only after manifest replacement keeps telemetry consistent with the
+state a restart would actually observe.
+
+Consequences
+
+Checkpoint and manifest format version 1, computation identity,
+checkpoint-before-spill ordering, and the verified-resume trust boundary do
+not change. Worker threads still perform no filesystem I/O or progress
+formatting. `ProgressTracker::publishCheckpointProgress` replaces the separate
+`addCompletedCheckpointBlocks` and `setCheckpointBytes` mutators so one update
+carries the work delta, durable count, referenced bytes, and committed range.
+JSON consumers must accept schema version 4, which adds
+`checkpoint_blocks.durable` and `last_committed_checkpoint`. Text output
+replaces `last_checkpoint=` with `last_validated=` and adds `durable=` and
+`last_committed=`, so a fresh commit is never printed as validated.

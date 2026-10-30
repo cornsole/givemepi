@@ -87,6 +87,20 @@ std::string singleLine(std::string value)
 }
 
 
+void writeRange(
+    std::ostream& output,
+    const char* label,
+    const std::optional<CheckpointRangeProgress>& range
+)
+{
+    if (range.has_value())
+    {
+        output << ' ' << label << "=[" << range->startTerm << ','
+               << range->endTerm << ")@L" << range->treeLevel;
+    }
+}
+
+
 std::string render(
     const ProgressSnapshot& snapshot,
     const ProgressMetrics& metrics
@@ -123,6 +137,7 @@ std::string render(
            << " memory=" << byteCount(snapshot.memoryBytes())
            << " checkpoints=" << snapshot.completedCheckpointBlocks()
            << '/' << snapshot.totalCheckpointBlocks()
+           << " durable=" << snapshot.durableCheckpointBlocks()
            << " checkpoint_bytes=" << byteCount(snapshot.checkpointBytes());
     output << " storage=" << byteCount(snapshot.storageResidentBytes())
            << " resident/" << byteCount(snapshot.storageStoredBytes())
@@ -140,12 +155,8 @@ std::string render(
     {
         output << " merge_level=" << *snapshot.currentMergeLevel();
     }
-    if (snapshot.lastValidatedCheckpoint().has_value())
-    {
-        const auto& checkpoint = *snapshot.lastValidatedCheckpoint();
-        output << " last_checkpoint=[" << checkpoint.startTerm << ','
-               << checkpoint.endTerm << ")@L" << checkpoint.treeLevel;
-    }
+    writeRange(output, "last_validated", snapshot.lastValidatedCheckpoint());
+    writeRange(output, "last_committed", snapshot.lastCommittedCheckpoint());
     if (snapshot.failureDetail().has_value())
     {
         output << " failure=\""

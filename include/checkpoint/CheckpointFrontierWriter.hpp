@@ -4,6 +4,7 @@
 #include "checkpoint/AtomicFileCommit.hpp"
 #include "checkpoint/CheckpointManifest.hpp"
 #include "checkpoint/CheckpointStore.hpp"
+#include "progress/ProgressTracker.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -25,6 +26,13 @@ namespace pi::checkpoint
  * blocks for new frontier nodes, reuses the exact entries of unchanged nodes,
  * atomically replaces the manifest, then best-effort deletes superseded
  * block files. Runs on the coordinating thread only.
+ *
+ * After each successful manifest replacement, an optional tracker receives
+ * one coherent checkpoint publication: the first published frontier adds its
+ * newly calculated blocks as completed work, and every publication replaces
+ * the durable block count, exact referenced block bytes, and (when a block
+ * was newly written) the last committed range. Gated, identical, and failed
+ * commits leave the tracker unchanged.
  */
 class CheckpointFrontierWriter final : public binary::BinaryCheckpointCoordinator
 {
@@ -36,6 +44,8 @@ public:
      *        seed the initial frontier; any order, non-overlapping, complete.
      * @param commitObserver optional atomic-commit observer for every block
      *        and manifest write (failure injection in tests).
+     * @param tracker optional non-owning progress tracker; must outlive the
+     *        writer.
      * @throws std::invalid_argument for an invalid identity or entry set.
      */
     CheckpointFrontierWriter(
@@ -43,7 +53,8 @@ public:
         ComputationIdentity identity,
         std::chrono::seconds interval,
         std::vector<ManifestEntry> acceptedEntries,
-        AtomicCommitObserver commitObserver = nullptr
+        AtomicCommitObserver commitObserver = nullptr,
+        progress::ProgressTracker* tracker = nullptr
     );
 
     /**
@@ -75,6 +86,10 @@ private:
     std::optional<Clock::time_point> lastCommit_;
     std::uint64_t commitCount_ = 0;
     AtomicCommitObserver commitObserver_;
+    progress::ProgressTracker* tracker_;
+    /// Newly calculated blocks of the first valid frontier, captured once.
+    std::optional<std::uint64_t> initialFrontierWork_;
+    bool initialFrontierWorkPublished_ = false;
 };
 
 } // namespace pi::checkpoint

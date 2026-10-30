@@ -16,7 +16,7 @@ int main()
     using pi::progress::ProgressSnapshotData;
     using pi::progress::TextOutputMode;
     using pi::progress::TextProgressReporter;
-    using pi::progress::ValidatedCheckpointProgress;
+    using pi::progress::CheckpointRangeProgress;
 
     ProgressSnapshotData data;
     data.phase = ProgressPhase::merging;
@@ -25,6 +25,7 @@ int main()
     data.completedTerms = 25;
     data.totalCheckpointBlocks = 10;
     data.completedCheckpointBlocks = 2;
+    data.durableCheckpointBlocks = 1;
     data.currentMergeLevel = 3;
     data.activeTasks = 4;
     data.queuedTasks = 2;
@@ -34,7 +35,9 @@ int main()
     data.storageStoredBytes = 16384;
     data.storageChunkCount = 3;
     data.lastValidatedCheckpoint =
-        ValidatedCheckpointProgress{0, 25, 2};
+        CheckpointRangeProgress{0, 25, 2};
+    data.lastCommittedCheckpoint =
+        CheckpointRangeProgress{25, 100, 3};
 
     ProgressMetrics metrics;
     metrics.completionRatio = 0.25;
@@ -56,8 +59,14 @@ int main()
     assert(terminalRecord.find("memory=4.00 KiB") != std::string::npos);
     assert(terminalRecord.find("storage=8.00 KiB resident/16.00 KiB stored/3 chunks")
         != std::string::npos);
-    assert(terminalRecord.find("last_checkpoint=[0,25)@L2")
+    assert(terminalRecord.find(
+        "checkpoints=2/10 durable=1 checkpoint_bytes=2.00 KiB"
+    ) != std::string::npos);
+    assert(terminalRecord.find("last_validated=[0,25)@L2")
         != std::string::npos);
+    assert(terminalRecord.find("last_committed=[25,100)@L3")
+        != std::string::npos);
+    assert(terminalRecord.find("last_checkpoint=") == std::string::npos);
     assert(terminalRecord.ends_with("\x1b[K"));
 
     data.phase = ProgressPhase::verifyingOutput;
@@ -82,6 +91,8 @@ int main()
     data.phase = ProgressPhase::failed;
     data.completedTerms = 50;
     data.failureDetail = "line one\nline two";
+    data.lastValidatedCheckpoint.reset();
+    data.lastCommittedCheckpoint.reset();
     metrics.completionRatio = 0.5;
     metrics.estimatedTimeRemaining.reset();
     log.report(ProgressSnapshot(data), metrics);
@@ -92,6 +103,8 @@ int main()
     assert(logRecord.find("failure=\"line one line two\"")
         != std::string::npos);
     assert(logRecord.find('\r') == std::string::npos);
+    assert(logRecord.find("last_validated=") == std::string::npos);
+    assert(logRecord.find("last_committed=") == std::string::npos);
     assert(logRecord.find("\x1b[K") == std::string::npos);
     assert(logRecord.ends_with('\n'));
     assert(logRecord.find('\n') == logRecord.size() - 1);

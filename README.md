@@ -150,9 +150,28 @@ RAM이 부족할 때 OS swap에 의존하지 않고 명시적인 out-of-core mer
 정책을 사용합니다. 진행 상태는 계산 로직이 문자열을 직접 출력하지 않고,
 thread-safe tracker가 immutable snapshot을 제공하는 구조로 확장합니다.
 
-계획된 snapshot에는 phase, 목표 자릿수, 완료 항 수와 블록 수, merge level,
-active/queued task, 처리 속도, ETA, 메모리, checkpoint bytes, 마지막 검증 블록이
-포함됩니다. CLI text와 JSON reporter는 같은 snapshot을 소비합니다.
+snapshot에는 phase, 목표 자릿수, 완료 항 수와 블록 수, merge level,
+active/queued task, 처리 속도, ETA, 메모리, storage chunk와 I/O, checkpoint
+telemetry가 포함됩니다. CLI text와 JSON reporter는 같은 snapshot을 소비합니다.
+
+Checkpoint telemetry는 서로 다른 네 가지 개념을 구분합니다.
+
+- **완료 작업**(`checkpoints=C/T`, JSON `checkpoint_blocks.completed/total`):
+  검증을 통과해 재사용한 resume 블록과 새로 계산한 초기 frontier 블록의 수입니다.
+  단조 증가하며, 고정된 total(재사용 블록 + 재계산 예정 leaf 블록)을 넘지 않습니다.
+- **Durable 블록**(`durable=D`, JSON `checkpoint_blocks.durable`): 현재
+  manifest의 entry 수입니다. 자식 블록이 병합된 부모로 교체되면 **감소할 수
+  있습니다**. `checkpoint_bytes`는 현재 manifest가 참조하는 블록 파일 크기의
+  정확한 합이며 manifest 자체와 참조되지 않은 파일은 제외합니다.
+- **검증된 블록**(`last_validated=`, JSON `last_validated_checkpoint`): resume
+  시 구조·checksum·manifest·modular P/Q/T 검증을 통과한 입력에만 설정됩니다.
+- **커밋된 블록**(`last_committed=`, JSON `last_committed_checkpoint`): 새로
+  기록된 마지막 블록으로, 이를 참조하는 manifest가 atomic하게 게시된 뒤에만
+  갱신됩니다. 새로 기록된 블록은 검증된 블록으로 표시하지 않습니다.
+
+Checkpoint telemetry는 manifest 교체가 성공한 뒤 coordinating thread에서 한
+번에 게시됩니다. 실패했거나 interval 때문에 생략됐거나 내용이 같은 commit은
+telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 4입니다.
 
 ## 현재 구현 상태
 
@@ -168,8 +187,8 @@ active/queued task, 처리 속도, ETA, 메모리, checkpoint bytes, 마지막 �
 | 병렬 Binary Splitting | 완료 | 명시적 cutoff, bounded leaf block, 단계별 merge, fallback |
 | Chudnovsky finalization | 완료 | precision plan, integer sqrt/division, rounded decimal API |
 | Storage·out-of-core | 완료 | 동기·비동기 spill/reload, concurrent I/O, LZ4 |
-| Checkpoint·무결성 | 구현·검증 완료 | interval-gated merge frontier, atomic manifest, verified resume, quarantine |
-| Progress reporting | 완료 | immutable snapshot, CLI text/JSON, resume 복구 구성요소 |
+| Checkpoint·무결성 | 완료 | interval-gated merge frontier, atomic manifest, verified resume, quarantine, 자동 CLI 중단·resume 회귀 테스트 |
+| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v4, live checkpoint telemetry, resume 복구 |
 | 최종 결과 검증 | 완료 | streaming hash, BBP spot check, known digits, manifest |
 
 세부 구현 순서는 [Implementation Plan](docs/IMPLEMENTATION_PLAN.md), 완료 상태는
@@ -216,13 +235,23 @@ build/pi-engine
 ./build/pi-engine --digits 1000000 --threads 0
 ```
 
-Checkpoint 위치와 주기는 TOML 또는 CLI에서 지정할 수 있습니다.
+Checkpoint 위치와 주기는 TOML 또는 CLI에서 지정할 수 있습니다. 기본값은
+checkpoint와 resume 활성화, `checkpoints`/`checkpoint-quarantine` 디렉터리,
+300초 interval입니다.
 
 ```bash
 ./build/pi-engine --checkpoint --resume \
   --checkpoint-directory checkpoints \
   --checkpoint-quarantine-directory checkpoint-quarantine \
   --checkpoint-interval 300
+```
+
+진행 상태는 기본으로 500 ms마다 text 형식으로 출력되며, CLI에서 바꿀 수
+있습니다.
+
+```bash
+./build/pi-engine --progress --progress-interval 500 --progress-format json
+./build/pi-engine --no-progress
 ```
 
 ## 테스트
@@ -232,6 +261,10 @@ Checkpoint 위치와 주기는 TOML 또는 CLI에서 지정할 수 있습니다.
 ```bash
 ctest --test-dir build --output-on-failure
 ```
+
+테스트에는 실제 `pi-engine`을 첫 manifest 게시 뒤 중단하고 같은 identity로
+resume한 다음, 중단 없이 계산한 결과와 decimal 출력 및 verification hash가
+byte 단위로 같은지 비교하는 Linux 전용 CLI 회귀 테스트가 포함됩니다.
 
 Sanitizer 빌드는 다음처럼 구성할 수 있습니다.
 

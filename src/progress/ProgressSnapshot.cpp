@@ -14,6 +14,7 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
       completedTerms_(data.completedTerms),
       totalCheckpointBlocks_(data.totalCheckpointBlocks),
       completedCheckpointBlocks_(data.completedCheckpointBlocks),
+      durableCheckpointBlocks_(data.durableCheckpointBlocks),
       currentMergeLevel_(data.currentMergeLevel),
       activeTasks_(data.activeTasks),
       queuedTasks_(data.queuedTasks),
@@ -32,6 +33,7 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
       storageCompletedReads_(data.storageCompletedReads),
       storageFailedReads_(data.storageFailedReads),
       lastValidatedCheckpoint_(std::move(data.lastValidatedCheckpoint)),
+      lastCommittedCheckpoint_(std::move(data.lastCommittedCheckpoint)),
       failureDetail_(std::move(data.failureDetail))
 {
     if (completedTerms_ > totalTerms_)
@@ -53,12 +55,15 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
         throw std::invalid_argument("Elapsed time cannot be negative");
     }
 
-    if (lastValidatedCheckpoint_.has_value()
-        && lastValidatedCheckpoint_->startTerm
-            >= lastValidatedCheckpoint_->endTerm)
+    const auto emptyRange = [](const auto& checkpoint) {
+        return checkpoint.has_value()
+            && checkpoint->startTerm >= checkpoint->endTerm;
+    };
+    if (emptyRange(lastValidatedCheckpoint_)
+        || emptyRange(lastCommittedCheckpoint_))
     {
         throw std::invalid_argument(
-            "Validated checkpoint range must be non-empty"
+            "Checkpoint range must be non-empty"
         );
     }
 
@@ -116,6 +121,12 @@ std::uint64_t ProgressSnapshot::totalCheckpointBlocks() const noexcept
 std::uint64_t ProgressSnapshot::completedCheckpointBlocks() const noexcept
 {
     return completedCheckpointBlocks_;
+}
+
+
+std::uint64_t ProgressSnapshot::durableCheckpointBlocks() const noexcept
+{
+    return durableCheckpointBlocks_;
 }
 
 
@@ -211,10 +222,17 @@ std::uint64_t ProgressSnapshot::storageFailedReads() const noexcept
 }
 
 
-const std::optional<ValidatedCheckpointProgress>&
+const std::optional<CheckpointRangeProgress>&
 ProgressSnapshot::lastValidatedCheckpoint() const noexcept
 {
     return lastValidatedCheckpoint_;
+}
+
+
+const std::optional<CheckpointRangeProgress>&
+ProgressSnapshot::lastCommittedCheckpoint() const noexcept
+{
+    return lastCommittedCheckpoint_;
 }
 
 

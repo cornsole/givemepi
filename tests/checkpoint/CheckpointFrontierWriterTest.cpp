@@ -4,12 +4,15 @@
 #include "checkpoint/CheckpointResumePlanner.hpp"
 #include "checkpoint/CheckpointStore.hpp"
 #include "chudnovsky/PrecisionPolicy.hpp"
+#include "progress/ProgressTracker.hpp"
+#include "progress/ResumeProgress.hpp"
 
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unistd.h>
@@ -28,6 +31,10 @@ using pi::checkpoint::ComputationIdentity;
 using pi::checkpoint::ManifestEntry;
 using pi::checkpoint::RejectionReason;
 using pi::chudnovsky::PrecisionPolicy;
+using pi::progress::CheckpointRangeProgress;
+using pi::progress::ProgressTracker;
+using pi::progress::ProgressWorkPlan;
+using pi::progress::ResumeProgressRestorer;
 
 
 namespace
@@ -152,6 +159,50 @@ int fail(const char* message)
     return 1;
 }
 
+
+/// Checkpoint fields of one tracker snapshot, compared as a unit.
+struct Telemetry
+{
+    std::uint64_t completed;
+    std::uint64_t total;
+    std::uint64_t durable;
+    std::uint64_t bytes;
+    std::optional<CheckpointRangeProgress> lastValidated;
+    std::optional<CheckpointRangeProgress> lastCommitted;
+
+    bool operator==(const Telemetry&) const = default;
+};
+
+
+Telemetry telemetry(const ProgressTracker& tracker)
+{
+    const auto snapshot = tracker.snapshot();
+    return Telemetry{
+        snapshot.completedCheckpointBlocks(),
+        snapshot.totalCheckpointBlocks(),
+        snapshot.durableCheckpointBlocks(),
+        snapshot.checkpointBytes(),
+        snapshot.lastValidatedCheckpoint(),
+        snapshot.lastCommittedCheckpoint()
+    };
+}
+
+
+/// Durable gauge and exact referenced block bytes match the manifest on disk.
+bool matchesManifest(
+    const Telemetry& value,
+    const std::filesystem::path& directory,
+    const CheckpointManifest& manifest
+)
+{
+    std::uint64_t bytes = 0;
+    for (const ManifestEntry& entry : manifest.entries)
+        bytes += std::filesystem::file_size(directory / entry.filename);
+    return value.durable == manifest.entries.size()
+        && value.bytes == bytes
+        && value.completed <= value.total;
+}
+
 } // namespace
 
 
@@ -179,8 +230,9 @@ int main()
 
     // The first stage always commits; a later stage inside the interval is
     // skipped and leaves the published frontier untouched.
+    ProgressTracker freshTracker(ProgressWorkPlan{1000, identity.termCount, 5});
     CheckpointFrontierWriter gated(
-        directory, identity, std::chrono::hours(1), {}
+        directory, identity, std::chrono::hours(1), {}, nullptr, &freshTracker
     );
     commit(gated, leafStage);
     const CheckpointManifest leafManifest = store.loadManifest(identity);
@@ -193,6 +245,16 @@ int main()
     if (!cleanPlan(planner.create(identity), leafManifest.entries))
         return fail("Planner rejected the first committed frontier");
 
+    const Telemetry freshTelemetry = telemetry(freshTracker);
+    if (freshTelemetry.completed != 5
+        || !matchesManifest(freshTelemetry, directory, leafManifest)
+        || freshTelemetry.lastValidated.has_value()
+        || freshTelemetry.lastCommitted
+            != CheckpointRangeProgress{leaves[4], n, 0})
+    {
+        return fail("Fresh initial frontier telemetry is wrong");
+    }
+
     commit(gated, firstMerge);
     if (gated.commitCount() != 1
         || store.loadManifest(identity) != leafManifest
@@ -200,14 +262,31 @@ int main()
     {
         return fail("Interval-gated stage replaced the durable frontier");
     }
+    if (telemetry(freshTracker) != freshTelemetry)
+        return fail("Interval-gated stage changed telemetry");
 
     // Resume from planner-accepted entries; the merged frontier replaces
     // consumed children and keeps the odd node's exact file and entry.
     const std::filesystem::path oddPath = directory / leafManifest.entries[4].filename;
     const auto oddWriteTime = std::filesystem::last_write_time(oddPath);
+    const CheckpointResumePlan leafPlan = planner.create(identity);
+    ProgressTracker resumedTracker(
+        ProgressWorkPlan{1000, identity.termCount, 5}
+    );
+    if (!ResumeProgressRestorer::restore(leafPlan, resumedTracker))
+        return fail("Resume progress was not restored");
+    const Telemetry restoredTelemetry = telemetry(resumedTracker);
+    if (restoredTelemetry.completed != 5
+        || !matchesManifest(restoredTelemetry, directory, leafManifest)
+        || restoredTelemetry.lastValidated
+            != CheckpointRangeProgress{leaves[4], n, 0}
+        || restoredTelemetry.lastCommitted.has_value())
+    {
+        return fail("Resumed telemetry is wrong");
+    }
     CheckpointFrontierWriter resumed(
         directory, identity, std::chrono::seconds(0),
-        acceptedEntries(planner.create(identity)), countingObserver
+        acceptedEntries(leafPlan), countingObserver, &resumedTracker
     );
     resetObserver(0, AtomicCommitStage::tempCreated);
     commit(resumed, firstMerge);
@@ -229,15 +308,28 @@ int main()
     if (!cleanPlan(planner.create(identity), mergedManifest.entries))
         return fail("Planner rejected the merged frontier");
 
+    // Merging shrinks the durable gauge and bytes; work stays within total.
+    const Telemetry mergedTelemetry = telemetry(resumedTracker);
+    if (mergedTelemetry.completed != 5
+        || !matchesManifest(mergedTelemetry, directory, mergedManifest)
+        || mergedTelemetry.lastValidated != restoredTelemetry.lastValidated
+        || mergedTelemetry.lastCommitted
+            != CheckpointRangeProgress{leaves[2], leaves[4], 1})
+    {
+        return fail("Merged frontier telemetry is wrong");
+    }
+
     resetObserver(0, AtomicCommitStage::tempCreated);
     commit(resumed, firstMerge);
     if (tempFilesCreated != 0 || resumed.commitCount() != 1)
         return fail("Unchanged frontier was rewritten");
+    if (telemetry(resumedTracker) != mergedTelemetry)
+        return fail("Identical frontier changed telemetry");
 
     // A failed block write leaves the last manifest authoritative.
     CheckpointFrontierWriter blockFailure(
         directory, identity, std::chrono::seconds(0),
-        mergedManifest.entries, countingObserver
+        mergedManifest.entries, countingObserver, &resumedTracker
     );
     resetObserver(1, AtomicCommitStage::contentWritten);
     bool threw = false;
@@ -250,12 +342,14 @@ int main()
     {
         return fail("Block write failure did not preserve the last manifest");
     }
+    if (telemetry(resumedTracker) != mergedTelemetry)
+        return fail("Block write failure changed telemetry");
 
     // A failed manifest publication leaves the new parent unreferenced; the
     // planner keeps the old frontier and quarantines the orphan.
     CheckpointFrontierWriter manifestFailure(
         directory, identity, std::chrono::seconds(0),
-        mergedManifest.entries, countingObserver
+        mergedManifest.entries, countingObserver, &resumedTracker
     );
     resetObserver(2, AtomicCommitStage::beforeRename);
     threw = false;
@@ -267,6 +361,8 @@ int main()
     {
         return fail("Manifest failure replaced the last manifest");
     }
+    if (telemetry(resumedTracker) != mergedTelemetry)
+        return fail("Manifest failure changed telemetry");
     const CheckpointResumePlan afterManifestFailure = planner.create(identity);
     bool orphanRejected = false;
     for (const auto& rejected : afterManifestFailure.rejectedBlocks)
@@ -285,9 +381,16 @@ int main()
     }
 
     // Recovery from the planner commits the root and removes every child.
+    // Its first frontier counts the newly calculated root, bounded by the
+    // fixed total of accepted plus planned blocks.
+    ProgressTracker recoveryTracker(
+        ProgressWorkPlan{1000, identity.termCount, 4}
+    );
+    if (!ResumeProgressRestorer::restore(afterManifestFailure, recoveryTracker))
+        return fail("Recovery progress was not restored");
     CheckpointFrontierWriter recovered(
         directory, identity, std::chrono::seconds(0),
-        acceptedEntries(afterManifestFailure)
+        acceptedEntries(afterManifestFailure), nullptr, &recoveryTracker
     );
     commit(recovered, root);
     const CheckpointManifest rootManifest = store.loadManifest(identity);
@@ -295,6 +398,25 @@ int main()
         || !cleanPlan(planner.create(identity), rootManifest.entries))
     {
         return fail("Root frontier was not committed cleanly");
+    }
+    const Telemetry rootTelemetry = telemetry(recoveryTracker);
+    if (rootTelemetry.completed != 4
+        || !matchesManifest(rootTelemetry, directory, rootManifest)
+        || rootTelemetry.lastCommitted != CheckpointRangeProgress{0, n, 3})
+    {
+        return fail("Root frontier telemetry is wrong");
+    }
+
+    // Republishing reused entries keeps the last committed block.
+    CheckpointFrontierWriter republished(
+        directory, identity, std::chrono::seconds(0),
+        rootManifest.entries, nullptr, &recoveryTracker
+    );
+    commit(republished, root);
+    if (republished.commitCount() != 1
+        || telemetry(recoveryTracker) != rootTelemetry)
+    {
+        return fail("Reuse-only publication changed telemetry");
     }
 
     // Malformed frontiers fail before any write.
@@ -306,7 +428,8 @@ int main()
         try { commit(recovered, *invalid); }
         catch (const std::invalid_argument&) { threw = true; }
         if (!threw || recovered.commitCount() != 1
-            || store.loadManifest(identity) != rootManifest)
+            || store.loadManifest(identity) != rootManifest
+            || telemetry(recoveryTracker) != rootTelemetry)
         {
             return fail("Malformed frontier was accepted");
         }

@@ -22,6 +22,21 @@ struct ProgressWorkPlan
 };
 
 
+/// One coherent checkpoint publication after a durable manifest replacement.
+struct CheckpointProgressUpdate
+{
+    /// Newly completed checkpoint work; clamped to the remaining fixed total.
+    std::uint64_t completedBlocks;
+    /// Entry count of the now-authoritative manifest.
+    std::uint64_t durableBlocks;
+    /// Exact file bytes of blocks referenced by that manifest.
+    std::uint64_t checkpointBytes;
+    /// Last block newly written by this publication; absent keeps the
+    /// previously published value.
+    std::optional<CheckpointRangeProgress> lastCommitted;
+};
+
+
 /// Thread-safe owner of raw computation progress.
 ///
 /// Worker-facing numeric updates use atomics and never format, allocate, or
@@ -49,12 +64,15 @@ public:
     /// Lock-free when the platform provides lock-free 64-bit atomics.
     [[nodiscard]] bool addCompletedTerms(std::uint64_t count) noexcept;
 
-    /// Atomically adds completed checkpoint blocks within the fixed total.
+    /// Publishes checkpoint work, durable gauge, bytes, and last commit as one
+    /// coherent update on the low-frequency coordinating-thread path.
     ///
-    /// Returns false after termination or if the addition exceeds the total.
-    /// Lock-free when the platform provides lock-free 64-bit atomics.
+    /// Completed work only increases and never exceeds the fixed total; the
+    /// durable count and bytes are replaced. Returns false without mutation
+    /// after termination or for an empty or out-of-range committed range.
+    /// Time and memory: O(1).
     [[nodiscard]]
-    bool addCompletedCheckpointBlocks(std::uint64_t count) noexcept;
+    bool publishCheckpointProgress(const CheckpointProgressUpdate& update);
 
     /// Publishes current scheduler task counts. Time and memory: O(1).
     void setTaskCounts(
@@ -64,9 +82,6 @@ public:
 
     /// Publishes current process memory consumption. Time and memory: O(1).
     void setMemoryBytes(std::uint64_t bytes) noexcept;
-
-    /// Publishes total durable checkpoint bytes. Time and memory: O(1).
-    void setCheckpointBytes(std::uint64_t bytes) noexcept;
 
     /// Publishes storage resident bytes, durable bytes, and indexed chunk count.
     void setStorageProgress(
@@ -96,12 +111,12 @@ public:
     /// Returns false after termination. Time and memory: O(1).
     [[nodiscard]] bool clearCurrentMergeLevel();
 
-    /// Records the most recently validated checkpoint range.
+    /// Records the most recently resume-validated checkpoint range.
     ///
     /// Returns false for an invalid range or after termination. Time and
     /// memory: O(1).
     [[nodiscard]]
-    bool recordValidatedCheckpoint(ValidatedCheckpointProgress checkpoint);
+    bool recordValidatedCheckpoint(CheckpointRangeProgress checkpoint);
 
     /// Atomically enters the failed terminal phase with owned diagnostic text.
     ///
@@ -122,11 +137,9 @@ private:
 
     std::atomic<ProgressPhase> phase_{ProgressPhase::initializing};
     std::atomic<std::uint64_t> completedTerms_{0};
-    std::atomic<std::uint64_t> completedCheckpointBlocks_{0};
     std::atomic<std::uint64_t> activeTasks_{0};
     std::atomic<std::uint64_t> queuedTasks_{0};
     std::atomic<std::uint64_t> memoryBytes_{0};
-    std::atomic<std::uint64_t> checkpointBytes_{0};
     std::atomic<std::uint64_t> storageResidentBytes_{0};
     std::atomic<std::uint64_t> storageStoredBytes_{0};
     std::atomic<std::uint64_t> storageChunkCount_{0};
@@ -141,7 +154,11 @@ private:
 
     mutable std::mutex metadataMutex_;
     std::optional<std::uint32_t> currentMergeLevel_;
-    std::optional<ValidatedCheckpointProgress> lastValidatedCheckpoint_;
+    std::uint64_t completedCheckpointBlocks_ = 0;
+    std::uint64_t durableCheckpointBlocks_ = 0;
+    std::uint64_t checkpointBytes_ = 0;
+    std::optional<CheckpointRangeProgress> lastValidatedCheckpoint_;
+    std::optional<CheckpointRangeProgress> lastCommittedCheckpoint_;
     std::optional<std::string> failureDetail_;
     std::optional<std::chrono::steady_clock::time_point> finishedAt_;
 };

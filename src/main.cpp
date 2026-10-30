@@ -171,7 +171,9 @@ int main(int argc, char* argv[])
                 config.checkpoint_directory,
                 checkpointIdentity,
                 std::chrono::seconds(config.checkpoint_interval_seconds),
-                std::move(acceptedEntries)
+                std::move(acceptedEntries),
+                nullptr,
+                &tracker
             );
         }
 

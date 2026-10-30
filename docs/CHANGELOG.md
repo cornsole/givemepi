@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added PR-0031 live checkpoint telemetry: after each successful atomic
+  manifest replacement, the frontier writer publishes one coherent update on
+  the coordinating thread with monotonic checkpoint work, a durable block
+  gauge equal to the current manifest entry count, exact manifest-referenced
+  block bytes, and the last newly committed range. Failed, interval-gated, and
+  identical commits leave checkpoint telemetry unchanged.
+- Added an automated Linux CLI regression that runs the real `pi-engine`,
+  interrupts it after the first manifest, resumes with the same identity, and
+  compares decimal output and verification hash with an uninterrupted run.
+
 - Added PR-0030 production checkpoint and resume integration: an
   interval-gated, non-overlapping merge frontier is committed before storage
   spill, and verified checkpoint blocks seed only the uncovered staged
@@ -132,8 +142,35 @@
   inconclusive and mutation coverage, reporter verification-phase assertions,
   and a 128 MiB bounded-memory streaming inspection and SHA-256 regression.
 
+### Changed
+
+- Advanced the JSON progress schema from version 3 to 4: `checkpoint_blocks`
+  gains `durable`, and a `last_committed_checkpoint` object (or `null`) sits
+  beside the resume-only `last_validated_checkpoint`. `checkpoint_bytes` now
+  counts only block files referenced by the current manifest.
+- Text progress adds `durable=D` after `checkpoints=C/T`, renames
+  `last_checkpoint=` to `last_validated=`, and adds `last_committed=`; each
+  range is printed only when present. The durable count may decrease when
+  merged parents replace children, while completed work stays monotonic and
+  never exceeds its fixed total. Fresh commits are never labeled validated.
+- Replaced `ProgressTracker::addCompletedCheckpointBlocks` and
+  `setCheckpointBytes` with `publishCheckpointProgress`, renamed
+  `ValidatedCheckpointProgress` to `CheckpointRangeProgress`, and gave
+  `CheckpointFrontierWriter` an optional non-owning tracker wired from the CLI.
+  Checkpoint and manifest format version 1, identity, checkpoint-before-spill
+  ordering, and the verified-resume trust boundary are unchanged (ADR-0053).
+- Marked the implemented Chunk progress telemetry and LZ4 compression
+  checklist entries complete. PR-0031 verification is complete.
+
 ### Verification
 
+- Built all PR-0031 Debug targets and passed all 66 CTest tests.
+- Passed all eight PR-0031 changed-path tests under ASan/UBSan with leak
+  detection disabled.
+- The automated CLI regression terminated a 1,000,000-digit run after its
+  first manifest became authoritative, resumed the same computation, and
+  matched both decimal output bytes and verification SHA-256 with an
+  uninterrupted run.
 - Built all Debug targets and passed all 65 CTest tests.
 - Passed the five checkpoint/resume changed-path tests under ASan/UBSan with
   leak detection disabled.

@@ -16,7 +16,7 @@ int main()
     using pi::progress::ProgressPhase;
     using pi::progress::ProgressSnapshot;
     using pi::progress::ProgressSnapshotData;
-    using pi::progress::ValidatedCheckpointProgress;
+    using pi::progress::CheckpointRangeProgress;
 
     ProgressSnapshotData data;
     data.phase = ProgressPhase::merging;
@@ -25,6 +25,7 @@ int main()
     data.completedTerms = 25;
     data.totalCheckpointBlocks = 10;
     data.completedCheckpointBlocks = 2;
+    data.durableCheckpointBlocks = 1;
     data.currentMergeLevel = 3;
     data.activeTasks = 4;
     data.queuedTasks = 2;
@@ -35,7 +36,9 @@ int main()
     data.storageStoredBytes = 16384;
     data.storageChunkCount = 3;
     data.lastValidatedCheckpoint =
-        ValidatedCheckpointProgress{0, 25, 2};
+        CheckpointRangeProgress{0, 25, 2};
+    data.lastCommittedCheckpoint =
+        CheckpointRangeProgress{25, 100, 3};
 
     ProgressMetrics metrics;
     metrics.completionRatio = 0.25;
@@ -57,15 +60,25 @@ int main()
         "\"storage_io\":{\"writes\":{\"queued\":0,\"active\":0"
     ) != std::string::npos);
     assert(record.find(
-        "\"schema_version\":3,\"sampled_at\":\"1970-01-01T00:00:00Z\""
+        "\"schema_version\":4,\"sampled_at\":\"1970-01-01T00:00:00Z\""
     ) != std::string::npos);
     assert(record.find("\"phase\":\"merging\"") != std::string::npos);
     assert(record.find("\"terminal_state\":\"running\"")
         != std::string::npos);
     assert(record.find("\"terms\":{\"completed\":25,\"total\":100}")
         != std::string::npos);
-    assert(record.find("\"last_validated_checkpoint\":{\"start_term\":0,")
-        != std::string::npos);
+    assert(record.find(
+        "\"checkpoint_blocks\":{\"completed\":2,\"total\":10,\"durable\":1}"
+    ) != std::string::npos);
+    assert(record.find("\"checkpoint_bytes\":2048") != std::string::npos);
+    assert(record.find(
+        "\"last_validated_checkpoint\":{\"start_term\":0,\"end_term\":25,"
+        "\"tree_level\":2}"
+    ) != std::string::npos);
+    assert(record.find(
+        "\"last_committed_checkpoint\":{\"start_term\":25,\"end_term\":100,"
+        "\"tree_level\":3}"
+    ) != std::string::npos);
     assert(record.find("\"storage\":{\"resident_bytes\":8192,\"stored_bytes\":16384,\"chunk_count\":3}")
         != std::string::npos);
     assert(record.find("\"completion_ratio\":0.25")
@@ -82,6 +95,8 @@ int main()
 
     data.phase = ProgressPhase::failed;
     data.failureDetail = "quote \" slash \\ newline\n tab\t byte\x01";
+    data.lastValidatedCheckpoint.reset();
+    data.lastCommittedCheckpoint.reset();
     metrics.completionRatio = std::numeric_limits<double>::infinity();
     metrics.termsPerSecond.reset();
     metrics.checkpointBlocksPerSecond.reset();
@@ -97,6 +112,10 @@ int main()
         "\"failure_detail\":\"quote \\\" slash \\\\ newline\\n tab\\t byte\\u0001\""
     ) != std::string::npos);
     assert(second.find("\"completion_ratio\":null")
+        != std::string::npos);
+    assert(second.find("\"last_validated_checkpoint\":null")
+        != std::string::npos);
+    assert(second.find("\"last_committed_checkpoint\":null")
         != std::string::npos);
     assert(second.find("\"terms_per_second\":null")
         != std::string::npos);

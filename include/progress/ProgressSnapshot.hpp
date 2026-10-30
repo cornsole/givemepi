@@ -11,15 +11,15 @@
 namespace pi::progress
 {
 
-/// Range metadata for the most recently validated checkpoint.
-struct ValidatedCheckpointProgress
+/// Term range and tree level of one durable checkpoint block.
+struct CheckpointRangeProgress
 {
     std::uint64_t startTerm;
     std::uint64_t endTerm;
     std::uint32_t treeLevel;
 
     [[nodiscard]]
-    bool operator==(const ValidatedCheckpointProgress&) const noexcept = default;
+    bool operator==(const CheckpointRangeProgress&) const noexcept = default;
 };
 
 
@@ -31,12 +31,16 @@ struct ProgressSnapshotData
     std::uint64_t totalTerms = 0;
     std::uint64_t completedTerms = 0;
     std::uint64_t totalCheckpointBlocks = 0;
+    /// Monotonic checkpoint work: accepted plus newly calculated blocks.
     std::uint64_t completedCheckpointBlocks = 0;
+    /// Blocks referenced by the current durable manifest; may decrease.
+    std::uint64_t durableCheckpointBlocks = 0;
     std::optional<std::uint32_t> currentMergeLevel;
     std::uint64_t activeTasks = 0;
     std::uint64_t queuedTasks = 0;
     std::chrono::nanoseconds elapsed = std::chrono::nanoseconds::zero();
     std::uint64_t memoryBytes = 0;
+    /// Exact file bytes of blocks referenced by the current manifest.
     std::uint64_t checkpointBytes = 0;
     std::uint64_t storageResidentBytes = 0;
     std::uint64_t storageStoredBytes = 0;
@@ -49,7 +53,10 @@ struct ProgressSnapshotData
     std::uint64_t storageActiveReads = 0;
     std::uint64_t storageCompletedReads = 0;
     std::uint64_t storageFailedReads = 0;
-    std::optional<ValidatedCheckpointProgress> lastValidatedCheckpoint;
+    /// Last checkpoint accepted by resume validation.
+    std::optional<CheckpointRangeProgress> lastValidatedCheckpoint;
+    /// Last block newly written by a successfully published manifest.
+    std::optional<CheckpointRangeProgress> lastCommittedCheckpoint;
     std::optional<std::string> failureDetail;
 };
 
@@ -77,6 +84,7 @@ public:
     [[nodiscard]] std::uint64_t completedTerms() const noexcept;
     [[nodiscard]] std::uint64_t totalCheckpointBlocks() const noexcept;
     [[nodiscard]] std::uint64_t completedCheckpointBlocks() const noexcept;
+    [[nodiscard]] std::uint64_t durableCheckpointBlocks() const noexcept;
     [[nodiscard]] std::optional<std::uint32_t> currentMergeLevel() const noexcept;
     [[nodiscard]] std::uint64_t activeTasks() const noexcept;
     [[nodiscard]] std::uint64_t queuedTasks() const noexcept;
@@ -96,8 +104,12 @@ public:
     [[nodiscard]] std::uint64_t storageFailedReads() const noexcept;
 
     [[nodiscard]]
-    const std::optional<ValidatedCheckpointProgress>&
+    const std::optional<CheckpointRangeProgress>&
     lastValidatedCheckpoint() const noexcept;
+
+    [[nodiscard]]
+    const std::optional<CheckpointRangeProgress>&
+    lastCommittedCheckpoint() const noexcept;
 
     [[nodiscard]]
     const std::optional<std::string>& failureDetail() const noexcept;
@@ -112,6 +124,7 @@ private:
     std::uint64_t completedTerms_;
     std::uint64_t totalCheckpointBlocks_;
     std::uint64_t completedCheckpointBlocks_;
+    std::uint64_t durableCheckpointBlocks_;
     std::optional<std::uint32_t> currentMergeLevel_;
     std::uint64_t activeTasks_;
     std::uint64_t queuedTasks_;
@@ -129,7 +142,8 @@ private:
     std::uint64_t storageActiveReads_;
     std::uint64_t storageCompletedReads_;
     std::uint64_t storageFailedReads_;
-    std::optional<ValidatedCheckpointProgress> lastValidatedCheckpoint_;
+    std::optional<CheckpointRangeProgress> lastValidatedCheckpoint_;
+    std::optional<CheckpointRangeProgress> lastCommittedCheckpoint_;
     std::optional<std::string> failureDetail_;
 };
 

@@ -1506,6 +1506,10 @@ add_executable(checkpoint-frontier-writer-test
     src/scheduler/Worker.cpp
     src/scheduler/Scheduler.cpp
     src/scheduler/ReferenceQueue.cpp
+    src/progress/ResumeProgress.cpp
+    src/progress/ProgressTracker.cpp
+    src/progress/ProgressSnapshot.cpp
+    src/progress/ProgressState.cpp
 )
 
 add_test(
@@ -1522,6 +1526,22 @@ target_link_libraries(checkpoint-frontier-writer-test
     PRIVATE
         gmp
         Threads::Threads
+)
+
+add_executable(checkpoint-resume-cli-test
+    tests/checkpoint/CheckpointResumeCliTest.cpp
+)
+
+add_test(
+    NAME CheckpointResumeCliTest
+    COMMAND checkpoint-resume-cli-test $<TARGET_FILE:pi-engine>
+)
+
+set_tests_properties(
+    CheckpointResumeCliTest
+    PROPERTIES
+        LABELS "integration"
+        TIMEOUT 600
 )
 
 add_test(

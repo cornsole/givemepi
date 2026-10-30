@@ -31,10 +31,11 @@ bool throws(Function&& function)
 
 int main()
 {
+    using pi::progress::CheckpointProgressUpdate;
+    using pi::progress::CheckpointRangeProgress;
     using pi::progress::ProgressPhase;
     using pi::progress::ProgressTracker;
     using pi::progress::ProgressWorkPlan;
-    using pi::progress::ValidatedCheckpointProgress;
 
     assert(throws<std::invalid_argument>([]() {
         static_cast<void>(ProgressTracker(ProgressWorkPlan{0, 1, 0}));
@@ -49,15 +50,57 @@ int main()
     assert(tracker.setCurrentMergeLevel(0));
     tracker.setTaskCounts(8, 32);
     tracker.setMemoryBytes(4096);
-    tracker.setCheckpointBytes(2048);
     tracker.setStorageProgress(8192, 16384, 3);
     tracker.setStorageIoProgress(2, 1, 7, 1, 3, 2, 9, 2);
     assert(tracker.recordValidatedCheckpoint(
-        ValidatedCheckpointProgress{0, 10'000, 0}
+        CheckpointRangeProgress{0, 10'000, 0}
     ));
     assert(!tracker.recordValidatedCheckpoint(
-        ValidatedCheckpointProgress{80'000, 80'001, 0}
+        CheckpointRangeProgress{80'000, 80'001, 0}
     ));
+
+    // Invalid committed ranges are rejected without mutation.
+    assert(!tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+        1, 1, 10, CheckpointRangeProgress{5, 5, 0}
+    }));
+    assert(!tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+        1, 1, 10, CheckpointRangeProgress{0, 80'001, 0}
+    }));
+    {
+        const auto unchanged = tracker.snapshot();
+        assert(unchanged.completedCheckpointBlocks() == 0);
+        assert(unchanged.durableCheckpointBlocks() == 0);
+        assert(unchanged.checkpointBytes() == 0);
+        assert(!unchanged.lastCommittedCheckpoint().has_value());
+    }
+
+    // Initial frontier: work and durable count rise together.
+    assert(tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+        6, 6, 600, CheckpointRangeProgress{70'000, 80'000, 0}
+    }));
+    // Merge: durable gauge and bytes shrink, work stays monotonic.
+    assert(tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+        0, 3, 450, CheckpointRangeProgress{40'000, 80'000, 1}
+    }));
+    // Reuse-only publication keeps the previous last committed range.
+    assert(tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+        0, 3, 450, std::nullopt
+    }));
+    {
+        const auto merged = tracker.snapshot();
+        assert(merged.completedCheckpointBlocks() == 6);
+        assert(merged.durableCheckpointBlocks() == 3);
+        assert(merged.checkpointBytes() == 450);
+        const CheckpointRangeProgress expectedCommit{40'000, 80'000, 1};
+        assert(merged.lastCommittedCheckpoint() == expectedCommit);
+        const CheckpointRangeProgress expectedValidated{0, 10'000, 0};
+        assert(merged.lastValidatedCheckpoint() == expectedValidated);
+    }
+    // Work beyond the fixed total is clamped to it.
+    assert(tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+        5, 2, 400, std::nullopt
+    }));
+    assert(tracker.snapshot().completedCheckpointBlocks() == 8);
 
     constexpr std::uint64_t threadCount = 8;
     constexpr std::uint64_t updatesPerThread = 10'000;
@@ -102,11 +145,46 @@ int main()
     observer.join();
 
     assert(!tracker.addCompletedTerms(1));
-    for (std::uint64_t block = 0; block < 8; ++block)
+
+    // Concurrent snapshots observe each publication as one coherent unit.
     {
-        assert(tracker.addCompletedCheckpointBlocks(1));
+        ProgressTracker coherent(ProgressWorkPlan{1'000, 1'000, 1'000});
+        std::atomic<bool> stop{false};
+        std::thread reader([&coherent, &stop]() {
+            std::uint64_t previousCompleted = 0;
+            while (!stop.load(std::memory_order_acquire))
+            {
+                const auto snapshot = coherent.snapshot();
+                assert(snapshot.completedCheckpointBlocks()
+                    >= previousCompleted);
+                assert(snapshot.completedCheckpointBlocks()
+                    <= snapshot.totalCheckpointBlocks());
+                assert(snapshot.checkpointBytes()
+                    == snapshot.durableCheckpointBlocks() * 100);
+                assert(snapshot.durableCheckpointBlocks()
+                    == snapshot.completedCheckpointBlocks());
+                if (snapshot.durableCheckpointBlocks() != 0)
+                {
+                    assert(snapshot.lastCommittedCheckpoint()
+                        == (CheckpointRangeProgress{
+                            snapshot.durableCheckpointBlocks() - 1,
+                            snapshot.durableCheckpointBlocks(),
+                            0
+                        }));
+                }
+                previousCompleted = snapshot.completedCheckpointBlocks();
+            }
+        });
+        for (std::uint64_t block = 1; block <= 1'000; ++block)
+        {
+            assert(coherent.publishCheckpointProgress(CheckpointProgressUpdate{
+                1, block, block * 100,
+                CheckpointRangeProgress{block - 1, block, 0}
+            }));
+        }
+        stop.store(true, std::memory_order_release);
+        reader.join();
     }
-    assert(!tracker.addCompletedCheckpointBlocks(1));
 
     assert(tracker.transitionTo(ProgressPhase::finalizing));
     assert(tracker.clearCurrentMergeLevel());
@@ -115,10 +193,11 @@ int main()
     const auto completedAgain = tracker.snapshot();
     assert(completed.completedTerms() == 80'000);
     assert(completed.completedCheckpointBlocks() == 8);
+    assert(completed.durableCheckpointBlocks() == 2);
     assert(completed.activeTasks() == 8);
     assert(completed.queuedTasks() == 32);
     assert(completed.memoryBytes() == 4096);
-    assert(completed.checkpointBytes() == 2048);
+    assert(completed.checkpointBytes() == 400);
     assert(completed.storageResidentBytes() == 8192);
     assert(completed.storageStoredBytes() == 16384);
     assert(completed.storageChunkCount() == 3);
@@ -131,9 +210,15 @@ int main()
     assert(completed.storageCompletedReads() == 9);
     assert(completed.storageFailedReads() == 2);
     assert(completed.lastValidatedCheckpoint().has_value());
+    assert(completed.lastCommittedCheckpoint().has_value());
     assert(completed.elapsed() == completedAgain.elapsed());
     assert(!tracker.addCompletedTerms(0));
     assert(!tracker.setCurrentMergeLevel(4));
+    assert(!tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+        0, 9, 900, std::nullopt
+    }));
+    assert(tracker.snapshot().durableCheckpointBlocks() == 2);
+    assert(tracker.snapshot().checkpointBytes() == 400);
     assert(!tracker.markFailed("too late"));
 
     ProgressTracker failing(ProgressWorkPlan{100, 8, 0});

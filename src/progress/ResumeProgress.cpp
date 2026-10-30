@@ -27,8 +27,10 @@ bool ResumeProgressRestorer::restore(
     const ProgressSnapshot initial = tracker.snapshot();
     if (initial.completedTerms() != 0
         || initial.completedCheckpointBlocks() != 0
+        || initial.durableCheckpointBlocks() != 0
         || initial.checkpointBytes() != 0
         || initial.lastValidatedCheckpoint().has_value()
+        || initial.lastCommittedCheckpoint().has_value()
         || initial.terminalState() != ProgressTerminalState::running
         || plan.acceptedBlocks.size()
             > initial.totalCheckpointBlocks())
@@ -88,17 +90,21 @@ bool ResumeProgressRestorer::restore(
     }
 
     if (!tracker.addCompletedTerms(completedTerms)
-        || !tracker.addCompletedCheckpointBlocks(accepted.size()))
+        || !tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+            accepted.size(),
+            accepted.size(),
+            checkpointBytes,
+            std::nullopt
+        }))
     {
         return false;
     }
-    tracker.setCheckpointBytes(checkpointBytes);
 
     if (!accepted.empty())
     {
         const auto& last = accepted.back().location;
         if (!tracker.recordValidatedCheckpoint(
-                ValidatedCheckpointProgress{
+                CheckpointRangeProgress{
                     last.start,
                     last.end,
                     last.treeLevel

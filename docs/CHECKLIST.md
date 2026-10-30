@@ -268,7 +268,7 @@
 
 [x] Compression Codec Interface and None Codec (PR-0025)
 
-[ ] Compression
+[x] Compression (LZ4 backend PR-0028; none/LZ4 selection and acceptance PR-0029)
 
 [x] Chunk Index Contract and Durable Codec (PR-0025)
 
@@ -390,6 +390,12 @@
 
 [x] Production Verified Resume Integration (PR-0030)
 
+[x] Live Checkpoint Telemetry Publication after Manifest Replacement (PR-0031)
+
+[x] Automated Interrupted CLI Resume Regression (PR-0031)
+
+[x] PR-0031 Verification Gate (complete Debug build, 66/66 CTest, 8/8 changed-path ASan/UBSan tests)
+
 [x] CRC
 
 -----------------
@@ -416,11 +422,19 @@
 
 [x] Memory
 
-[ ] Chunk
+[x] Chunk (storage resident/stored bytes, indexed chunk count, and asynchronous read/write counters; PR-0025/PR-0027)
 
-[x] Checkpoint Bytes
+[x] Checkpoint Bytes (exact manifest-referenced block bytes since PR-0031)
 
-[x] Last Verified Checkpoint
+[x] Last Verified Checkpoint (resume-validated input only)
+
+[x] Monotonic Checkpoint Work Completion (PR-0031)
+
+[x] Durable Checkpoint Block Gauge (PR-0031)
+
+[x] Last Committed Checkpoint (PR-0031)
+
+[x] JSON Progress Schema Version 4 (PR-0031)
 
 [x] CLI Text Reporter
 

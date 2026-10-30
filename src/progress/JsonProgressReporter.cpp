@@ -100,6 +100,22 @@ void writeOptionalDuration(
     }
 }
 
+
+void writeOptionalRange(
+    std::ostream& output,
+    const std::optional<CheckpointRangeProgress>& range
+)
+{
+    if (!range.has_value())
+    {
+        output << "null";
+        return;
+    }
+    output << "{\"start_term\":" << range->startTerm
+           << ",\"end_term\":" << range->endTerm
+           << ",\"tree_level\":" << range->treeLevel << '}';
+}
+
 } // namespace
 
 
@@ -146,7 +162,8 @@ void JsonProgressReporter::report(
            << ",\"total\":" << snapshot.totalTerms() << '}';
     record << ",\"checkpoint_blocks\":{\"completed\":"
            << snapshot.completedCheckpointBlocks()
-           << ",\"total\":" << snapshot.totalCheckpointBlocks() << '}';
+           << ",\"total\":" << snapshot.totalCheckpointBlocks()
+           << ",\"durable\":" << snapshot.durableCheckpointBlocks() << '}';
     record << ",\"current_merge_level\":";
     if (snapshot.currentMergeLevel().has_value())
     {
@@ -166,17 +183,9 @@ void JsonProgressReporter::report(
            << ",\"stored_bytes\":" << snapshot.storageStoredBytes()
            << ",\"chunk_count\":" << snapshot.storageChunkCount() << '}';
     record << ",\"last_validated_checkpoint\":";
-    if (snapshot.lastValidatedCheckpoint().has_value())
-    {
-        const auto& checkpoint = *snapshot.lastValidatedCheckpoint();
-        record << "{\"start_term\":" << checkpoint.startTerm
-               << ",\"end_term\":" << checkpoint.endTerm
-               << ",\"tree_level\":" << checkpoint.treeLevel << '}';
-    }
-    else
-    {
-        record << "null";
-    }
+    writeOptionalRange(record, snapshot.lastValidatedCheckpoint());
+    record << ",\"last_committed_checkpoint\":";
+    writeOptionalRange(record, snapshot.lastCommittedCheckpoint());
     record << ",\"failure_detail\":";
     if (snapshot.failureDetail().has_value())
     {
