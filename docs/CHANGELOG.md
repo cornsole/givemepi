@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added PR-0032 default CLI hardening: a successful no-config, no-argument
+  text run ends with `phase=completed`, `terms=N/N`, non-zero complete
+  checkpoint work, durable blocks, and `checkpoint_bytes`, and leaves a
+  non-empty manifest and root checkpoint block under the default
+  `checkpoints/` directory. The real-process CLI regression covers this
+  default text run and a resume-only/no-writer case.
+
 - Added PR-0031 live checkpoint telemetry: after each successful atomic
   manifest replacement, the frontier writer publishes one coherent update on
   the coordinating thread with monotonic checkpoint work, a durable block
@@ -144,6 +151,22 @@
 
 ### Changed
 
+- PR-0032: recalculated checkpoint work is planned only when checkpoint writing
+  is enabled. Resume-only mode (`--no-checkpoint --resume`) keeps verified
+  accepted blocks as completed work, and with no accepted blocks reports
+  `checkpoints=0/0` and writes no checkpoint files.
+- PR-0032: the CLI checks the progress reporting runner after joining it and
+  returns a failure when the reporter failed, instead of a successful result
+  behind stale progress. Text and JSON reporters also convert failed output
+  stream writes into reporter failures.
+- PR-0032: interactive TTY text progress uses a compact record without the
+  log-only storage and I/O diagnostics; non-TTY text logs remain complete
+  newline-delimited records. JSON progress schema version 4, checkpoint and
+  manifest format version 1, and the verified-resume trust boundary are
+  unchanged (ADR-0054).
+- Documented that relative checkpoint, quarantine, storage, and output paths
+  resolve against the process working directory, and that `build/pi-engine`
+  should be rebuilt after source updates before running it.
 - Advanced the JSON progress schema from version 3 to 4: `checkpoint_blocks`
   gains `durable`, and a `last_committed_checkpoint` object (or `null`) sits
   beside the resume-only `last_validated_checkpoint`. `checkpoint_bytes` now
@@ -164,6 +187,15 @@
 
 ### Verification
 
+- Built all Debug targets and passed all 66 CTest tests for PR-0032; reran the
+  affected reporter tests after output-stream failure detection was added.
+- Passed all seven PR-0032 changed-path tests under ASan/UBSan with leak
+  detection disabled.
+- A rebuilt no-argument executable completed 1,000,000 digits with
+  `terms=70517/70517`, `checkpoints=88/88`, one durable 2,157,009-byte block,
+  a non-empty checkpoint manifest, `pi.txt`, and `pi.txt.verify`.
+- Direct TTY, non-TTY, JSON, resume-only, and `/dev/full` output-failure smoke
+  runs passed; the output failure returned exit status 1.
 - Built all PR-0031 Debug targets and passed all 66 CTest tests.
 - Passed all eight PR-0031 changed-path tests under ASan/UBSan with leak
   detection disabled.
@@ -180,6 +212,9 @@
   verification SHA-256.
 
 ### Fixed
+- Fixed atomic publication of parentless relative destinations such as the
+  default `pi.txt.verify`: directory synchronization now opens the current
+  directory instead of the invalid empty parent path.
 
 - Corrected known-digit verification to compare against the rounded prefix at
   the requested precision instead of incorrectly treating every output as a

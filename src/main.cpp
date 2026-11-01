@@ -21,48 +21,14 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
 #include <unistd.h>
-
-namespace
-{
-
-std::uint64_t plannedCheckpointBlocks(
-    const pi::checkpoint::CheckpointResumePlan& plan,
-    const pi::binary::ParallelSplitOptions& options,
-    std::size_t workerCount,
-    bool enabled
-)
-{
-    if (!enabled)
-    {
-        return 0;
-    }
-
-    std::uint64_t total = plan.acceptedBlocks.size();
-    const std::size_t maximumBlocks = workerCount
-        > std::numeric_limits<std::size_t>::max() / options.tasksPerWorker
-        ? std::numeric_limits<std::size_t>::max()
-        : workerCount * options.tasksPerWorker;
-
-    for (const pi::checkpoint::MissingRange& range : plan.rangesToRecalculate)
-    {
-        const std::uint64_t termCount = range.end - range.start;
-        const std::uint64_t requestedBlocks =
-            1 + (termCount - 1) / options.sequentialCutoff;
-        total += std::min<std::uint64_t>(requestedBlocks, maximumBlocks);
-    }
-    return total;
-}
-
-} // namespace
-
 
 
 int main(int argc, char* argv[])
@@ -120,11 +86,11 @@ int main(int argc, char* argv[])
         pi::progress::ProgressTracker tracker({
             precision.requestedDigits,
             precision.termCount,
-            plannedCheckpointBlocks(
+            pi::progress::planCheckpointBlocks(
                 resumePlan,
                 splitOptions,
                 workerCount,
-                config.checkpoint_enabled || config.resume_enabled
+                config.checkpoint_enabled
             )
         });
         if (config.resume_enabled)
@@ -374,7 +340,7 @@ int main(int argc, char* argv[])
             }
             if (runner)
             {
-                runner->join();
+                runner->joinChecked();
             }
 
             std::cout << "Calculated " << result->precision.requestedDigits

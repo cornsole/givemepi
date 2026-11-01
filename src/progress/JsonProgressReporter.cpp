@@ -207,6 +207,10 @@ void JsonProgressReporter::report(
 
     output_ << record.str();
     output_.flush();
+    if (!output_)
+    {
+        throw std::runtime_error("Failed to write JSON progress output");
+    }
 }
 
 } // namespace pi::progress

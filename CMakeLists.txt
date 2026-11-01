@@ -1541,7 +1541,7 @@ set_tests_properties(
     CheckpointResumeCliTest
     PROPERTIES
         LABELS "integration"
-        TIMEOUT 600
+        TIMEOUT 900
 )
 
 add_test(

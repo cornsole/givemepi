@@ -79,6 +79,16 @@ void ProgressReportingRunner::join()
 }
 
 
+void ProgressReportingRunner::joinChecked()
+{
+    join();
+    if (const std::optional<std::string> failure = lastFailure())
+    {
+        throw std::runtime_error("Progress reporter failed: " + *failure);
+    }
+}
+
+
 void ProgressReportingRunner::stop()
 {
     requestStop();

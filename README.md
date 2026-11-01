@@ -188,7 +188,7 @@ telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 4입니�
 | Chudnovsky finalization | 완료 | precision plan, integer sqrt/division, rounded decimal API |
 | Storage·out-of-core | 완료 | 동기·비동기 spill/reload, concurrent I/O, LZ4 |
 | Checkpoint·무결성 | 완료 | interval-gated merge frontier, atomic manifest, verified resume, quarantine, 자동 CLI 중단·resume 회귀 테스트 |
-| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v4, live checkpoint telemetry, resume 복구 |
+| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v4, live checkpoint telemetry, 기본·resume 완료 증거 |
 | 최종 결과 검증 | 완료 | streaming hash, BBP spot check, known digits, manifest |
 
 세부 구현 순서는 [Implementation Plan](docs/IMPLEMENTATION_PLAN.md), 완료 상태는
@@ -229,6 +229,11 @@ cmake --build build --parallel
 ```text
 build/pi-engine
 ```
+
+소스를 갱신(`git pull` 등)한 뒤에는 이전 실행 파일이 남아 있을 수 있으므로
+`cmake --build build --parallel`로 다시 빌드한 다음 `build/pi-engine`을
+실행합니다. 오래된 실행 파일로는 최신 progress·checkpoint 동작을 확인할 수
+없습니다.
 
 실행 파일은 π를 계산해 결과 파일에 기록하고, 기본 설정에서는 결과 검증과
 verification manifest 저장까지 수행합니다. `--threads 0`은 사용 가능한 hardware
@@ -274,6 +279,18 @@ cp config.toml.example config.toml
 다시 실행하면 검증을 통과한 durable block만 자동 재사용하고, 손상되거나
 manifest에 없는 block은 quarantine한 뒤 해당 범위를 다시 계산합니다.
 
+상대 경로(`checkpoints`, `checkpoint-quarantine`, `storage`, `pi.txt` 등)는
+실행 파일 위치나 소스 트리가 아니라 **프로세스의 현재 작업 디렉터리** 기준으로
+해석됩니다. 예를 들어 `/data/run`에서 `/path/to/repo/build/pi-engine`을 실행하면
+checkpoint는 `/data/run/checkpoints/`에 기록됩니다. 다른 디렉터리에서 다시
+실행하면 기존 checkpoint를 찾지 못하므로 같은 작업 디렉터리에서 resume하거나
+절대 경로를 지정합니다.
+
+PR-0032부터 checkpoint 작업 계획은 checkpoint writer가 있을 때만
+재계산 블록을 포함합니다. `--no-checkpoint --resume`(resume 전용)은 검증을 통과한
+기존 블록만 완료 작업으로 표시하고, 재사용할 블록이 없으면 `checkpoints=0/0`을
+보고하며 checkpoint 파일을 만들지 않습니다.
+
 ```bash
 ./build/pi-engine --checkpoint --resume \
   --checkpoint-directory checkpoints \
@@ -293,6 +310,20 @@ manifest에 없는 block은 quarantine한 뒤 해당 범위를 다시 계산합�
 
 진행 상태는 기본으로 500 ms마다 text 형식으로 **stderr**에 출력됩니다. JSON
 형식은 한 줄당 하나의 schema version 4 record인 JSONL입니다.
+
+PR-0032 기준 동작은 다음과 같습니다.
+
+- 대화형 터미널(TTY) stderr에서는 한 줄을 갱신하는 compact record를 출력하며,
+  log 전용 storage·I/O 진단(`storage=`, `io=`)은 생략합니다.
+- stderr가 파일이나 pipe이면(non-TTY) 시각이 붙은 줄 단위 전체 record를
+  출력하며 storage·I/O 진단을 모두 포함합니다. JSON schema version 4 record도
+  모든 field를 유지합니다.
+- 기본 설정으로 성공한 실행의 마지막 record는 `phase=completed`, `terms=N/N`,
+  0이 아닌 완료 checkpoint 작업(`checkpoints=C/C`), `durable=` 블록 수와
+  `checkpoint_bytes`를 보여 주며, 작업 디렉터리의 `checkpoints/`에 manifest와
+  root checkpoint block이 남습니다.
+- progress reporter가 실패하면 CLI는 오래된 progress를 둔 채 성공으로 끝내지
+  않고 실패 상태로 종료합니다.
 
 ```bash
 ./build/pi-engine --progress --progress-interval 500 --progress-format json \

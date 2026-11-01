@@ -396,6 +396,10 @@
 
 [x] PR-0031 Verification Gate (complete Debug build, 66/66 CTest, 8/8 changed-path ASan/UBSan tests)
 
+[x] Default No-Config Run Leaves Manifest and Root Checkpoint Block under `checkpoints/` (PR-0032)
+
+[x] Resume-Only Mode Plans No Recalculated Checkpoint Work; Empty Accepted Plan Reports `checkpoints=0/0` and Writes No Files (PR-0032)
+
 [x] CRC
 
 -----------------
@@ -453,6 +457,41 @@
 [x] Resume Progress Reconstruction
 
 [x] Future Reporter Extension Point
+
+[x] Default Text Terminal Completion Shows `phase=completed`, `terms=N/N`, Non-Zero Complete Checkpoint Work, Durable Blocks, and Bytes (PR-0032)
+
+[x] Reporter and Output-Stream Failures Propagated as CLI Failure after Runner Join (PR-0032)
+
+[x] Compact TTY Text Record; Full Non-TTY Text Log and JSON Schema v4 Unchanged (PR-0032)
+
+[x] PR-0032 Verification Gate (7/7 changed-path ASan/UBSan tests, complete Debug build, 66/66 CTest)
+
+-----------------
+
+## PR-0032 Runtime Integration Checklist
+
+Run from an empty working directory with no `config.toml`, using an executable
+rebuilt from the current source (`cmake --build build --parallel`, then
+`/path/to/repo/build/pi-engine`). Relative paths resolve against this working
+directory.
+
+[x] No-argument run exits with status 0 and writes `pi.txt` and parentless relative `pi.txt.verify`
+
+[x] Final stderr text record shows `phase=completed` and `terms=N/N` with equal values
+
+[x] Final record shows `checkpoints=C/C` with `C > 0`, `durable=D` with `D > 0`, and non-zero `checkpoint_bytes`
+
+[x] `checkpoints/` contains a non-empty manifest and the root checkpoint block it references; `checkpoint_bytes` equals the referenced block file sizes
+
+[x] On a TTY the progress line is compact (no `storage=`/`io=` diagnostics) and the final line ends with a newline
+
+[x] With stderr redirected to a file, every record is a timestamped line containing `storage=` and `io=` diagnostics
+
+[x] `--progress-format json` emits JSONL records with `schema_version` 4
+
+[x] `--no-checkpoint --resume` in a fresh directory reports `checkpoints=0/0` and creates no checkpoint files
+
+[x] A progress reporter or output-stream failure (verified with stderr redirected to `/dev/full`) makes the CLI exit non-zero instead of reporting success
 
 -----------------
 

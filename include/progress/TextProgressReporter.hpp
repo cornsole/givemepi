@@ -37,8 +37,11 @@ public:
 
     /// Formats and emits one human-readable progress record.
     ///
-    /// Terminal mode replaces the current line and closes it on terminal
-    /// states. Log mode emits one UTC-timestamped newline-delimited record.
+    /// Terminal mode redraws one compact line (phase, terms, progress, eta,
+    /// checkpoints, durable, and any failure) so in-place updates do not wrap,
+    /// and closes it on terminal states. Log mode emits one UTC-timestamped
+    /// newline-delimited record with the full field set, including speed,
+    /// tasks, memory, checkpoint bytes, storage, I/O, merge, and ranges.
     /// Time and memory complexity: O(n) in the rendered record length.
     void report(
         const ProgressSnapshot& snapshot,

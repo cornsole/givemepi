@@ -117,6 +117,23 @@ public:
     }
 };
 
+
+class TerminalFailingReporter final : public pi::progress::IProgressReporter
+{
+public:
+    void report(
+        const pi::progress::ProgressSnapshot& snapshot,
+        const pi::progress::ProgressMetrics&
+    ) override
+    {
+        if (snapshot.terminalState()
+            != pi::progress::ProgressTerminalState::running)
+        {
+            throw std::runtime_error("terminal record unavailable");
+        }
+    }
+};
+
 } // namespace
 
 
@@ -171,6 +188,52 @@ int main()
     assert(isolated.failureCount() >= 2);
     assert(isolated.lastFailure()
         == std::optional<std::string>{"reporter unavailable"});
+
+    TerminalFailingReporter terminalFailing;
+    ProgressTracker completedTracker(ProgressWorkPlan{100, 8, 0});
+    assert(completedTracker.transitionTo(ProgressPhase::splitting));
+    ProgressReportingRunner terminalRunner(
+        completedTracker,
+        terminalFailing,
+        5ms
+    );
+    assert(terminalRunner.start());
+    const auto reportDeadline = std::chrono::steady_clock::now() + 1s;
+    while (terminalRunner.reportCount() == 0
+        && std::chrono::steady_clock::now() < reportDeadline)
+    {
+        std::this_thread::yield();
+    }
+    assert(terminalRunner.reportCount() >= 1);
+    assert(completedTracker.addCompletedTerms(8));
+    assert(completedTracker.transitionTo(ProgressPhase::finalizing));
+    assert(completedTracker.transitionTo(ProgressPhase::completed));
+    bool terminalFailureSurfaced = false;
+    try
+    {
+        terminalRunner.joinChecked();
+    }
+    catch (const std::runtime_error& error)
+    {
+        terminalFailureSurfaced = std::string(error.what())
+            == "Progress reporter failed: terminal record unavailable";
+    }
+    assert(terminalFailureSurfaced);
+    assert(!terminalRunner.isRunning());
+    assert(terminalRunner.failureCount() == 1);
+
+    SlowReporter checkedReporter(1ms);
+    ProgressTracker checkedTracker(ProgressWorkPlan{100, 8, 0});
+    assert(checkedTracker.transitionTo(ProgressPhase::splitting));
+    ProgressReportingRunner checked(checkedTracker, checkedReporter, 1s);
+    assert(checked.start());
+    checkedReporter.waitUntilEntered();
+    assert(checkedTracker.addCompletedTerms(8));
+    assert(checkedTracker.transitionTo(ProgressPhase::finalizing));
+    assert(checkedTracker.transitionTo(ProgressPhase::completed));
+    checked.requestStop();
+    checked.joinChecked();
+    assert(checked.failureCount() == 0);
 
     SlowReporter stoppedReporter(1ms);
     ProgressTracker stoppedTracker(ProgressWorkPlan{100, 8, 0});

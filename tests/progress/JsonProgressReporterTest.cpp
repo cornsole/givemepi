@@ -120,6 +120,24 @@ int main()
     assert(second.find("\"terms_per_second\":null")
         != std::string::npos);
     assert(second.find('\n') == second.size() - 1);
+    std::ostringstream failedOutput;
+    failedOutput.setstate(std::ios::badbit);
+    JsonProgressReporter failedReporter(
+        failedOutput,
+        [fixedTime]() { return fixedTime; }
+    );
+    bool writeFailureReported = false;
+    try
+    {
+        failedReporter.report(ProgressSnapshot(data), metrics);
+    }
+    catch (const std::runtime_error& error)
+    {
+        writeFailureReported = std::string(error.what())
+            == "Failed to write JSON progress output";
+    }
+    assert(writeFailureReported);
+
 
     bool rejectedClock = false;
     try

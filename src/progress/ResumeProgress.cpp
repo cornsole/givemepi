@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 
@@ -17,6 +18,49 @@ struct AcceptedMetadata
 };
 
 } // namespace
+
+
+std::uint64_t planCheckpointBlocks(
+    const checkpoint::CheckpointResumePlan& plan,
+    const binary::ParallelSplitOptions& options,
+    std::size_t workerCount,
+    bool checkpointWritingEnabled
+)
+{
+    constexpr std::uint64_t maximum =
+        std::numeric_limits<std::uint64_t>::max();
+    std::uint64_t total = plan.acceptedBlocks.size();
+    if (!checkpointWritingEnabled || plan.rangesToRecalculate.empty())
+    {
+        return total;
+    }
+    if (options.sequentialCutoff == 0 || options.tasksPerWorker == 0)
+    {
+        throw std::invalid_argument(
+            "Checkpoint planning requires non-zero split options"
+        );
+    }
+
+    const std::uint64_t workers = workerCount;
+    const std::uint64_t tasksPerWorker = options.tasksPerWorker;
+    const std::uint64_t maximumBlocks = workers > maximum / tasksPerWorker
+        ? maximum
+        : workers * tasksPerWorker;
+    for (const checkpoint::MissingRange& range : plan.rangesToRecalculate)
+    {
+        if (range.end <= range.start)
+        {
+            continue;
+        }
+        const std::uint64_t termCount = range.end - range.start;
+        const std::uint64_t requestedBlocks =
+            1 + (termCount - 1) / options.sequentialCutoff;
+        const std::uint64_t blocks =
+            std::min<std::uint64_t>(requestedBlocks, maximumBlocks);
+        total = blocks > maximum - total ? maximum : total + blocks;
+    }
+    return total;
+}
 
 
 bool ResumeProgressRestorer::restore(

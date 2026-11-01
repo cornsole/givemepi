@@ -5,6 +5,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <stdexcept>
 #include <utility>
 
 
@@ -130,6 +131,93 @@ int main()
     ProgressTracker terminal(ProgressWorkPlan{1'000, 74, 2});
     assert(terminal.markFailed("stopped"));
     assert(!ResumeProgressRestorer::restore(plan, terminal));
+
+    using pi::binary::ParallelSplitOptions;
+    using pi::progress::planCheckpointBlocks;
+
+    CheckpointResumePlan resumeOnlyEmpty;
+    resumeOnlyEmpty.rangesToRecalculate.push_back({0, 74});
+    const std::uint64_t emptyTotal = planCheckpointBlocks(
+        resumeOnlyEmpty,
+        ParallelSplitOptions{32, 4},
+        8,
+        false
+    );
+    assert(emptyTotal == 0);
+    ProgressTracker resumeOnlyEmptyTracker(
+        ProgressWorkPlan{1'000, 74, emptyTotal}
+    );
+    assert(resumeOnlyEmptyTracker.transitionTo(
+        ProgressPhase::validatingCheckpoints));
+    assert(ResumeProgressRestorer::restore(
+        resumeOnlyEmpty,
+        resumeOnlyEmptyTracker
+    ));
+    assert(resumeOnlyEmptyTracker.snapshot().totalCheckpointBlocks() == 0);
+    assert(resumeOnlyEmptyTracker.snapshot().completedCheckpointBlocks() == 0);
+
+    CheckpointResumePlan resumeOnlyAccepted;
+    resumeOnlyAccepted.acceptedBlocks.push_back(
+        accepted(identity, 0, 10, 1, 200)
+    );
+    resumeOnlyAccepted.acceptedBlocks.push_back(
+        accepted(identity, 20, 30, 2, 300)
+    );
+    resumeOnlyAccepted.rangesToRecalculate.push_back({10, 20});
+    resumeOnlyAccepted.rangesToRecalculate.push_back({30, 74});
+    const std::uint64_t acceptedTotal = planCheckpointBlocks(
+        resumeOnlyAccepted,
+        ParallelSplitOptions{4, 2},
+        3,
+        false
+    );
+    assert(acceptedTotal == 2);
+    ProgressTracker resumeOnlyAcceptedTracker(
+        ProgressWorkPlan{1'000, 74, acceptedTotal}
+    );
+    assert(resumeOnlyAcceptedTracker.transitionTo(
+        ProgressPhase::validatingCheckpoints));
+    assert(ResumeProgressRestorer::restore(
+        resumeOnlyAccepted,
+        resumeOnlyAcceptedTracker
+    ));
+    assert(resumeOnlyAcceptedTracker.snapshot().completedCheckpointBlocks()
+        == 2);
+    assert(resumeOnlyAcceptedTracker.snapshot().durableCheckpointBlocks()
+        == 2);
+
+    // [10,20) needs 3 leaves at cutoff 4; [30,74) needs 11, capped at 3 * 2.
+    assert(planCheckpointBlocks(
+        resumeOnlyAccepted,
+        ParallelSplitOptions{4, 2},
+        3,
+        true
+    ) == 2 + 3 + 6);
+
+    CheckpointResumePlan fresh;
+    fresh.rangesToRecalculate.push_back({0, 74});
+    assert(planCheckpointBlocks(fresh, ParallelSplitOptions{32, 4}, 8, true)
+        == 3);
+    assert(planCheckpointBlocks(fresh, ParallelSplitOptions{32, 4}, 8, false)
+        == 0);
+
+    assert(planCheckpointBlocks(fresh, ParallelSplitOptions{0, 4}, 8, false)
+        == 0);
+    bool rejectedOptions = false;
+    try
+    {
+        static_cast<void>(planCheckpointBlocks(
+            fresh,
+            ParallelSplitOptions{0, 4},
+            8,
+            true
+        ));
+    }
+    catch (const std::invalid_argument&)
+    {
+        rejectedOptions = true;
+    }
+    assert(rejectedOptions);
 
     return 0;
 }

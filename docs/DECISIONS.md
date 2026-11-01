@@ -2521,3 +2521,73 @@ JSON consumers must accept schema version 4, which adds
 `checkpoint_blocks.durable` and `last_committed_checkpoint`. Text output
 replaces `last_checkpoint=` with `last_validated=` and adds `durable=` and
 `last_committed=`, so a fresh commit is never printed as validated.
+
+---
+
+## ADR-0054
+
+Date
+
+2026-11-01
+
+Status
+
+Accepted
+
+Title
+
+Prove Default CLI Completion, Plan Checkpoint Work Only with a Writer, and Propagate Reporter Failures
+
+Decision
+
+PR-0032 hardens the default text-mode CLI without changing persisted or
+machine-readable formats:
+
+- Default completion evidence: a successful run with no `config.toml` and no
+  arguments must end with a terminal text record showing `phase=completed`,
+  `terms=N/N`, non-zero complete checkpoint work, and non-zero durable blocks
+  and `checkpoint_bytes` that match the block files referenced by the
+  published manifest in the default `checkpoints/` directory.
+- Checkpoint work planning: recalculated checkpoint blocks are added to the
+  checkpoint work total only when checkpoint writing is enabled. Resume-only
+  mode (`checkpoint=false`, `resume=true`) still counts verified accepted
+  blocks as completed work but plans no recalculated work because no writer
+  exists. With no accepted blocks it reports `checkpoints=0/0` and creates no
+  checkpoint files.
+- Reporter failure propagation: after joining the progress reporting runner,
+  the CLI inspects its failure state and returns a CLI failure instead of a
+  successful result behind stale progress.
+- Output failure detection: text and JSON reporters check the stream after
+  flushing, and the CLI converts a failed write into a non-zero result through
+  the runner failure path.
+- Relative atomic publication: a parentless output such as `pi.txt.verify`
+  synchronizes the current working directory rather than opening an empty
+  parent path.
+- Output modes: interactive terminal (TTY) text output uses a compact record
+  without the log-only storage and I/O diagnostics. Non-TTY text output stays a
+  newline-delimited, timestamped, complete log record, and JSON output stays
+  the complete schema version 4 record.
+
+Relative checkpoint, quarantine, storage, and output paths are resolved
+against the process working directory, not the executable location or the
+source tree.
+
+Reason
+
+A previous default run could finish successfully while its displayed
+checkpoint plan promised work that no writer would ever perform, or while a
+failed reporter left stale progress on screen. Users judge completion from the
+final progress line and the files left in the working directory, so both must
+be provably consistent with the computation. A single full-width record also
+wraps and becomes unreadable on interactive terminals, while logs and JSON
+consumers need every field.
+
+Consequences
+
+Checkpoint block and manifest format version 1, computation identity,
+checkpoint-before-spill ordering, and the verified-resume trust boundary do
+not change. JSON progress remains schema version 4 with unchanged fields.
+Tools that scrape interactive TTY text must switch to non-TTY text logs or
+JSON for storage and I/O diagnostics. The real-process CLI regression gains a
+no-config default text run and a resume-only/no-writer case. Checkpoint
+cadence inside an unfinished Binary Splitting leaf stage remains out of scope.

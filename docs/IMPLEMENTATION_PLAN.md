@@ -29,6 +29,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0029 | Measurement and bottleneck optimization | Complete |
 | PR-0030 | Durable checkpoint emission and verified resume | Complete |
 | PR-0031 | Live checkpoint telemetry and CLI resume regression | Complete |
+| PR-0032 | Default CLI progress and checkpoint hardening | Complete |
 
 ---
 
@@ -1235,3 +1236,97 @@ work, the current durable frontier, resume-validated evidence, and freshly
 committed ranges. Keep progress JSON schema version 4, checkpoint/manifest
 format version 1, and the verified-resume trust boundary stable. Select the
 next PR boundary with the user before implementation.
+
+---
+
+## PR-0032: Default CLI Progress and Checkpoint Hardening
+
+### Goal
+
+Make the default text-mode CLI prove and display completed term and checkpoint
+state reliably, and remove the misleading checkpoint work plan when resume is
+enabled but checkpoint writing is disabled.
+
+### Architecture Contract
+
+A successful default run must finish with a terminal progress snapshot whose
+completed terms equal total terms, whose checkpoint work is non-zero and
+complete, and whose durable checkpoint count and bytes match files referenced
+by the published manifest.
+
+Resume-only mode (`checkpoint=false`, `resume=true`) may report verified
+accepted checkpoint blocks, but it must not plan new checkpoint work because
+no writer exists. With no accepted blocks its checkpoint work is `0/0`.
+
+Interactive text output uses a compact terminal record that does not include
+the full log-only storage and I/O diagnostics. Non-TTY text logs remain
+newline-delimited and complete. Reporter failures are observable by the CLI
+and must not be silently converted into a successful run with stale progress.
+
+Atomic publication of a parentless relative output such as the default
+`pi.txt.verify` synchronizes the current working directory; it must not try to
+open an empty parent path.
+
+Checkpoint and manifest format version 1, JSON progress schema version 4,
+checkpoint-before-spill ordering, and the verified-resume trust boundary do
+not change.
+
+### Work Sequence
+
+1. Plan recalculated checkpoint blocks only when checkpoint writing is enabled.
+2. Preserve accepted resume blocks as completed work in resume-only mode.
+3. Make text and JSON output-stream failures observable to the reporter runner.
+4. Make the CLI reject a failed progress reporter after joining it.
+5. Publish parentless relative outputs by synchronizing the current directory.
+6. Add a compact TTY text record while preserving full text log records.
+7. Extend the real-process CLI regression with a no-config default text run.
+8. Assert final `terms=N/N`, completed checkpoint work, durable bytes, manifest,
+   root checkpoint files, and the default relative verification manifest.
+9. Add a resume-only/no-writer case that requires `checkpoints=0/0`.
+10. Record the runtime integration checklist and verification evidence.
+
+### Acceptance
+
+- A no-config, no-argument run exits successfully with final text progress
+  `phase=completed`, `terms=N/N`, non-zero completed checkpoint work, durable
+  blocks, and bytes.
+- Its working directory contains a non-empty manifest and root checkpoint
+  block under the default `checkpoints/` directory.
+- `--no-checkpoint --resume` with no accepted blocks reports
+  `checkpoints=0/0` and creates no checkpoint files.
+- Reporter failure is returned as a CLI failure instead of leaving stale
+  progress behind a successful result.
+- Interactive terminal records are compact; full storage and I/O diagnostics
+  remain available in text log and JSON formats.
+- Parentless relative outputs such as the default `pi.txt.verify` publish
+  atomically and synchronize their actual current-directory parent.
+- Changed-path sanitizer tests, a complete Debug build, and the full CTest
+  suite pass.
+
+### Out of Scope
+
+- checkpoint cadence inside an unfinished Binary Splitting leaf stage;
+- checkpoint or manifest format changes;
+- JSON progress schema changes;
+- binary version metadata or installation packaging;
+- benchmark, release workflow, NUMA, Huge Pages, SIMD, ASM, or FFT work.
+
+### Verification
+
+- Built all Debug targets and passed all 66 CTest tests. The affected reporter
+  tests passed again after output-stream failure detection was added.
+- All seven changed-path tests passed under ASan/UBSan with leak detection
+  disabled.
+- A rebuilt no-argument executable completed 1,000,000 digits with
+  `terms=70517/70517`, `checkpoints=88/88`, one durable 2,157,009-byte
+  checkpoint block, a non-empty manifest, `pi.txt`, and `pi.txt.verify`.
+- Direct TTY, non-TTY, JSON schema v4, resume-only `checkpoints=0/0`, and
+  `/dev/full` reporter-failure smoke runs passed.
+
+### Next Contributor TODO
+
+PR-0032 is complete. Preserve the working-directory-relative path contract,
+parentless atomic publication, writer-aware checkpoint planning, terminal
+reporter failure propagation, compact TTY record, complete text logs, and JSON
+schema version 4. Select the next PR boundary with the user before
+implementation.

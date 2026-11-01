@@ -101,27 +101,25 @@ void writeRange(
 }
 
 
-std::string render(
+void writeProgress(
+    std::ostream& output,
     const ProgressSnapshot& snapshot,
     const ProgressMetrics& metrics
 )
 {
-    std::ostringstream output;
-    output.imbue(std::locale::classic());
     output << "phase=" << toString(snapshot.phase())
            << " terms=" << snapshot.completedTerms()
            << '/' << snapshot.totalTerms();
-
     if (metrics.completionRatio.has_value())
     {
         output << " progress=" << std::fixed << std::setprecision(2)
                << (*metrics.completionRatio * 100.0) << '%';
     }
-    if (metrics.termsPerSecond.has_value())
-    {
-        output << " speed=" << std::fixed << std::setprecision(2)
-               << *metrics.termsPerSecond << " terms/s";
-    }
+}
+
+
+void writeEta(std::ostream& output, const ProgressMetrics& metrics)
+{
     output << " eta=";
     if (metrics.estimatedTimeRemaining.has_value())
     {
@@ -131,14 +129,68 @@ std::string render(
     {
         output << "unknown";
     }
+}
+
+
+void writeCheckpointCounts(
+    std::ostream& output,
+    const ProgressSnapshot& snapshot
+)
+{
+    output << " checkpoints=" << snapshot.completedCheckpointBlocks()
+           << '/' << snapshot.totalCheckpointBlocks()
+           << " durable=" << snapshot.durableCheckpointBlocks();
+}
+
+
+void writeFailure(std::ostream& output, const ProgressSnapshot& snapshot)
+{
+    if (snapshot.failureDetail().has_value())
+    {
+        output << " failure=\""
+               << singleLine(*snapshot.failureDetail()) << '"';
+    }
+}
+
+
+/// Short single-row record for in-place terminal redraws. Excludes speed,
+/// task, memory, storage, I/O, merge, and range detail so routine updates
+/// stay well inside common terminal widths and `\r` redraws do not wrap.
+std::string renderCompact(
+    const ProgressSnapshot& snapshot,
+    const ProgressMetrics& metrics
+)
+{
+    std::ostringstream output;
+    output.imbue(std::locale::classic());
+    writeProgress(output, snapshot, metrics);
+    writeEta(output, metrics);
+    writeCheckpointCounts(output, snapshot);
+    writeFailure(output, snapshot);
+    return output.str();
+}
+
+
+std::string renderFull(
+    const ProgressSnapshot& snapshot,
+    const ProgressMetrics& metrics
+)
+{
+    std::ostringstream output;
+    output.imbue(std::locale::classic());
+    writeProgress(output, snapshot, metrics);
+    if (metrics.termsPerSecond.has_value())
+    {
+        output << " speed=" << std::fixed << std::setprecision(2)
+               << *metrics.termsPerSecond << " terms/s";
+    }
+    writeEta(output, metrics);
 
     output << " tasks=" << snapshot.activeTasks() << " active/"
            << snapshot.queuedTasks() << " queued"
-           << " memory=" << byteCount(snapshot.memoryBytes())
-           << " checkpoints=" << snapshot.completedCheckpointBlocks()
-           << '/' << snapshot.totalCheckpointBlocks()
-           << " durable=" << snapshot.durableCheckpointBlocks()
-           << " checkpoint_bytes=" << byteCount(snapshot.checkpointBytes());
+           << " memory=" << byteCount(snapshot.memoryBytes());
+    writeCheckpointCounts(output, snapshot);
+    output << " checkpoint_bytes=" << byteCount(snapshot.checkpointBytes());
     output << " storage=" << byteCount(snapshot.storageResidentBytes())
            << " resident/" << byteCount(snapshot.storageStoredBytes())
            << " stored/" << snapshot.storageChunkCount() << " chunks";
@@ -157,11 +209,7 @@ std::string render(
     }
     writeRange(output, "last_validated", snapshot.lastValidatedCheckpoint());
     writeRange(output, "last_committed", snapshot.lastCommittedCheckpoint());
-    if (snapshot.failureDetail().has_value())
-    {
-        output << " failure=\""
-               << singleLine(*snapshot.failureDetail()) << '"';
-    }
+    writeFailure(output, snapshot);
     return output.str();
 }
 
@@ -189,10 +237,9 @@ void TextProgressReporter::report(
     const ProgressMetrics& metrics
 )
 {
-    const std::string record = render(snapshot, metrics);
     if (mode_ == TextOutputMode::terminal)
     {
-        output_ << '\r' << record << "\x1b[K";
+        output_ << '\r' << renderCompact(snapshot, metrics) << "\x1b[K";
         if (snapshot.terminalState() != ProgressTerminalState::running)
         {
             output_ << '\n';
@@ -200,9 +247,14 @@ void TextProgressReporter::report(
     }
     else
     {
-        output_ << '[' << utcTimestamp(now_()) << "] " << record << '\n';
+        output_ << '[' << utcTimestamp(now_()) << "] "
+                << renderFull(snapshot, metrics) << '\n';
     }
     output_.flush();
+    if (!output_)
+    {
+        throw std::runtime_error("Failed to write text progress output");
+    }
 }
 
 } // namespace pi::progress

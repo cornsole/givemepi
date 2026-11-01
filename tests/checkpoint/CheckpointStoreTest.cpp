@@ -201,6 +201,32 @@ int main()
         }
     }
 
+    const std::filesystem::path relativePath =
+        "givemepi-relative-atomic-" + std::to_string(::getpid());
+    try
+    {
+        AtomicFileCommit::write(
+            relativePath,
+            std::span<const std::uint8_t>(
+                reinterpret_cast<const std::uint8_t*>(original.data()),
+                original.size()
+            )
+        );
+        if (readText(relativePath) != original)
+        {
+            std::filesystem::remove(relativePath);
+            std::cerr << "Relative atomic destination commit failed\n";
+            return 1;
+        }
+        std::filesystem::remove(relativePath);
+    }
+    catch (...)
+    {
+        std::error_code ignored;
+        std::filesystem::remove(relativePath, ignored);
+        throw;
+    }
+
     std::cout << "CheckpointStore OK\n";
     return 0;
 }

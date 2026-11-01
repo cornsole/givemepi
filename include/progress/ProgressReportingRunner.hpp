@@ -55,6 +55,14 @@ public:
     /// Joins the current run, waiting for natural terminal state or a stop.
     void join();
 
+    /// Joins the current run, then surfaces any isolated reporter failure.
+    ///
+    /// Use on success paths where losing a progress record, including the
+    /// terminal snapshot, must fail the caller. Throws std::runtime_error
+    /// carrying the latest recorded failure detail. Time complexity: O(n)
+    /// for a failure message of length n after the join.
+    void joinChecked();
+
     /// Requests shutdown and joins the current run.
     void stop();
 

@@ -196,8 +196,12 @@ void AtomicFileCommit::write(
         renamed = true;
         if (observer != nullptr) observer(AtomicCommitStage::renamed);
 
+        const std::filesystem::path directoryPath =
+            destination.has_parent_path()
+                ? destination.parent_path()
+                : std::filesystem::path(".");
         FileDescriptor directory(::open(
-            destination.parent_path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC
+            directoryPath.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC
         ));
 
         if (directory.get() < 0)
