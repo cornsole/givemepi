@@ -33,11 +33,41 @@
 
 int main(int argc, char* argv[])
 {
+    constexpr int exitFailure = 1;
+    constexpr int exitUsage = 2;
+
+    pi::config::CommandLineOptions options;
+    try
+    {
+        options = pi::config::CommandLine::parse(argc, argv);
+    }
+    catch (const pi::config::CommandLineUsageError& error)
+    {
+        std::cerr << "pi-engine: " << error.what() << '\n'
+                  << "Try 'pi-engine --help' for usage.\n";
+        return exitUsage;
+    }
+    catch (const std::exception& error)
+    {
+        std::cerr << "pi-engine: " << error.what() << '\n';
+        return exitFailure;
+    }
+    if (options.help_requested)
+    {
+        pi::config::CommandLine::writeHelp(std::cout);
+        if (!std::cout.flush())
+        {
+            std::cerr << "pi-engine: cannot write help\n";
+            return exitFailure;
+        }
+        return 0;
+    }
+
     try
     {
         pi::config::Config config =
             pi::config::ConfigLoader::load("config.toml");
-        pi::config::CommandLine::applyOverrides(config, argc, argv);
+        pi::config::CommandLine::applyOverrides(config, options);
 
         const pi::chudnovsky::PrecisionPlan precision =
             pi::chudnovsky::PrecisionPolicy::create(config.digits);
@@ -378,6 +408,6 @@ int main(int argc, char* argv[])
     catch (const std::exception& error)
     {
         std::cerr << "pi-engine: " << error.what() << '\n';
-        return 1;
+        return exitFailure;
     }
 }

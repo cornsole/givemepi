@@ -10,6 +10,8 @@ Phase 0
 
 [x] Config
 
+[x] CLI Help, Unknown Option Rejection, and Usage Exit Status (PR-0033)
+
 [x] CI Automation
 
 ----------------------

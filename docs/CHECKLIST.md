@@ -10,6 +10,18 @@
 
 [x] CLI
 
+[x] `-h`/`--help` Print Grouped Help with Built-in Defaults to stdout and Exit 0 before Loading `config.toml` or Creating Files (PR-0033)
+
+[x] Unknown Options Rejected with `pi-engine: unknown option: <arg>` and `Try 'pi-engine --help' for usage.` on stderr, Exit 2 (PR-0033)
+
+[x] Missing and Malformed CLI Values Are Usage Errors (Exit 2); Configuration, Runtime, and Verification Failures Stay Exit 1 (PR-0033)
+
+[x] CLI Parsing Separated from Override Application (`CommandLine::parse` before `ConfigLoader::load`) (PR-0033)
+
+[x] Parser/Help Unit Test (`CommandLineTest`) and Real-Process CLI Option Regression (`CommandLineCliTest`) Added (PR-0033)
+
+[x] PR-0033 Verification Gate (complete Debug build, 68/68 CTest, 4/4 changed-path ASan/UBSan tests)
+
 [x] Project directory structure
 
 [x] README Algorithm, Architecture Direction, and Current Status

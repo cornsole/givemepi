@@ -177,7 +177,7 @@ telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 4입니�
 
 | 영역 | 상태 | 현재 범위 |
 | --- | --- | --- |
-| 설정과 CLI | 완료 | TOML/default/CLI override, 병렬 계산, 결과 기록과 검증 |
+| 설정과 CLI | 완료 | TOML/default/CLI override, `-h`/`--help`, 알 수 없는 옵션 거부(종료 상태 2), 병렬 계산, 결과 기록과 검증 |
 | Platform | 기반 완료 | CPUID와 AVX/AVX2/AVX-512 기능 탐지 |
 | Memory | 기반 완료 | Arena, pool, alignment, scratch buffer |
 | Scheduler | 완료 | lifecycle, drain, MPMC queue, local routing, work stealing |
@@ -257,20 +257,47 @@ thread 수를 자동 선택합니다.
 `--no-verify`로 최종 검증을 끌 수 있습니다. `--bbp-samples`는 1~32이며 기본값은
 8입니다.
 
+### 도움말과 종료 상태
+
+`-h` 또는 `--help`는 지원하는 옵션을 Calculation, Output, Checkpoint and
+resume, Progress, Out-of-core storage, Final verification, General 그룹으로
+나누어 내장 기본값, 허용 값·단위, 설정 우선순위, 경로 해석 규칙, 예시와 함께
+stdout에 출력하고 종료 상태 0으로 끝납니다. 도움말은 `config.toml`을 읽거나
+검증하지 않으며 계산하지 않고 파일·디렉터리도 만들지 않습니다.
+
+```bash
+./build/pi-engine --help
+```
+
+옵션 값은 항상 별도 인자로 전달합니다(`--digits 1000`, `--digits=1000`은 지원하지
+않음). 같은 옵션을 반복하면 마지막 값이 적용됩니다. 인자는 왼쪽부터 해석하며
+`-h`/`--help`를 만나면 그 뒤 인자는 해석하지 않습니다.
+
+| 종료 상태 | 의미 |
+| --- | --- |
+| 0 | 계산 성공 또는 도움말 출력 |
+| 1 | `config.toml` 오류, 설정 검증 실패(예: `--bbp-samples 33`), 계산·I/O·검증 실패 |
+| 2 | 명령줄 사용 오류: 알 수 없는 옵션, 값 누락, 정수·`text`/`json`으로 해석할 수 없는 값 |
+
+알 수 없는 옵션은 더 이상 무시되지 않습니다. 예를 들어 `--digit` 오타는
+`config.toml`을 읽기 전에 거부되며 stderr에 다음을 출력하고 종료 상태 2로
+끝납니다.
+
+```text
+pi-engine: unknown option: --digit
+Try 'pi-engine --help' for usage.
+```
+
 ### 설정 우선순위
 
 실행 시 현재 작업 디렉터리의 `config.toml`을 읽습니다. 파일이 없으면 내장
-기본값을 사용하고, CLI 옵션은 TOML 값을 덮어씁니다.
+기본값을 사용하고, CLI 옵션은 TOML 값을 덮어씁니다(내장 기본값 → `config.toml`
+→ CLI 옵션 순으로 나중 값이 우선).
 
 ```bash
 cp config.toml.example config.toml
 ./build/pi-engine --digits 1000000
 ```
-
-> [!WARNING]
-> 현재 알 수 없는 CLI 옵션은 오류 없이 무시됩니다. 예를 들어 `--digit` 오타는
-> `--digits`로 처리되지 않고 기본 자릿수로 실행될 수 있으므로 실행 전 옵션명을
-> 확인해야 합니다.
 
 ### Checkpoint와 resume
 
@@ -359,6 +386,11 @@ ctest --test-dir build --output-on-failure
 테스트에는 실제 `pi-engine`을 첫 manifest 게시 뒤 중단하고 같은 identity로
 resume한 다음, 중단 없이 계산한 결과와 decimal 출력 및 verification hash가
 byte 단위로 같은지 비교하는 Linux 전용 CLI 회귀 테스트가 포함됩니다.
+또한 실제 `pi-engine`을 별도 작업 디렉터리에서 실행해 `-h`/`--help`의 동일한
+stdout·종료 상태 0, 잘못된 `config.toml`이 있어도 도움말과 사용 오류가 파일을
+만들지 않는 점, 알 수 없는 옵션·값 누락·잘못된 값의 stderr와 종료 상태 2,
+설정 오류의 종료 상태 1, CLI override가 `config.toml` 값보다 우선하는 점을
+확인하는 Linux 전용 CLI 옵션 회귀 테스트(`CommandLineCliTest`)가 포함됩니다.
 
 Sanitizer 빌드는 다음처럼 구성할 수 있습니다.
 

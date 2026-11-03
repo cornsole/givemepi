@@ -32,16 +32,13 @@ bool throws(Function&& function)
 
 void apply(pi::config::Config& config, std::initializer_list<const char*> values)
 {
-    std::vector<char*> arguments;
-    arguments.reserve(values.size());
-    for (const char* value : values)
-    {
-        arguments.push_back(const_cast<char*>(value));
-    }
+    const std::vector<const char*> arguments(values);
     pi::config::CommandLine::applyOverrides(
         config,
-        static_cast<int>(arguments.size()),
-        arguments.data()
+        pi::config::CommandLine::parse(
+            static_cast<int>(arguments.size()),
+            arguments.data()
+        )
     );
 }
 

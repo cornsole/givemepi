@@ -30,6 +30,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0030 | Durable checkpoint emission and verified resume | Complete |
 | PR-0031 | Live checkpoint telemetry and CLI resume regression | Complete |
 | PR-0032 | Default CLI progress and checkpoint hardening | Complete |
+| PR-0033 | CLI help and usage errors | Complete |
 
 ---
 
@@ -1330,3 +1331,93 @@ parentless atomic publication, writer-aware checkpoint planning, terminal
 reporter failure propagation, compact TTY record, complete text logs, and JSON
 schema version 4. Select the next PR boundary with the user before
 implementation.
+
+---
+
+## PR-0033: CLI Help and Usage Errors
+
+### Goal
+
+Give `pi-engine` a complete `-h`/`--help` and stop silently ignoring unknown
+command-line options, so a typo such as `--digit` can no longer start a
+default-sized calculation.
+
+### Architecture Contract
+
+`CommandLine::parse` reads `argv` left to right into `CommandLineOptions`
+(engaged `std::optional` fields per override) without reading
+`config.toml` or touching the filesystem. `main` parses first:
+
+- `-h` or `--help` stops parsing, writes `CommandLine::writeHelp` to stdout,
+  and exits 0 before configuration loading, validation, calculation, or any
+  file or directory creation.
+- `CommandLineUsageError` (unknown option, missing value, value that is not
+  an unsigned integer of the option's width, or a progress format other than
+  `text`/`json`) prints `pi-engine: <message>` and
+  `Try 'pi-engine --help' for usage.` to stderr and exits 2.
+- Otherwise `ConfigLoader::load("config.toml")` runs, then
+  `CommandLine::applyOverrides(config, options)` applies engaged fields and
+  validates the merged configuration. Configuration, validation, calculation,
+  I/O, and verification failures keep exit status 1.
+
+The help groups exactly the supported options as Calculation, Output,
+Checkpoint and resume, Progress, Out-of-core storage, Final verification, and
+General, and renders built-in defaults from `include/config/Defaults.hpp`,
+accepted values and units, configuration precedence, working-directory path
+resolution, exit status, and examples. No `--version` option is added.
+Calculation, checkpoint, storage, progress, and verification formats do not
+change.
+
+### Work Sequence
+
+1. Split command-line handling into `parse` (syntax, usage errors, help) and
+   `applyOverrides` (merge and validate).
+2. Reject unknown options and parse numeric values strictly with
+   `std::from_chars`, replacing the permissive `std::stoull` path for
+   `--digits` and storage byte sizes.
+3. Render grouped help from the shared defaults.
+4. Parse before loading `config.toml` in `main`; map usage errors to exit 2.
+5. Migrate `ProgressConfigTest` to the new API.
+6. Add `CommandLineTest` for parsing, help content, and help/parser option
+   parity.
+7. Add the real-process `CommandLineCliTest` for help aliases, usage errors,
+   configuration failures, and overrides of `config.toml`.
+8. Update README and canonical documents.
+
+### Acceptance
+
+- `pi-engine -h` and `pi-engine --help` print identical help to stdout, write
+  nothing to stderr, exit 0, and leave a working directory containing an
+  invalid `config.toml` unchanged.
+- An unknown option prints the exact two-line diagnostic to stderr, writes
+  nothing to stdout, exits 2, and creates no files.
+- Missing and malformed option values exit 2; an invalid `config.toml` and
+  merged-configuration range failures such as `--bbp-samples 33` exit 1.
+- CLI options override `config.toml`, and unset options keep its values.
+- The help lists exactly the options accepted by the parser.
+- A complete Debug build, the full CTest suite, and changed-path
+  ASan/UBSan tests pass.
+
+### Out of Scope
+
+- `--version` or build metadata;
+- `--option=value` syntax, short aliases other than `-h`, or abbreviations;
+- CLI switches for `out_of_core`, `compression`, or `huge_pages`;
+- calculation, checkpoint, storage, progress, or verification format changes.
+
+### Verification
+
+- Built all Debug targets and passed all 68 CTest tests, including the
+  real-process `CommandLineCliTest` and existing checkpoint/resume regression.
+- All four changed-path tests passed under ASan/UBSan with leak detection
+  disabled.
+- Direct smoke runs observed 97 help lines on stdout with empty stderr and
+  exit 0, and exact two-line `--digit` diagnostics with empty stdout and exit 2.
+
+### Next Contributor TODO
+
+PR-0033 is complete. Keep `CommandLine::writeHelp` and
+`CommandLine::parse` in step: `CommandLineTest` fails when the help lists an
+option the parser rejects or omits one it accepts. Preserve parse-before-config
+ordering and the 0/1/2 exit-status contract. Select the next PR boundary with
+the user before implementation.

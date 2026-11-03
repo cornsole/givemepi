@@ -559,6 +559,39 @@ target_compile_definitions(progress-config-test
         TOML_HEADER_ONLY=1
 )
 
+add_executable(command-line-test
+    tests/config/CommandLineTest.cpp
+    src/config/Config.cpp
+    src/config/CommandLine.cpp
+    src/storage/StoragePolicy.cpp
+)
+
+add_test(
+    NAME CommandLineTest
+    COMMAND command-line-test
+)
+
+target_include_directories(command-line-test
+    PRIVATE
+        include
+)
+
+add_executable(command-line-cli-test
+    tests/config/CommandLineCliTest.cpp
+)
+
+add_test(
+    NAME CommandLineCliTest
+    COMMAND command-line-cli-test $<TARGET_FILE:pi-engine>
+)
+
+set_tests_properties(
+    CommandLineCliTest
+    PROPERTIES
+        LABELS "integration"
+        TIMEOUT 300
+)
+
 add_executable(progress-state-test
     tests/progress/ProgressStateTest.cpp
     src/progress/ProgressState.cpp

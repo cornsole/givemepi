@@ -2591,3 +2591,66 @@ Tools that scrape interactive TTY text must switch to non-TTY text logs or
 JSON for storage and I/O diagnostics. The real-process CLI regression gains a
 no-config default text run and a resume-only/no-writer case. Checkpoint
 cadence inside an unfinished Binary Splitting leaf stage remains out of scope.
+
+---
+
+## ADR-0055
+
+Date
+
+2026-11-03
+
+Status
+
+Accepted
+
+Title
+
+Parse the Command Line before Configuration, Print Help Early, and Reject Usage Errors with Exit Status 2
+
+Decision
+
+PR-0033 separates command-line syntax from configuration merging:
+
+- `CommandLine::parse(argc, argv)` converts `argv` into
+  `CommandLineOptions`, one `std::optional` per override, without reading
+  `config.toml` or touching the filesystem. Arguments are read left to right,
+  each value is the next separate argument, and a repeated option keeps its
+  last value.
+- `-h` and `--help` stop parsing. `main` writes `CommandLine::writeHelp` to
+  stdout and exits 0 before configuration loading, validation, calculation,
+  and file or directory creation.
+- Unknown options, missing values, values that are not unsigned integers of
+  the option's width, and progress formats other than `text` or `json` throw
+  `CommandLineUsageError`. `main` prints `pi-engine: <message>` and
+  `Try 'pi-engine --help' for usage.` to stderr and exits 2.
+- `CommandLine::applyOverrides(Config&, const CommandLineOptions&)` applies the
+  engaged overrides after `ConfigLoader::load` and runs `validateConfig` on the
+  merged configuration. Range and cross-field rules (for example
+  `--bbp-samples` 1 to 32, or chunk size not above the memory budget) stay in
+  `validateConfig` and exit 1, so each rule has one implementation that
+  covers both `config.toml` and command-line values.
+- The help text is rendered from `include/config/Defaults.hpp`, grouped as
+  Calculation, Output, Checkpoint and resume, Progress, Out-of-core storage,
+  Final verification, and General, and lists exactly the parser's options.
+  A unit test fails when the two diverge. No `--version` option exists.
+
+Reason
+
+Silently ignored options made a typo such as `--digit` start a default-sized
+calculation and create checkpoint, storage, and output files. Parsing before
+loading `config.toml` lets help and usage errors finish without side effects,
+even when `config.toml` is invalid. Exit status 2 lets scripts distinguish an
+invocation mistake from a configuration or computation failure, following the
+common command-line convention.
+
+Consequences
+
+Scripts that passed unsupported options now fail with exit status 2 instead of
+running. `--option=value` syntax remains unsupported and is reported as an
+unknown option. `--digits` and the storage byte sizes reject inputs that
+`std::stoull` used to accept or wrap, such as `-1` or `1e6`. Validation
+failures caused by well-formed command-line values keep exit status 1.
+`out_of_core`, `compression`, and `huge_pages` remain configuration-file-only.
+Calculation, checkpoint, storage, progress, and verification formats do not
+change.

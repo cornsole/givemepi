@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added PR-0033 CLI help: `pi-engine -h` and `pi-engine --help` print grouped
+  help (Calculation, Output, Checkpoint and resume, Progress, Out-of-core
+  storage, Final verification, General) with built-in defaults from
+  `include/config/Defaults.hpp`, accepted values and units, configuration
+  precedence, working-directory path resolution, exit status, and examples to
+  stdout and exit 0 without reading `config.toml` or creating files.
+- Added `CommandLineTest` (parser, help content, help/parser option parity)
+  and the real-process `CommandLineCliTest` (help aliases, usage errors,
+  configuration failures, and CLI overrides of `config.toml`).
+
 - Added PR-0032 default CLI hardening: a successful no-config, no-argument
   text run ends with `phase=completed`, `terms=N/N`, non-zero complete
   checkpoint work, durable blocks, and `checkpoint_bytes`, and leaves a
@@ -151,6 +161,20 @@
 
 ### Changed
 
+- PR-0033: unknown command-line options are rejected instead of ignored. The
+  CLI prints `pi-engine: unknown option: <arg>` and
+  `Try 'pi-engine --help' for usage.` to stderr and exits 2. Missing values and
+  values that are not unsigned integers of the option's width or a supported
+  progress format are also usage errors with exit 2; `config.toml`,
+  merged-configuration validation, calculation, I/O, and verification failures
+  still exit 1 (ADR-0055).
+- PR-0033: `CommandLine::applyOverrides(Config&, argc, argv)` is replaced by
+  `CommandLine::parse(argc, argv)`, which runs before `config.toml` is loaded,
+  and `CommandLine::applyOverrides(Config&, const CommandLineOptions&)`.
+  `--digits` and the storage byte-size options now parse strictly, rejecting
+  inputs such as `-1`, `1e6`, or `12abc` that `std::stoull` used to accept or
+  wrap.
+
 - PR-0032: recalculated checkpoint work is planned only when checkpoint writing
   is enabled. Resume-only mode (`--no-checkpoint --resume`) keeps verified
   accepted blocks as completed work, and with no accepted blocks reports
@@ -187,6 +211,12 @@
 
 ### Verification
 
+- Built all PR-0033 Debug targets and passed all 68 CTest tests.
+- Passed all four PR-0033 changed-path tests under ASan/UBSan with leak
+  detection disabled.
+- Direct smoke runs printed 97 help lines to stdout with empty stderr and exit
+  0, and rejected `--digit` with the exact two-line usage diagnostic, empty
+  stdout, and exit 2.
 - Built all Debug targets and passed all 66 CTest tests for PR-0032; reran the
   affected reporter tests after output-stream failure detection was added.
 - Passed all seven PR-0032 changed-path tests under ASan/UBSan with leak
