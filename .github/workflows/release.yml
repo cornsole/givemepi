@@ -65,6 +65,7 @@ jobs:
     env:
       VERSION: ${{ needs.verify-version.outputs.version }}
       TOMLPP_REPOSITORY: https://github.com/marzer/tomlplusplus.git
+      BUILD_JOBS: 2
 
     steps:
       - name: Checkout
@@ -106,7 +107,7 @@ jobs:
 
       - name: Build from checkout
         run: |
-          cmake --build "${RUNNER_TEMP}/build-checkout" --parallel
+          cmake --build "${RUNNER_TEMP}/build-checkout" --parallel "${BUILD_JOBS}"
 
       - name: Configure Debug test build from checkout
         run: |
@@ -114,11 +115,11 @@ jobs:
 
       - name: Build Debug tests from checkout
         run: |
-          cmake --build "${RUNNER_TEMP}/test-checkout" --parallel
+          cmake --build "${RUNNER_TEMP}/test-checkout" --parallel "${BUILD_JOBS}"
 
       - name: Test Debug build from checkout
         run: |
-          ctest --test-dir "${RUNNER_TEMP}/test-checkout" --output-on-failure
+          ctest --test-dir "${RUNNER_TEMP}/test-checkout" --parallel "${BUILD_JOBS}" --output-on-failure
 
       - name: Create source archive
         run: |
@@ -184,7 +185,7 @@ jobs:
 
       - name: Build from extracted archive
         run: |
-          cmake --build "${RUNNER_TEMP}/build-extracted" --parallel
+          cmake --build "${RUNNER_TEMP}/build-extracted" --parallel "${BUILD_JOBS}"
 
       - name: Configure Debug test build from extracted archive
         run: |
@@ -193,11 +194,11 @@ jobs:
 
       - name: Build Debug tests from extracted archive
         run: |
-          cmake --build "${RUNNER_TEMP}/test-extracted" --parallel
+          cmake --build "${RUNNER_TEMP}/test-extracted" --parallel "${BUILD_JOBS}"
 
       - name: Test Debug build from extracted archive
         run: |
-          ctest --test-dir "${RUNNER_TEMP}/test-extracted" --output-on-failure
+          ctest --test-dir "${RUNNER_TEMP}/test-extracted" --parallel "${BUILD_JOBS}" --output-on-failure
 
       - name: Extract release notes from changelog
         run: |
