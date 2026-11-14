@@ -2755,3 +2755,64 @@ optimization work starts. Raw results remain available as workflow artifacts,
 but performance acceptance still requires controlled local or dedicated
 hardware measurements. Release packaging, scheduled runs, pull-request gates,
 and performance thresholds remain separate future decisions.
+
+---
+
+## ADR-0058
+
+Date
+
+2026-11-15
+
+Status
+
+Accepted
+
+Title
+
+Cut Changelog Versions at Release and Publish Source-Only Tagged Releases
+
+Decision
+
+PR-0036 supersedes ADR-0010's requirement for a version heading per pull
+request. Pull-request changes accumulate under one top-level `[Unreleased]`
+section. A release moves those entries under
+`## [<semantic-version>] - <release-PR>` and restores an empty
+`[Unreleased]` section.
+
+The first release under this policy is `0.13.0`, following the existing
+`0.12.0` changelog history. A release tag must be exactly `v0.13.0`, and its
+version must match both `project(PiEngine VERSION ...)` and the changelog
+heading before any build or publication begins.
+
+The automated release contains a prefixed archive of tracked source files and
+`SHA256SUMS`. The tagged checkout and an independently extracted archive both
+must build in Release mode, and separate Debug builds must pass the complete
+CTest suite. Workflow permissions default to `contents: read`; only the
+publication job receives `contents: write`.
+
+Reason
+
+The repository accumulated multiple pull requests under `[Unreleased]`, so
+ADR-0010 no longer described actual practice. Release-time version cuts keep
+one authoritative pending section while preserving PR identifiers in the
+entries.
+
+The current executable is built with `-march=native`, links system GMP and LZ4
+libraries dynamically, and has no install or packaging contract. Publishing
+that binary as portable would risk illegal instructions or unavailable runtime
+dependencies. Tracked source, vendored toml++, licenses, configuration example,
+and documentation form an honest portable release boundary.
+
+The current tests use C `assert` for expectations, so `NDEBUG` removes their
+checks in a Release build and can also remove calls with side effects. Until
+that test debt is removed, release verification compiles the production
+configuration in Release mode and executes CTest from a separate Debug build.
+
+Consequences
+
+Tags, CMake project versions, and changelog release headings cannot diverge.
+Release notes come from the matching changelog section. Prebuilt binaries,
+`--version`, install rules, CPack, signing, and multi-platform packages require
+separate decisions. Pull requests continue to update `[Unreleased]` without
+allocating a new semantic version.

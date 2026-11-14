@@ -421,6 +421,25 @@ cmake --build build-benchmark --parallel
 ./build-benchmark/final-verification-benchmark --quick
 ```
 
+### Source release
+
+`v0.13.0`부터 release workflow는 CMake project version, tag, changelog
+version이 정확히 일치하는지 확인합니다. Tagged source를 Release로 build하고
+별도 Debug build에서 전체 CTest를 실행한 뒤 `givemepi-<version>.tar.gz`와
+SHA-256을 만듭니다. 압축을 푼 별도 디렉터리에서도 같은 검증을 반복합니다.
+
+Release asset은 source archive와 `SHA256SUMS`뿐입니다. 현재 실행 파일은
+`-march=native`로 빌드되고 system GMP·LZ4에 동적 링크되므로 portable binary로
+배포하지 않습니다. Repository의 toml++ 경로는 `.gitmodules` 없는 pinned
+gitlink이므로 release workflow가 기록된 commit을 정확히 가져와 source archive
+안에 포함합니다.
+
+다운로드 후 다음처럼 무결성을 확인합니다.
+
+```bash
+sha256sum --check SHA256SUMS
+```
+
 Sanitizer 빌드는 다음처럼 구성할 수 있습니다.
 
 ```bash

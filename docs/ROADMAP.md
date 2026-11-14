@@ -14,6 +14,8 @@ Phase 0
 
 [x] CI Automation
 
+[x] Tag-Gated Source Release Workflow (PR-0036)
+
 ----------------------
 
 Phase 1

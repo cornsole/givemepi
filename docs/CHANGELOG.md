@@ -4,6 +4,22 @@
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.13.0] - PR-0036
+
+### Added
+
+- Added PR-0036 tag-gated source release automation with version and changelog
+  gates, production Release builds, separate Debug CTest verification, source
+  archive packaging, SHA-256 verification, clean extracted-archive rebuild,
+  and narrowly scoped GitHub release publication.
+- Added a self-contained source archive that replaces the repository's
+  uninitialized toml++ gitlink with the exact pinned upstream commit and
+  includes both project and dependency licenses.
+
 - Added PR-0035 manually dispatched benchmark workflow: a Release build with
   `ENABLE_BENCHMARKS=ON` builds and runs all five existing benchmark
   executables with bounded workloads and uploads their raw output as one
@@ -102,6 +118,60 @@
   integration boundary.
 
 
+- Wired storage directory, memory budget, target chunk size, compression, and
+  concurrent I/O settings through TOML/CLI configuration into `StoragePolicy`.
+- Extended progress snapshots and reporters with resident storage bytes,
+  durable stored bytes, and indexed chunk count.
+- Added a configurable in-memory versus forced out-of-core merge benchmark
+  reporting elapsed time, peak RSS, spill/reload counts, and spilled bytes.
+- Defined the PR-0026 stabilization boundary: synchronous spill/reload and
+  deterministic memory behavior remain in this PR; asynchronous writing,
+  merge wait/backpressure, concurrent I/O, compression optimization, and
+  NUMA/Huge Pages work are explicitly deferred to PR-0027/PR-0028.
+- Wired validated runtime storage configuration into the production calculator
+  path, including StorageManager, StorageMergeCoordinator, and ProgressTracker
+  injection while preserving the disabled out-of-core path.
+- Added a bounded asynchronous chunk writer with worker lifecycle tracking,
+  durable completion handles, queued cancellation, shutdown drain/cancel
+  modes, and serialized StorageManager publication.
+- Extended NodeLifecycle to consume asynchronous stored/failed/cancelled
+  completions while preserving resident payload ownership until durability.
+- Connected the merge coordinator to the bounded writer: spill submissions
+  wait for queue capacity, payloads remain resident until all durable handles
+  complete, and async failures restore the lifecycle to resident.
+- Added a bounded asynchronous chunk reader with queued/loading/loaded/
+  failed/cancelled handles and serialized StorageManager reload access.
+- Connected asynchronous reload to merge preparation: stored nodes are queued,
+  awaited, decoded through the canonical BinaryNode/Chunk adapter, and only
+  then returned to the resident lifecycle.
+- Extended progress snapshots and text/JSON output with asynchronous storage I/O
+  queue, active, completed, and failed counters for writes and reads.
+- Added failure and shutdown coverage for duplicate durable writes, missing
+  reload identities, terminal handle states, and post-shutdown submission
+  rejection.
+- Added an async/sync out-of-core merge benchmark mode. On the current runner,
+  1,000,000 digits under a forced 1 MiB budget completed in 0.512 s sync and
+  0.544 s async, with 15 spills and 15 reloads in both modes. The async run
+  used 27 MiB peak RSS versus 23 MiB sync; this is a baseline, not a target.
+- Stabilized PR-0027 with a clean 64-test regression run and separated
+  concurrent I/O, compression optimization, and NUMA/Huge Pages work into the
+  PR-0028 follow-up boundary.
+- Added a staged PR-0028 high-performance roadmap covering reproducible
+  measurement, concurrent I/O, data movement/compression, and NUMA/Huge Pages
+  acceptance gates.
+- Enabled real concurrent async storage execution: distinct chunk file
+  operations can overlap while StorageManager index publication remains
+  synchronized. The benchmark now accepts worker and queue arguments and uses
+  process-isolated temporary directories.
+- Reduced async spill data movement by moving Chunk payload ownership into the
+  writer queue instead of copying GMP P/Q/T values at submission.
+- Added a bounded LZ4 compression backend with durable ChunkStore round-trip,
+  metadata validation, CRC coverage, and CI dependency setup. Full none-vs-LZ4
+  workload benchmarking remains a PR-0029 follow-up.
+- Added compression selection to the storage throughput benchmark. A current
+  100 MiB single-chunk run measured none at 99.66 MiB and 3.27 s total versus
+  LZ4 at 70.05 MiB and 2.74 s total; the full workload matrix remains required.
+
 - Added a version-1 runtime chunk codec with explicit big-endian metadata,
   canonical P/Q/T signed-magnitude payloads, CRC32C coverage, checked lengths,
   deterministic round trips, and corruption/version rejection.
@@ -180,6 +250,15 @@
 
 ### Changed
 
+- PR-0036 advances the project version from stale `0.1.0` to `0.13.0`,
+  supersedes per-PR version headings with release-time changelog cuts, and
+  preserves one top-level `[Unreleased]` section.
+- Limited AI-agent build and test commands to at most 60% of available logical
+  CPU cores; commands run directly by the user are unaffected.
+- Separated production Release compilation from Debug CTest execution because
+  the current assert-based tests lose expectations and some side-effecting
+  calls under `NDEBUG`; replacing those contracts remains tracked work.
+
 - PR-0035 treats shared GitHub runner timings as informational. Build,
   process, and benchmark-internal correctness failures fail the workflow, but
   elapsed-time thresholds and baseline comparison are intentionally absent.
@@ -241,6 +320,17 @@
 
 ### Verification
 
+- Built the PR-0036 checkout and clean extracted source archive in Release
+  mode, then built and passed all 69 Debug CTest tests from each source tree
+  with AI-agent parallelism limited to 13 of 22 logical cores.
+- Created the 577-entry prefixed source archive with the pinned toml++ commit,
+  required licenses and documentation, and a successfully verified
+  `SHA256SUMS`.
+- Passed `actionlint` 1.7.12, workflow YAML parsing, release-note extraction,
+  exact version agreement, mismatched-tag rejection, and final release review.
+- Remotely dispatched the PR-0035 benchmark workflow successfully and confirmed
+  its non-expired `benchmark-results` artifact.
+
 - Built all five PR-0035 benchmark targets in a GCC Release configuration and
   ran their bounded profiles successfully. The out-of-core workload completed
   15 asynchronous spills and reloads.
@@ -285,6 +375,99 @@
   from 16 accepted blocks, and matched the uninterrupted output byte-for-byte.
 - Matched fresh and resumed 100,000-digit forced-1-MiB out-of-core output and
   verification SHA-256.
+
+- Verified the PR-0028 storage pipeline with a clean Debug build and all 64
+  CTest targets passing.
+- Verified the async multi-chunk path at 1,000,000 digits with four workers
+  and queue capacity four: 15 spills, 15 reloads, 27 MiB peak RSS, and a
+  successful P-bit result.
+- Verified 512 MiB none/LZ4 single-chunk round trips and recorded the current
+  platform audit: one NUMA node, no explicit HugeTLB pages, and no default
+  affinity or system-wide THP override.
+- Separated PR-0028 functional implementation from PR-0029 repeatable
+  workload measurement, bottleneck optimization, and large-data acceptance.
+- Fixed the PR-0029 measurement contract: Release/compiler populations,
+  CPU/filesystem metadata, cold/warm cache separation, five repetitions,
+  p50/p95 summaries, raw samples, queue telemetry, integrity, and P/Q/T
+  equality are required before accepting an optimization. `/tmp` tmpfs and
+  ext4 results are explicitly kept as separate populations.
+- Added PR-0029 stage telemetry for GMP encode/decode, compression,
+  file read/write, file sync, rename, directory sync, CRC32C, index
+  publication, async queue-capacity wait, and async worker active time.
+- Executed the PR-0029 sync/async multi-chunk workload matrix on separate
+  tmpfs and ext4 populations. All 34 combinations preserved spill/reload
+  counts and the P-bit result; ext4 durability sync is the dominant observed
+  bottleneck. Single-chunk repetition and 1 GiB acceptance remain incomplete,
+  and one non-reproducible 512 MiB ext4/LZ4 mismatch is tracked for follow-up.
+- Removed duplicate read/decode work from verified reload while preserving
+  checksum, structural, identity, compression, and GMP validation. Added
+  separate aggregate telemetry for index mutex wait and index commit time.
+  The 1,000,000-digit async benchmark retained 15 spills/reloads and the same
+  P-bit result; reload telemetry dropped from roughly 19/21/15 ms to
+  9/10/6 ms for file-read/CRC/GMP-decode in the repeated sample population.
+- Completed 1 GiB release round-trip checks for none/LZ4 on both tmpfs and
+  ext4. Chunk identity, index integrity, and payload equality passed in all
+  four cases. ASan/UBSan passed the 100 MiB storage case and storage-manager
+  regression tests; larger sanitizer runs were environment-limited and are
+  not marked as accepted.
+- Audited platform applicability: the current host has one NUMA node, no
+  explicit HugeTLB pool, THP already enabled, and powersave CPU governors.
+  NUMA/HugeTLB/THP code changes are deferred; affinity is reserved for
+  benchmark reproducibility, while ext4 durability and index commit remain
+  the actionable optimization targets.
+- Completed the single-chunk matrix at five repetitions per cell: 12 cells,
+  60/60 successful round-trips, with min/p50/p95 summaries for 100 MiB,
+  512 MiB, and 1 GiB none/LZ4 on tmpfs and ext4. The earlier 512 MiB
+  ext4/LZ4 mismatch did not recur.
+- Added explicit cold/warm reload measurement mode and completed 60 cold plus
+  60 warm samples across the same 12 cells. Warmup payloads and timings are
+  excluded from measured reload telemetry; all 120 executions preserved
+  chunk integrity and payload equality. Cache warmup did not consistently
+  reduce wall-clock reload time because CRC/GMP decode remains significant.
+- Added `peak_rss_mib` to the single-chunk throughput benchmark using
+  `getrusage(RUSAGE_SELF)`. A 12-cell 100/512/1024 MiB none/LZ4 tmpfs/ext4
+  baseline completed 12/12 successfully, with observed peaks of 591~620,
+  2962~3112, and 5523~5945 MiB respectively. Five-sample RSS distribution
+  acceptance remains separate from the instrumentation baseline.
+- Rechecked the earlier 512 MiB ext4/LZ4 mismatch with 20 additional
+  independent-directory Release runs. All 20 round-trips passed with no
+  checksum, identity, or payload mismatch; the anomaly is currently
+  non-reproducible and remains documented as an environment observation.
+- Completed 512 MiB and 1 GiB none/LZ4 large-data round-trips under combined
+  ASan/UBSan with leak detection disabled due the runner's ptrace limitation.
+  All four cases passed without sanitizer diagnostics; peak RSS ranged from
+  3506 MiB to 6948 MiB.
+- Reduced ChunkCodec store-path data movement by writing none/LZ4 payloads
+  directly into a bounded final output buffer. Release smoke round-trips for
+  100 MiB, 512 MiB, and 1 GiB none/LZ4 all passed with canonical bytes and
+  CRC integrity preserved. Repeated before/after speedup acceptance remains
+  separate from this correctness and allocation reduction change.
+- Completed single-chunk peak RSS five-sample acceptance for the full 12-cell
+  workload: 100/512/1024 MiB × tmpfs/ext4 × none/LZ4, 60/60 successful
+  round-trips with no checksum, identity, or payload mismatch. Per-cell p95
+  RSS was 491~5,152 MiB (100 MiB/LZ4 through 1 GiB/none), below the recorded
+  PR-0028 release baseline ranges of 591~620, 2,962~3,112, and 5,523~5,945
+  MiB. Raw samples remain in `/tmp/givemepi-pr0029-before-after-complete-after.tsv`.
+- Completed the independent Reader/Writer workload matrix: workers 1/2/4/8 ×
+  queue capacities 1/4/16/64 × tmpfs/ext4 × none/LZ4, five repetitions per
+  cell (64 cells, 320 runs). Every run completed with 8 writer successes,
+  8 reader successes, and 16 indexed chunks. Elapsed-time p50 across all
+  samples was 0.013 s and p95 was 0.215 s; raw samples are preserved in
+  `/tmp/givemepi-pr0029-reader-writer-matrix.tsv`. The benchmark currently
+  does not report peak RSS, so this is execution/correctness evidence, not a
+  separate memory acceptance.
+- Completed multi-chunk concurrent I/O cold/warm acceptance using sync and
+  async modes, workers 1/2/4/8, queues 1/4/16/64, tmpfs/ext4, none/LZ4, and
+  five repetitions: 256 cells and 1,280/1,280 successful runs. Every sample
+  preserved 15 spills, 15 reloads, and the expected P-bit result; aggregate
+  elapsed p50/p95 was 0.368/2.124 seconds and peak RSS p95 was 27 MiB.
+  Cold and warm populations showed no correctness regression. Raw samples are
+  preserved at `/tmp/givemepi-pr0029-multichunk-concurrent-cold-warm-accepted.tsv`.
+- Finalized PR-0029: Debug rebuilt with all 64 CTest tests passing, Release
+  benchmark targets rebuilt, and ASan/UBSan out-of-core smoke passed for sync
+  and async 1,000,000-digit workloads with leak detection disabled. NUMA,
+  Huge Pages, and affinity remain deferred on this one-NUMA/no-HugeTLB host;
+  no further PR-0029 scope is open.
 
 ### Fixed
 - Fixed atomic publication of parentless relative destinations such as the
@@ -810,166 +993,3 @@
 - Fixed configuration loading workflow.
 
 
----
-
-## [Unreleased]
-
-### Added
-
-- Platform detection.
-- Memory subsystem.
-- Lock-free scheduler.
-- Work stealing scheduler.
-- Big integer backend.
-- Binary splitting engine.
-- Chudnovsky calculation core.
-### Added
-
-- Wired storage directory, memory budget, target chunk size, compression, and
-  concurrent I/O settings through TOML/CLI configuration into `StoragePolicy`.
-- Extended progress snapshots and reporters with resident storage bytes,
-  durable stored bytes, and indexed chunk count.
-- Added a configurable in-memory versus forced out-of-core merge benchmark
-  reporting elapsed time, peak RSS, spill/reload counts, and spilled bytes.
-- Defined the PR-0026 stabilization boundary: synchronous spill/reload and
-  deterministic memory behavior remain in this PR; asynchronous writing,
-  merge wait/backpressure, concurrent I/O, compression optimization, and
-  NUMA/Huge Pages work are explicitly deferred to PR-0027/PR-0028.
-- Wired validated runtime storage configuration into the production calculator
-  path, including StorageManager, StorageMergeCoordinator, and ProgressTracker
-  injection while preserving the disabled out-of-core path.
-- Added a bounded asynchronous chunk writer with worker lifecycle tracking,
-  durable completion handles, queued cancellation, shutdown drain/cancel
-  modes, and serialized StorageManager publication.
-- Extended NodeLifecycle to consume asynchronous stored/failed/cancelled
-  completions while preserving resident payload ownership until durability.
-- Connected the merge coordinator to the bounded writer: spill submissions
-  wait for queue capacity, payloads remain resident until all durable handles
-  complete, and async failures restore the lifecycle to resident.
-- Added a bounded asynchronous chunk reader with queued/loading/loaded/
-  failed/cancelled handles and serialized StorageManager reload access.
-- Connected asynchronous reload to merge preparation: stored nodes are queued,
-  awaited, decoded through the canonical BinaryNode/Chunk adapter, and only
-  then returned to the resident lifecycle.
-- Extended progress snapshots and text/JSON output with asynchronous storage I/O
-  queue, active, completed, and failed counters for writes and reads.
-- Added failure and shutdown coverage for duplicate durable writes, missing
-  reload identities, terminal handle states, and post-shutdown submission
-  rejection.
-- Added an async/sync out-of-core merge benchmark mode. On the current runner,
-  1,000,000 digits under a forced 1 MiB budget completed in 0.512 s sync and
-  0.544 s async, with 15 spills and 15 reloads in both modes. The async run
-  used 27 MiB peak RSS versus 23 MiB sync; this is a baseline, not a target.
-- Stabilized PR-0027 with a clean 64-test regression run and separated
-  concurrent I/O, compression optimization, and NUMA/Huge Pages work into the
-  PR-0028 follow-up boundary.
-- Added a staged PR-0028 high-performance roadmap covering reproducible
-  measurement, concurrent I/O, data movement/compression, and NUMA/Huge Pages
-  acceptance gates.
-- Enabled real concurrent async storage execution: distinct chunk file
-  operations can overlap while StorageManager index publication remains
-  synchronized. The benchmark now accepts worker and queue arguments and uses
-  process-isolated temporary directories.
-- Reduced async spill data movement by moving Chunk payload ownership into the
-  writer queue instead of copying GMP P/Q/T values at submission.
-- Added a bounded LZ4 compression backend with durable ChunkStore round-trip,
-  metadata validation, CRC coverage, and CI dependency setup. Full none-vs-LZ4
-  workload benchmarking remains a PR-0029 follow-up.
-- Added compression selection to the storage throughput benchmark. A current
-  100 MiB single-chunk run measured none at 99.66 MiB and 3.27 s total versus
-  LZ4 at 70.05 MiB and 2.74 s total; the full workload matrix remains required.
-
-### Verification
-
-- Verified the PR-0028 storage pipeline with a clean Debug build and all 64
-  CTest targets passing.
-- Verified the async multi-chunk path at 1,000,000 digits with four workers
-  and queue capacity four: 15 spills, 15 reloads, 27 MiB peak RSS, and a
-  successful P-bit result.
-- Verified 512 MiB none/LZ4 single-chunk round trips and recorded the current
-  platform audit: one NUMA node, no explicit HugeTLB pages, and no default
-  affinity or system-wide THP override.
-- Separated PR-0028 functional implementation from PR-0029 repeatable
-  workload measurement, bottleneck optimization, and large-data acceptance.
-- Fixed the PR-0029 measurement contract: Release/compiler populations,
-  CPU/filesystem metadata, cold/warm cache separation, five repetitions,
-  p50/p95 summaries, raw samples, queue telemetry, integrity, and P/Q/T
-  equality are required before accepting an optimization. `/tmp` tmpfs and
-  ext4 results are explicitly kept as separate populations.
-- Added PR-0029 stage telemetry for GMP encode/decode, compression,
-  file read/write, file sync, rename, directory sync, CRC32C, index
-  publication, async queue-capacity wait, and async worker active time.
-- Executed the PR-0029 sync/async multi-chunk workload matrix on separate
-  tmpfs and ext4 populations. All 34 combinations preserved spill/reload
-  counts and the P-bit result; ext4 durability sync is the dominant observed
-  bottleneck. Single-chunk repetition and 1 GiB acceptance remain incomplete,
-  and one non-reproducible 512 MiB ext4/LZ4 mismatch is tracked for follow-up.
-- Removed duplicate read/decode work from verified reload while preserving
-  checksum, structural, identity, compression, and GMP validation. Added
-  separate aggregate telemetry for index mutex wait and index commit time.
-  The 1,000,000-digit async benchmark retained 15 spills/reloads and the same
-  P-bit result; reload telemetry dropped from roughly 19/21/15 ms to
-  9/10/6 ms for file-read/CRC/GMP-decode in the repeated sample population.
-- Completed 1 GiB release round-trip checks for none/LZ4 on both tmpfs and
-  ext4. Chunk identity, index integrity, and payload equality passed in all
-  four cases. ASan/UBSan passed the 100 MiB storage case and storage-manager
-  regression tests; larger sanitizer runs were environment-limited and are
-  not marked as accepted.
-- Audited platform applicability: the current host has one NUMA node, no
-  explicit HugeTLB pool, THP already enabled, and powersave CPU governors.
-  NUMA/HugeTLB/THP code changes are deferred; affinity is reserved for
-  benchmark reproducibility, while ext4 durability and index commit remain
-  the actionable optimization targets.
-- Completed the single-chunk matrix at five repetitions per cell: 12 cells,
-  60/60 successful round-trips, with min/p50/p95 summaries for 100 MiB,
-  512 MiB, and 1 GiB none/LZ4 on tmpfs and ext4. The earlier 512 MiB
-  ext4/LZ4 mismatch did not recur.
-- Added explicit cold/warm reload measurement mode and completed 60 cold plus
-  60 warm samples across the same 12 cells. Warmup payloads and timings are
-  excluded from measured reload telemetry; all 120 executions preserved
-  chunk integrity and payload equality. Cache warmup did not consistently
-  reduce wall-clock reload time because CRC/GMP decode remains significant.
-- Added `peak_rss_mib` to the single-chunk throughput benchmark using
-  `getrusage(RUSAGE_SELF)`. A 12-cell 100/512/1024 MiB none/LZ4 tmpfs/ext4
-  baseline completed 12/12 successfully, with observed peaks of 591~620,
-  2962~3112, and 5523~5945 MiB respectively. Five-sample RSS distribution
-  acceptance remains separate from the instrumentation baseline.
-- Rechecked the earlier 512 MiB ext4/LZ4 mismatch with 20 additional
-  independent-directory Release runs. All 20 round-trips passed with no
-  checksum, identity, or payload mismatch; the anomaly is currently
-  non-reproducible and remains documented as an environment observation.
-- Completed 512 MiB and 1 GiB none/LZ4 large-data round-trips under combined
-  ASan/UBSan with leak detection disabled due the runner's ptrace limitation.
-  All four cases passed without sanitizer diagnostics; peak RSS ranged from
-  3506 MiB to 6948 MiB.
-- Reduced ChunkCodec store-path data movement by writing none/LZ4 payloads
-  directly into a bounded final output buffer. Release smoke round-trips for
-  100 MiB, 512 MiB, and 1 GiB none/LZ4 all passed with canonical bytes and
-  CRC integrity preserved. Repeated before/after speedup acceptance remains
-  separate from this correctness and allocation reduction change.
-- Completed single-chunk peak RSS five-sample acceptance for the full 12-cell
-  workload: 100/512/1024 MiB × tmpfs/ext4 × none/LZ4, 60/60 successful
-  round-trips with no checksum, identity, or payload mismatch. Per-cell p95
-  RSS was 491~5,152 MiB (100 MiB/LZ4 through 1 GiB/none), below the recorded
-  PR-0028 release baseline ranges of 591~620, 2,962~3,112, and 5,523~5,945
-  MiB. Raw samples remain in `/tmp/givemepi-pr0029-before-after-complete-after.tsv`.
-- Completed the independent Reader/Writer workload matrix: workers 1/2/4/8 ×
-  queue capacities 1/4/16/64 × tmpfs/ext4 × none/LZ4, five repetitions per
-  cell (64 cells, 320 runs). Every run completed with 8 writer successes,
-  8 reader successes, and 16 indexed chunks. Elapsed-time p50 across all
-  samples was 0.013 s and p95 was 0.215 s; raw samples are preserved in
-  `/tmp/givemepi-pr0029-reader-writer-matrix.tsv`. The benchmark currently
-  does not report peak RSS, so this is execution/correctness evidence, not a
-  separate memory acceptance.
-- Completed multi-chunk concurrent I/O cold/warm acceptance using sync and
-  async modes, workers 1/2/4/8, queues 1/4/16/64, tmpfs/ext4, none/LZ4, and
-  five repetitions: 256 cells and 1,280/1,280 successful runs. Every sample
-  preserved 15 spills, 15 reloads, and the expected P-bit result; aggregate
-  elapsed p50/p95 was 0.368/2.124 seconds and peak RSS p95 was 27 MiB.
-  Cold and warm populations showed no correctness regression. Raw samples are
-  preserved at `/tmp/givemepi-pr0029-multichunk-concurrent-cold-warm-accepted.tsv`.
-- Finalized PR-0029: Debug rebuilt with all 64 CTest tests passing, Release
-  benchmark targets rebuilt, and ASan/UBSan out-of-core smoke passed for sync
-  and async 1,000,000-digit workloads with leak detection disabled. NUMA,
-  Huge Pages, and affinity remain deferred on this one-NUMA/no-HugeTLB host;
-  no further PR-0029 scope is open.

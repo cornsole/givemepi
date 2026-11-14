@@ -68,7 +68,17 @@
 
 [x] PR-0035 Verification Gate (five Release benchmark targets and bounded runs, invalid-argument checks, complete Debug build, 69/69 CTest)
 
-[ ] Release Workflow
+[x] Tag-Gated Source Release Workflow (PR-0036)
+
+[x] CMake, Tag, and Changelog Version Agreement (`0.13.0`, `v0.13.0`, PR-0036)
+
+[x] Source Archive, SHA256SUMS, Release Builds, and Clean Extracted-Archive Debug CTest (PR-0036)
+
+[x] Source Archive Bundles Exact Pinned toml++ Gitlink Commit and Both Licenses (PR-0036)
+
+[x] PR-0036 Verification Gate (checkout and extracted Release builds, 69/69 Debug CTest twice, archive/checksum validation, actionlint and tag-gate checks)
+
+[ ] Replace Side-Effecting `assert` Test Contracts so Release CTest Is Meaningful
 
 
 -----------------

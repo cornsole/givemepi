@@ -579,6 +579,16 @@ Every implementation should compile independently whenever practical.
 
 Never intentionally leave broken intermediate states.
 
+## Agent Build and Test CPU Limit
+
+When an AI agent runs a build or test command, it must use at most 60% of the
+available logical CPU cores. This limit applies to the main agent and delegated
+agents, but not to commands run directly by the user.
+
+Compute the job limit as `max(1, floor(nproc * 0.60))` and pass it explicitly
+to build and test tools, for example `cmake --build <dir> --parallel <jobs>` and
+`ctest --test-dir <dir> --parallel <jobs>`.
+
 --------------------------------------------------
 
 ## File Changes

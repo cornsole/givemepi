@@ -33,6 +33,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0033 | CLI help and usage errors | Complete |
 | PR-0034 | Logger foundation and resume diagnostics | Complete |
 | PR-0035 | Informational benchmark workflow | Complete |
+| PR-0036 | Tag-gated source release workflow | Complete |
 
 ---
 
@@ -1598,3 +1599,86 @@ bounded CI profile. Unknown or additional arguments fail explicitly.
 PR-0035 is complete. Keep shared GitHub runner timing informational and retain
 the existing no-argument benchmark profiles and CSV schemas. Select any
 optimization or release-workflow boundary with the user before implementation.
+
+---
+
+## PR-0036: Tag-Gated Source Release Workflow
+
+### Goal
+
+Publish a tested, checksummed source archive from an exact version tag while
+keeping non-portable prebuilt binaries out of the release contract.
+
+### Architecture Contract
+
+The release version is `0.13.0`, following the existing `0.12.0` changelog
+history. `CMakeLists.txt`, the `v0.13.0` tag, and the
+`## [0.13.0] - PR-0036` changelog heading must agree.
+
+The workflow runs on `v*` tag pushes. Read access is the default; only the
+publish job receives `contents: write`. It builds the tagged source in Release
+mode, runs the complete CTest suite in a separate Debug build, creates a
+prefixed source archive, verifies its SHA-256, repeats both builds from the
+extracted archive, and publishes only the source archive plus `SHA256SUMS`.
+
+The changelog keeps one top-level `[Unreleased]` section. Pull requests append
+there; a release moves accumulated entries under one version heading. This
+supersedes the historical requirement to create a version heading for every
+pull request.
+
+### Work Sequence
+
+1. Advance the CMake project version from stale `0.1.0` to `0.13.0`.
+2. Cut the current changelog into `[0.13.0] - PR-0036`, retain an empty
+   `[Unreleased]` section, and remove the stale duplicate `[Unreleased]`
+   section after the historical version entries.
+3. Record the release-version and changelog policy in a superseding ADR.
+4. Add a tag-gated source release workflow with narrow permissions.
+5. Reject tag, project-version, or changelog-version mismatch before building.
+6. Build the checkout in Release mode and run the full suite from a Debug build.
+7. Create `givemepi-0.13.0.tar.gz` and `SHA256SUMS`.
+8. Extract the archive into a clean directory, then repeat both builds.
+9. Publish changelog-backed release notes and the two release assets.
+10. Update README, roadmap, checklist, and changelog.
+
+### Acceptance
+
+- A tag other than `v0.13.0` fails before packaging.
+- Missing or mismatched changelog version evidence fails before packaging.
+- The tagged checkout and extracted source archive both build in Release mode,
+  and separate Debug builds pass the complete CTest suite.
+- `sha256sum --check SHA256SUMS` succeeds.
+- The archive contains tracked source, vendored toml++, both licenses,
+  `config.toml.example`, README, and canonical documents.
+- Only the publish job has `contents: write`.
+- The GitHub release contains only the source archive and checksum file.
+
+### Out of Scope
+
+- prebuilt Linux, Windows, or macOS binaries;
+- `install()` rules, CPack, `.deb`, or `.rpm` packages;
+- a `--version` CLI option or generated version header;
+- signing, provenance attestation, or package registries;
+- changing `-march=native`, runtime dependencies, or optimization behavior;
+- SIMD, assembly, NUMA, Huge Pages, or performance tuning.
+
+### Verification
+
+- The PR-0035 benchmark workflow completed remotely and uploaded its
+  `benchmark-results` artifact.
+- Built the checkout in Release mode and built and passed all 69 CTest tests
+  in Debug mode with the agent CPU limit set to 13 of 22 logical cores.
+- Created the prefixed source archive with the exact pinned toml++ commit,
+  verified `SHA256SUMS`, required files, and all 577 archive entries.
+- Extracted the archive into a clean directory, completed its Release build,
+  and built and passed all 69 Debug CTest tests at the same CPU limit.
+- `actionlint` 1.7.12, YAML parsing, release-note extraction, exact version
+  agreement, and mismatched-tag rejection passed.
+- Final review found one fixed portability issue in the release-heading gate;
+  it now accepts the matching semantic version with any valid release PR ID.
+
+### Next Contributor TODO
+
+PR-0036 is complete. Publish binaries only after portable architecture,
+runtime dependency, and installation contracts are approved. Replace
+side-effecting assert-based tests before treating Release CTest as meaningful.

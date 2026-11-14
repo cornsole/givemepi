@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     PiEngine
-    VERSION 0.1.0
+    VERSION 0.13.0
     DESCRIPTION "High Performance Pi Calculator"
     LANGUAGES CXX
 )

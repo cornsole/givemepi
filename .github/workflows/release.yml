@@ -1,0 +1,270 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-version:
+    name: Verify tag, CMake version, and changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check version agreement
+        id: version
+        run: |
+          set -euo pipefail
+
+          cmake_version="$(awk '
+            /^project\(/ { in_project = 1; next }
+            in_project && $1 == "VERSION" { print $2; exit }
+            in_project && /^\)/ { exit }
+          ' CMakeLists.txt)"
+
+          if ! [[ "${cmake_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=CMakeLists.txt::Could not read a MAJOR.MINOR.PATCH project VERSION (got '${cmake_version}')."
+            exit 1
+          fi
+
+          expected_tag="v${cmake_version}"
+          if [ "${GITHUB_REF_NAME}" != "${expected_tag}" ]; then
+            echo "::error::Tag '${GITHUB_REF_NAME}' does not match CMake project version '${cmake_version}' (expected tag '${expected_tag}')."
+            exit 1
+          fi
+
+          escaped_version="${cmake_version//./\\.}"
+          heading_pattern="^## \\[${escaped_version}\\] - PR-[0-9]+(-[0-9]+)?$"
+          heading_count="$(grep -cE -- "${heading_pattern}" docs/CHANGELOG.md || true)"
+          if [ "${heading_count}" != "1" ]; then
+            echo "::error file=docs/CHANGELOG.md::Expected exactly one release heading matching '${heading_pattern}', found ${heading_count}."
+            exit 1
+          fi
+
+          echo "Release version ${cmake_version} verified for tag ${GITHUB_REF_NAME}."
+          echo "version=${cmake_version}" >> "${GITHUB_OUTPUT}"
+
+  build-package:
+    name: Build, test, and package source
+    needs: verify-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.verify-version.outputs.version }}
+      TOMLPP_REPOSITORY: https://github.com/marzer/tomlplusplus.git
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        # toml++ is intentionally not installed from apt: both builds must use
+        # the vendored copy under third_party/tomlplusplus.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libgmp-dev liblz4-dev
+
+      - name: Populate vendored toml++ at the pinned gitlink commit
+        # third_party/tomlplusplus is recorded as a gitlink without .gitmodules,
+        # so checkout leaves it empty. Fetch exactly the commit pinned in HEAD.
+        run: |
+          set -euo pipefail
+
+          tomlpp_commit="$(git ls-tree HEAD third_party/tomlplusplus \
+            | awk '$2 == "commit" { print $3 }')"
+          if [ -z "${tomlpp_commit}" ]; then
+            echo "::error::third_party/tomlplusplus is not a pinned gitlink in HEAD."
+            exit 1
+          fi
+
+          mkdir -p third_party/tomlplusplus
+          git -C third_party/tomlplusplus init -q
+          git -C third_party/tomlplusplus fetch -q --depth 1 \
+            "${TOMLPP_REPOSITORY}" "${tomlpp_commit}"
+          git -C third_party/tomlplusplus checkout -q --detach FETCH_HEAD
+
+          test "$(git -C third_party/tomlplusplus rev-parse HEAD)" = "${tomlpp_commit}"
+          test -f third_party/tomlplusplus/include/toml++/toml.hpp
+          test -f third_party/tomlplusplus/LICENSE
+
+      - name: Configure Release build from checkout
+        run: |
+          cmake -S . -B "${RUNNER_TEMP}/build-checkout" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build from checkout
+        run: |
+          cmake --build "${RUNNER_TEMP}/build-checkout" --parallel
+
+      - name: Configure Debug test build from checkout
+        run: |
+          cmake -S . -B "${RUNNER_TEMP}/test-checkout" -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build Debug tests from checkout
+        run: |
+          cmake --build "${RUNNER_TEMP}/test-checkout" --parallel
+
+      - name: Test Debug build from checkout
+        run: |
+          ctest --test-dir "${RUNNER_TEMP}/test-checkout" --output-on-failure
+
+      - name: Create source archive
+        run: |
+          set -euo pipefail
+
+          prefix="givemepi-${VERSION}/"
+          archive="givemepi-${VERSION}.tar"
+          mkdir -p dist
+
+          git archive --format=tar --prefix="${prefix}" \
+            --output="${RUNNER_TEMP}/${archive}" "${GITHUB_SHA}"
+          git -C third_party/tomlplusplus archive --format=tar \
+            --prefix="${prefix}third_party/tomlplusplus/" \
+            --output="${RUNNER_TEMP}/tomlplusplus.tar" HEAD
+          tar --concatenate --file="${RUNNER_TEMP}/${archive}" \
+            "${RUNNER_TEMP}/tomlplusplus.tar"
+
+          gzip -n -9 --stdout "${RUNNER_TEMP}/${archive}" > "dist/${archive}.gz"
+
+          tar -tzf "dist/${archive}.gz" > "${RUNNER_TEMP}/archive-contents.txt"
+          for required in \
+            LICENSE \
+            README.md \
+            config.toml.example \
+            CMakeLists.txt \
+            docs/CHANGELOG.md \
+            third_party/tomlplusplus/LICENSE \
+            third_party/tomlplusplus/include/toml++/toml.hpp
+          do
+            if ! grep -qFx -- "${prefix}${required}" "${RUNNER_TEMP}/archive-contents.txt"; then
+              echo "::error::Source archive is missing ${prefix}${required}."
+              exit 1
+            fi
+          done
+
+          if grep -v -- "^${prefix}" "${RUNNER_TEMP}/archive-contents.txt"; then
+            echo "::error::Source archive contains entries outside ${prefix}."
+            exit 1
+          fi
+
+      - name: Create and verify SHA256SUMS
+        working-directory: dist
+        run: |
+          sha256sum "givemepi-${VERSION}.tar.gz" > SHA256SUMS
+          cat SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+
+      - name: Extract archive into a clean directory
+        run: |
+          set -euo pipefail
+
+          extract_dir="${RUNNER_TEMP}/extracted"
+          rm -rf "${extract_dir}"
+          mkdir -p "${extract_dir}"
+          tar -xzf "dist/givemepi-${VERSION}.tar.gz" -C "${extract_dir}"
+
+          echo "EXTRACTED_SOURCE=${extract_dir}/givemepi-${VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Configure Release build from extracted archive
+        run: |
+          cmake -S "${EXTRACTED_SOURCE}" -B "${RUNNER_TEMP}/build-extracted" \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build from extracted archive
+        run: |
+          cmake --build "${RUNNER_TEMP}/build-extracted" --parallel
+
+      - name: Configure Debug test build from extracted archive
+        run: |
+          cmake -S "${EXTRACTED_SOURCE}" -B "${RUNNER_TEMP}/test-extracted" \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build Debug tests from extracted archive
+        run: |
+          cmake --build "${RUNNER_TEMP}/test-extracted" --parallel
+
+      - name: Test Debug build from extracted archive
+        run: |
+          ctest --test-dir "${RUNNER_TEMP}/test-extracted" --output-on-failure
+
+      - name: Extract release notes from changelog
+        run: |
+          set -euo pipefail
+
+          escaped_version="${VERSION//./\\.}"
+          heading_pattern="^## \\[${escaped_version}\\] - PR-[0-9]+(-[0-9]+)?$"
+          heading="$(grep -E -- "${heading_pattern}" docs/CHANGELOG.md)"
+          awk -v heading="${heading}" '
+            $0 == heading { in_section = 1; next }
+            in_section && /^## / { exit }
+            in_section { print }
+          ' docs/CHANGELOG.md \
+            | sed -e '/./,$!d' \
+            | sed -e ':a' -e '/^\n*$/{$d;N;ba' -e '}' \
+            > dist/release-notes.md
+
+          if ! grep -q '[^[:space:]]' dist/release-notes.md; then
+            echo "::error file=docs/CHANGELOG.md::Changelog section '${heading}' is empty."
+            exit 1
+          fi
+
+          cat dist/release-notes.md
+
+      - name: Upload release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ needs.verify-version.outputs.version }}
+          path: |
+            dist/givemepi-${{ needs.verify-version.outputs.version }}.tar.gz
+            dist/SHA256SUMS
+            dist/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - verify-version
+      - build-package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.verify-version.outputs.version }}
+
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.verify-version.outputs.version }}
+          path: dist
+
+      - name: Re-verify checksum
+        working-directory: dist
+        run: |
+          sha256sum --check --strict SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --title "givemepi ${VERSION}" \
+            --notes-file dist/release-notes.md \
+            "dist/givemepi-${VERSION}.tar.gz" \
+            dist/SHA256SUMS
