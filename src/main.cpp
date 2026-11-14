@@ -4,6 +4,7 @@
 #include "chudnovsky/PrecisionPolicy.hpp"
 #include "config/CommandLine.hpp"
 #include "config/ConfigLoader.hpp"
+#include "logging/Logger.hpp"
 #include "progress/JsonProgressReporter.hpp"
 #include "progress/ProgressReportingRunner.hpp"
 #include "progress/ResumeProgress.hpp"
@@ -29,6 +30,57 @@
 #include <utility>
 #include <vector>
 #include <unistd.h>
+
+namespace
+{
+
+void logValidationDiagnostic(
+    pi::logging::Logger& logger,
+    const pi::checkpoint::ValidationDiagnostic& diagnostic
+)
+{
+    const std::string_view stage =
+        pi::checkpoint::toString(diagnostic.stage);
+    const std::string_view reason =
+        pi::checkpoint::toString(diagnostic.reason);
+    std::string message;
+    message.reserve(
+        stage.size() + reason.size() + diagnostic.detail.size() + 4
+    );
+    message.append(stage);
+    message.push_back('/');
+    message.append(reason);
+    message.append(": ");
+    message.append(diagnostic.detail);
+    logger.write(
+        pi::logging::LogLevel::warning,
+        "checkpoint",
+        message
+    );
+}
+
+
+bool belongsToRejectedCheckpoint(
+    const pi::checkpoint::CheckpointResumePlan& plan,
+    const pi::checkpoint::ValidationDiagnostic& diagnostic
+) noexcept
+{
+    for (const auto& rejected : plan.rejectedBlocks)
+    {
+        for (const auto& rejectedDiagnostic
+             : rejected.validation.diagnostics())
+        {
+            if (rejectedDiagnostic == diagnostic)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 
 
 int main(int argc, char* argv[])
@@ -63,6 +115,11 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    pi::logging::Logger logger(
+        std::cerr,
+        pi::logging::LogLevel::warning
+    );
+
     try
     {
         pi::config::Config config =
@@ -85,6 +142,8 @@ int main(int argc, char* argv[])
         pi::checkpoint::CheckpointResumePlan resumePlan;
         if (config.resume_enabled)
         {
+            const bool resumeDirectoryExisted =
+                std::filesystem::exists(config.checkpoint_directory);
             resumePlan = pi::checkpoint::CheckpointResumePlanner(
                 config.checkpoint_directory,
                 config.checkpoint_quarantine_directory
@@ -92,16 +151,51 @@ int main(int argc, char* argv[])
             for (const pi::checkpoint::RejectedCheckpoint& rejected
                  : resumePlan.rejectedBlocks)
             {
-                std::cerr << "checkpoint rejected: "
-                          << rejected.path.string() << '\n';
+                std::string message = "rejected ";
+                message.append(rejected.path.string());
+                logger.write(
+                    pi::logging::LogLevel::warning,
+                    "checkpoint",
+                    message
+                );
                 for (const auto& diagnostic
                      : rejected.validation.diagnostics())
                 {
-                    std::cerr << "  "
-                              << pi::checkpoint::toString(diagnostic.stage)
-                              << '/'
-                              << pi::checkpoint::toString(diagnostic.reason)
-                              << ": " << diagnostic.detail << '\n';
+                    logValidationDiagnostic(logger, diagnostic);
+                }
+                if (rejected.quarantinedPath)
+                {
+                    message = "quarantined ";
+                    message.append(rejected.path.string());
+                    message.append(" to ");
+                    message.append(rejected.quarantinedPath->string());
+                    logger.write(
+                        pi::logging::LogLevel::warning,
+                        "checkpoint",
+                        message
+                    );
+                }
+                if (rejected.quarantineOperation
+                    && !rejected.quarantineOperation->isAccepted())
+                {
+                    for (const auto& diagnostic
+                         : rejected.quarantineOperation->diagnostics())
+                    {
+                        logValidationDiagnostic(logger, diagnostic);
+                    }
+                }
+            }
+            if (resumeDirectoryExisted)
+            {
+                for (const auto& diagnostic : resumePlan.diagnostics)
+                {
+                    if (diagnostic.stage
+                            == pi::checkpoint::ValidationStage::manifest
+                        && !belongsToRejectedCheckpoint(
+                            resumePlan, diagnostic))
+                    {
+                        logValidationDiagnostic(logger, diagnostic);
+                    }
                 }
             }
         }

@@ -2654,3 +2654,60 @@ failures caused by well-formed command-line values keep exit status 1.
 `out_of_core`, `compression`, and `huge_pages` remain configuration-file-only.
 Calculation, checkpoint, storage, progress, and verification formats do not
 change.
+
+---
+
+## ADR-0056
+
+Date
+
+2026-11-06
+
+Status
+
+Accepted
+
+Title
+
+Use a Synchronous Injected Logger for Pre-Progress Resume Diagnostics
+
+Decision
+
+PR-0034 adds `pi::logging::Logger` as a synchronous diagnostic sink with
+`debug`, `info`, `warning`, and `error` levels. A logger owns no stream; it
+receives a caller-owned `std::ostream`, filters against an instance threshold,
+and serializes each complete record with an instance mutex. The stable record
+form is `pi-engine: <level>: <component>: <message>\n`. Carriage returns and
+newlines in caller text become spaces, and sink failures never escape
+`Logger::write`.
+
+Production constructs one logger over stderr with a fixed `warning` threshold.
+It reports checkpoint resume rejection, validation, quarantine, and manifest
+diagnostics only after resume planning and before the progress runner starts.
+Planner-level manifest diagnostics that are already attached to a rejected
+checkpoint are not repeated. A missing checkpoint directory on a fresh run is
+not a warning.
+
+Help, usage diagnostics, fatal diagnostics, successful stdout, text progress,
+and JSON progress remain on their existing direct paths. The logger has no
+global singleton, macros, background thread, timestamp, external dependency,
+file sink, CLI option, or TOML setting.
+
+Reason
+
+Resume planning already preserved diagnostic evidence that `main` did not
+fully expose, especially manifest-load and quarantine failures. Emitting those
+warnings before progress starts makes recovery decisions observable without
+mixing non-JSON records into JSON progress or coordinating multiple stderr
+writers. A synchronous injected object is sufficient because the bounded
+production callsite is outside the calculation worker path.
+
+Consequences
+
+Resume warnings use a stable severity and component prefix and may precede
+text or JSON progress records. A normal fresh `--no-progress` run remains
+silent on stderr. Logger sink failure is intentionally non-fatal and cannot
+replace the original calculation result. Adding runtime log-level
+configuration, logging from library subsystems, or logging concurrently with
+progress requires a separate decision because each changes CLI/configuration
+or shared-output synchronization contracts.

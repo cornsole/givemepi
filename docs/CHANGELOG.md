@@ -4,6 +4,18 @@
 
 ### Added
 
+- Added PR-0034 logger foundation: a synchronous `pi::logging::Logger` bound
+  to one text sink with a fixed minimum level. Each enabled record is one line,
+  `pi-engine: <level>: <component>: <message>`, with CR/LF normalized so a
+  message cannot span or forge lines. Records are serialized by a per-instance
+  mutex, and sink failures never throw or change control flow.
+- Added PR-0034 resume diagnostics: before progress reporting starts, the CLI
+  logs stderr warnings for manifest failures, rejected checkpoint blocks,
+  validation diagnostics, quarantine failures, and successful quarantine
+  destinations, then recalculates rejected ranges and completes.
+- Added `LoggerTest` and extended the real-process `CheckpointResumeCliTest`
+  with resume diagnostic coverage.
+
 - Added PR-0033 CLI help: `pi-engine -h` and `pi-engine --help` print grouped
   help (Calculation, Output, Checkpoint and resume, Progress, Out-of-core
   storage, Final verification, General) with built-in defaults from
@@ -161,6 +173,11 @@
 
 ### Changed
 
+- PR-0034: the logger is used only for resume diagnostics with a fixed warning
+  threshold. Help, exact usage and fatal diagnostics, exit statuses 0/1/2,
+  stdout result, text progress, and JSON progress schema version 4 are
+  unchanged.
+
 - PR-0033: unknown command-line options are rejected instead of ignored. The
   CLI prints `pi-engine: unknown option: <arg>` and
   `Try 'pi-engine --help' for usage.` to stderr and exits 2. Missing values and
@@ -211,6 +228,14 @@
 
 ### Verification
 
+- Built all PR-0034 Debug targets and passed all 69 CTest tests.
+- Passed the four PR-0034 changed-path tests (`LoggerTest`,
+  `CommandLineCliTest`, `ProgressReportingRunnerTest`, and
+  `CheckpointResumeCliTest`) under combined ASan/UBSan with leak detection
+  disabled.
+- A direct fresh `--no-progress` smoke run emitted no stderr. A corrupted
+  checkpoint smoke run emitted rejection, validation, and quarantine warnings,
+  then completed.
 - Built all PR-0033 Debug targets and passed all 68 CTest tests.
 - Passed all four PR-0033 changed-path tests under ASan/UBSan with leak
   detection disabled.
@@ -771,7 +796,6 @@
 
 ### Added
 
-- Logger system.
 - Platform detection.
 - Memory subsystem.
 - Lock-free scheduler.

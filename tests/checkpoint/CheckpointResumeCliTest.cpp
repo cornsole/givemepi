@@ -569,6 +569,121 @@ void requireResumeOnlyRun(
     }
 }
 
+std::filesystem::path requireFileWithExtension(
+    const std::filesystem::path& directory,
+    std::string_view extension
+)
+{
+    std::optional<std::filesystem::path> found;
+    for (const auto& entry : std::filesystem::directory_iterator(directory))
+    {
+        if (entry.is_regular_file()
+            && entry.path().extension() == extension)
+        {
+            if (found)
+            {
+                throw std::runtime_error(
+                    "multiple files with extension "
+                    + std::string(extension)
+                );
+            }
+            found = entry.path();
+        }
+    }
+    if (!found)
+    {
+        throw std::runtime_error(
+            "missing file with extension " + std::string(extension)
+        );
+    }
+    return *found;
+}
+
+
+std::vector<std::string> warningOptions(
+    const RunPaths& paths,
+    bool progress
+)
+{
+    return {
+        "--digits", "1000",
+        "--threads", "2",
+        "--checkpoint",
+        "--resume",
+        "--checkpoint-directory", paths.checkpoints.string(),
+        "--checkpoint-quarantine-directory", paths.quarantine.string(),
+        "--checkpoint-interval", "3600",
+        progress ? "--progress" : "--no-progress",
+        "--progress-interval", "1",
+        "--progress-format", "text",
+        "--no-verify",
+        "--output", paths.output.string()
+    };
+}
+
+
+void requireManifestWarningBeforeProgress(
+    const std::filesystem::path& executable,
+    const std::filesystem::path& root
+)
+{
+    const RunPaths paths = makePaths(root, "logger-warning");
+    requireSuccessfulRun(
+        executable,
+        warningOptions(paths, false),
+        paths,
+        60s
+    );
+    if (!readFile(paths.stderrLog).empty())
+    {
+        throw std::runtime_error(
+            "fresh no-progress run emitted a diagnostic warning"
+        );
+    }
+
+    const auto manifest =
+        requireFileWithExtension(paths.checkpoints, ".manifest");
+    {
+        std::ofstream corrupt(manifest, std::ios::binary | std::ios::trunc);
+        corrupt << "broken manifest";
+        if (!corrupt)
+        {
+            throw std::runtime_error("failed to corrupt checkpoint manifest");
+        }
+    }
+
+    requireSuccessfulRun(
+        executable,
+        warningOptions(paths, true),
+        paths,
+        60s
+    );
+    const std::string log = readFile(paths.stderrLog);
+    const std::size_t manifestWarning = log.find(
+        "pi-engine: warning: checkpoint: manifest/invalid_manifest:"
+    );
+    const std::size_t firstProgressLine =
+        !log.empty() && log.front() == '[' ? 0 : log.find("\n[");
+    if (manifestWarning == std::string::npos)
+    {
+        throw std::runtime_error("corrupt manifest warning is absent");
+    }
+    if (firstProgressLine == std::string::npos
+        || manifestWarning >= firstProgressLine)
+    {
+        throw std::runtime_error(
+            "corrupt manifest warning did not precede progress"
+        );
+    }
+    if (finalTextRecord(log).phase != "completed")
+    {
+        throw std::runtime_error(
+            "manifest-warning run did not complete"
+        );
+    }
+}
+
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -586,6 +701,10 @@ int main(int argc, char* argv[])
         const std::string defaultOutput =
             requireDefaultRun(executable, temporary.path());
         requireResumeOnlyRun(executable, temporary.path());
+        requireManifestWarningBeforeProgress(
+            executable,
+            temporary.path()
+        );
 
         const RunPaths resumed = makePaths(temporary.path(), "resumed");
         ChildProcess interrupted = startProcess(

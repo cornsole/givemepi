@@ -209,6 +209,8 @@ set(PI_ENGINE_SOURCES
     src/config/Config.cpp
     src/config/ConfigLoader.cpp
     src/config/CommandLine.cpp
+    src/logging/Logger.cpp
+
     src/storage/StoragePolicy.cpp
     src/storage/BinaryNodeChunkAdapter.cpp
     src/storage/NodeLifecycle.cpp
@@ -590,6 +592,26 @@ set_tests_properties(
     PROPERTIES
         LABELS "integration"
         TIMEOUT 300
+)
+
+add_executable(logger-test
+    tests/logging/LoggerTest.cpp
+    src/logging/Logger.cpp
+)
+
+add_test(
+    NAME LoggerTest
+    COMMAND logger-test
+)
+
+target_include_directories(logger-test
+    PRIVATE
+        include
+)
+
+target_link_libraries(logger-test
+    PRIVATE
+        Threads::Threads
 )
 
 add_executable(progress-state-test

@@ -6,7 +6,7 @@ Phase 0
 
 [x] CMake
 
-[ ] Logger
+[x] Logger Foundation and Resume Diagnostics (PR-0034)
 
 [x] Config
 

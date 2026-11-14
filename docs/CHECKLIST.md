@@ -4,7 +4,17 @@
 
 [x] CMake
 
-[ ] Logger
+[x] Logger Foundation (PR-0034)
+
+[x] Synchronous `Logger` API: Fixed Warning Threshold, Per-Instance Mutex, One-Line Normalized `pi-engine: <level>: <component>: <message>` Records, No-Throw on Sink Failure (PR-0034)
+
+[x] Resume Manifest, Rejection, Validation, and Quarantine Diagnostics Logged as stderr Warnings before Progress Starts (PR-0034)
+
+[x] Logger Behavior Test (`LoggerTest`) Added and Real-Process `CheckpointResumeCliTest` Extended for Resume Diagnostics (PR-0034)
+
+[x] CLI Regression: Help, Usage/Fatal Diagnostics, Exit 0/1/2, stdout Result, Text Progress, and JSON Schema v4 Unchanged (PR-0034)
+
+[x] PR-0034 Verification Gate (complete Debug build, 69/69 CTest, 4/4 changed-path ASan/UBSan tests, fresh and corrupted-checkpoint smoke runs)
 
 [x] Config
 

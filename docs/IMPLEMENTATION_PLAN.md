@@ -31,6 +31,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0031 | Live checkpoint telemetry and CLI resume regression | Complete |
 | PR-0032 | Default CLI progress and checkpoint hardening | Complete |
 | PR-0033 | CLI help and usage errors | Complete |
+| PR-0034 | Logger foundation and resume diagnostics | Complete |
 
 ---
 
@@ -1421,3 +1422,103 @@ PR-0033 is complete. Keep `CommandLine::writeHelp` and
 option the parser rejects or omits one it accepts. Preserve parse-before-config
 ordering and the 0/1/2 exit-status contract. Select the next PR boundary with
 the user before implementation.
+
+---
+
+## PR-0034: Logger Foundation and Resume Diagnostics
+
+### Goal
+
+Add a synchronous, thread-safe diagnostic logger and use it to expose
+checkpoint resume warnings that are currently dropped, without changing CLI
+help, usage errors, exit statuses, calculation results, or progress formats.
+
+### Architecture Contract
+
+`pi::logging::Logger` writes one complete diagnostic record per call to a
+caller-owned `std::ostream`. `LogLevel` has `debug`, `info`, `warning`, and
+`error` levels; production uses a fixed `warning` threshold. Each record has
+the stable form
+`pi-engine: <level>: <component>: <message>\n`.
+
+Logger writes are synchronous and serialized by an instance mutex. Carriage
+returns and newlines in components or messages are written as spaces so one
+call cannot inject additional records. Sink failures are contained by the
+logger and never replace the calculation result or original failure.
+
+The logger has no global singleton, macros, background thread, timestamp,
+external dependency, file sink, CLI option, or TOML setting. Progress remains
+the calculation telemetry channel and retains text and JSON schema version 4.
+Help, usage errors, fatal errors, and successful result output keep their
+existing direct output contracts.
+
+Production logging is limited to checkpoint resume diagnostics emitted after
+resume planning and before the progress reporting runner starts. Rejected
+blocks, validation diagnostics, successful quarantine destinations,
+quarantine-operation failures, and manifest-load failures are warnings.
+Storage, scheduler, calculation, verification, and progress internals do not
+gain a logger dependency.
+
+### Work Sequence
+
+1. Add `LogLevel` and the synchronous `Logger` API.
+2. Implement threshold filtering, single-record serialization, newline
+   normalization, and sink-failure containment.
+3. Add behavior coverage for levels, exact records, newline normalization,
+   failed sinks, and concurrent writers.
+4. Register the production source and `LoggerTest` with CMake.
+5. Create the production warning logger after early help handling.
+6. Replace direct checkpoint rejection output and expose quarantine and
+   manifest diagnostics before progress reporting starts.
+7. Run targeted logger, command-line, progress, and checkpoint/resume tests.
+8. Exercise a real rejected-checkpoint resume path and verify warning ordering.
+9. Run the complete Debug build, full CTest suite, and changed-path
+   ASan/UBSan tests.
+10. Update README and canonical project documents with observed results.
+
+### Acceptance
+
+- Concurrent calls produce complete, non-interleaved one-line records.
+- Records below the configured threshold are omitted.
+- Embedded carriage returns and newlines cannot create extra records.
+- A failed or throwing sink cannot throw from `Logger::write` or change the
+  process exit status.
+- Rejected checkpoints, quarantine outcomes, and manifest-load failures are
+  reported before the progress runner starts.
+- `--help`, usage errors, fatal errors, successful stdout, and exit statuses
+  0/1/2 are unchanged.
+- A normal successful `--no-progress` run without warnings leaves stderr empty.
+- Text progress records and JSON progress schema version 4 are unchanged.
+- The new unit test, affected CLI regressions, the complete Debug build, the
+  full CTest suite, and changed-path ASan/UBSan tests pass.
+
+### Out of Scope
+
+- log-level CLI or TOML configuration;
+- asynchronous logging, rotation, timestamps, or file/network sinks;
+- structured JSON logs or progress schema changes;
+- logging inside storage, scheduler, calculation, verification, checkpoint,
+  or progress libraries;
+- routing help, usage, fatal, successful-result, or verification output through
+  the logger;
+- benchmark, release workflow, NUMA, Huge Pages, SIMD, ASM, or FFT work.
+
+### Verification
+
+- Built all Debug targets and passed all 69 CTest tests.
+- `LoggerTest`, `CommandLineCliTest`, `ProgressReportingRunnerTest`, and
+  `CheckpointResumeCliTest` passed under combined ASan/UBSan with leak
+  detection disabled.
+- A fresh 1,000-digit `--no-progress` run produced no stderr. After its
+  checkpoint block was corrupted, the resumed run emitted rejection,
+  structural validation, and quarantine warnings, then completed.
+- The real-process checkpoint/resume regression corrupts a published manifest,
+  requires the manifest warning before the first progress record, and requires
+  the run to finish with `phase=completed`.
+
+### Next Contributor TODO
+
+PR-0034 is complete. Preserve the separation between diagnostic warnings,
+progress telemetry, exact CLI errors, and successful stdout. Keep resume
+warnings before progress starts, and do not add logger configuration or inject
+the logger into library subsystems without a separate approved PR boundary.

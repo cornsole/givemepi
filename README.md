@@ -178,6 +178,7 @@ telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 4입니�
 | 영역 | 상태 | 현재 범위 |
 | --- | --- | --- |
 | 설정과 CLI | 완료 | TOML/default/CLI override, `-h`/`--help`, 알 수 없는 옵션 거부(종료 상태 2), 병렬 계산, 결과 기록과 검증 |
+| Logger | 기반 완료 | 동기식 한 줄 stderr logger, resume 진단 warning(progress 시작 전) |
 | Platform | 기반 완료 | CPUID와 AVX/AVX2/AVX-512 기능 탐지 |
 | Memory | 기반 완료 | Arena, pool, alignment, scratch buffer |
 | Scheduler | 완료 | lifecycle, drain, MPMC queue, local routing, work stealing |
@@ -305,6 +306,15 @@ cp config.toml.example config.toml
 `checkpoint-quarantine` 디렉터리, 300초 interval입니다. 같은 계산 identity로
 다시 실행하면 검증을 통과한 durable block만 자동 재사용하고, 손상되거나
 manifest에 없는 block은 quarantine한 뒤 해당 범위를 다시 계산합니다.
+
+PR-0034부터 resume 검증에서 block이 거부되거나 manifest 진단이 생기면 progress가
+시작되기 **전에** stderr로 `pi-engine: warning: checkpoint: ...` 형식의 한 줄
+warning을 출력합니다.
+거부된 block 경로(`rejected <path>`), 검증 단계·사유(`<stage>/<reason>: <detail>`),
+격리 위치(`quarantined <path> to <path>`)가 각각 한 줄로 기록되며, 계산은 해당
+범위를 다시 계산한 뒤 정상적으로 완료됩니다. 거부된 block이 없는 새 실행에서는
+이 warning을 출력하지 않습니다. logger는 resume 진단에만 쓰이며 progress
+record, stdout 결과, 도움말, 사용 오류 진단, 종료 상태(0/1/2)는 바뀌지 않습니다.
 
 상대 경로(`checkpoints`, `checkpoint-quarantine`, `storage`, `pi.txt` 등)는
 실행 파일 위치나 소스 트리가 아니라 **프로세스의 현재 작업 디렉터리** 기준으로
