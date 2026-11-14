@@ -32,6 +32,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0032 | Default CLI progress and checkpoint hardening | Complete |
 | PR-0033 | CLI help and usage errors | Complete |
 | PR-0034 | Logger foundation and resume diagnostics | Complete |
+| PR-0035 | Informational benchmark workflow | Complete |
 
 ---
 
@@ -1522,3 +1523,78 @@ PR-0034 is complete. Preserve the separation between diagnostic warnings,
 progress telemetry, exact CLI errors, and successful stdout. Keep resume
 warnings before progress starts, and do not add logger configuration or inject
 the logger into library subsystems without a separate approved PR boundary.
+
+---
+
+## PR-0035: Informational Benchmark Workflow
+
+### Goal
+
+Build and run the existing benchmark executables on demand in GitHub Actions,
+preserve their raw output as an artifact, and establish a repeatable
+measurement gate before later optimization work.
+
+### Architecture Contract
+
+Benchmark automation is separate from correctness CI. It runs only through
+`workflow_dispatch`, uses a Release build with `ENABLE_BENCHMARKS=ON`, and
+never gates a pull request on elapsed-time thresholds from a shared runner.
+Process failures and benchmark-internal correctness failures remain fatal.
+
+The existing no-argument benchmark workloads and CSV schemas remain stable.
+Fixed-workload benchmarks accept one exact optional `--quick` argument for a
+bounded CI profile. Unknown or additional arguments fail explicitly.
+
+### Work Sequence
+
+1. Add bounded `--quick` profiles to the fixed-workload Chudnovsky and final
+   verification benchmarks without changing their default profiles.
+2. Add a manually dispatched Release benchmark workflow.
+3. Build all five existing benchmark targets.
+4. Run each target with bounded inputs and capture its raw output.
+5. Upload the benchmark output as a workflow artifact.
+6. Reconcile benchmark, platform, memory, Big Integer, and assembly checklist
+   entries with the implementation that already exists.
+7. Document the informational shared-runner measurement contract.
+8. Run all benchmark quick profiles, the complete Debug build, and CTest.
+
+### Acceptance
+
+- Manual workflow dispatch builds all benchmark executables in Release mode.
+- All five benchmark executables run with bounded inputs and preserve raw
+  output in one uploaded artifact.
+- Chudnovsky quick mode still compares sequential and parallel output.
+- Final-verification quick mode still requires complete verification success.
+- Shared-runner timing values are informational and have no pass/fail
+  threshold.
+- Existing no-argument benchmark behavior and CSV schemas do not change.
+- Invalid fixed-workload benchmark arguments fail with a diagnostic.
+- The normal Debug build and complete CTest suite remain successful.
+
+### Out of Scope
+
+- scheduled benchmark runs or pull-request benchmark gates;
+- performance-regression thresholds or baseline comparison;
+- release workflow, packaging, or installation;
+- new benchmark programs;
+- SIMD, assembly, NUMA, Huge Pages, or calculation optimization;
+- logger configuration or library-subsystem logging.
+
+### Verification
+
+- Configured a GCC Release build with `ENABLE_BENCHMARKS=ON` and built all
+  five benchmark targets.
+- Ran both `--quick` profiles, an 8 MiB storage round trip, a 1,000,000-digit
+  asynchronous out-of-core merge with 15 spills and reloads, and a two-reader/
+  two-writer concurrency workload successfully.
+- Both fixed-workload benchmarks rejected `--bogus` with empty stdout, a
+  usage diagnostic on stderr, and a non-zero exit status.
+- Built all Debug targets and passed all 69 CTest tests.
+- Parsed the workflow as YAML. `actionlint` was not available locally; remote
+  `workflow_dispatch` remains the GitHub-surface verification.
+
+### Next Contributor TODO
+
+PR-0035 is complete. Keep shared GitHub runner timing informational and retain
+the existing no-argument benchmark profiles and CSV schemas. Select any
+optimization or release-workflow boundary with the user before implementation.

@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added PR-0035 manually dispatched benchmark workflow: a Release build with
+  `ENABLE_BENCHMARKS=ON` builds and runs all five existing benchmark
+  executables with bounded workloads and uploads their raw output as one
+  artifact.
+- Added exact `--quick` profiles to the Chudnovsky and final-verification
+  benchmarks while preserving their no-argument workloads and CSV schemas.
+
 - Added PR-0034 logger foundation: a synchronous `pi::logging::Logger` bound
   to one text sink with a fixed minimum level. Each enabled record is one line,
   `pi-engine: <level>: <component>: <message>`, with CR/LF normalized so a
@@ -173,6 +180,12 @@
 
 ### Changed
 
+- PR-0035 treats shared GitHub runner timings as informational. Build,
+  process, and benchmark-internal correctness failures fail the workflow, but
+  elapsed-time thresholds and baseline comparison are intentionally absent.
+- Reconciled roadmap and checklist entries with the existing platform,
+  memory, GMP FFT, benchmark, and CPUID feature-detection implementations.
+
 - PR-0034: the logger is used only for resume diagnostics with a fixed warning
   threshold. Help, exact usage and fatal diagnostics, exit statuses 0/1/2,
   stdout result, text progress, and JSON progress schema version 4 are
@@ -227,6 +240,13 @@
   checklist entries complete. PR-0031 verification is complete.
 
 ### Verification
+
+- Built all five PR-0035 benchmark targets in a GCC Release configuration and
+  ran their bounded profiles successfully. The out-of-core workload completed
+  15 asynchronous spills and reloads.
+- Verified invalid fixed-workload benchmark arguments fail with usage
+  diagnostics, built all Debug targets, and passed all 69 CTest tests.
+- Parsed the benchmark workflow as YAML; `actionlint` was unavailable locally.
 
 - Built all PR-0034 Debug targets and passed all 69 CTest tests.
 - Passed the four PR-0034 changed-path tests (`LoggerTest`,

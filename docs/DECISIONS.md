@@ -2711,3 +2711,47 @@ replace the original calculation result. Adding runtime log-level
 configuration, logging from library subsystems, or logging concurrently with
 progress requires a separate decision because each changes CLI/configuration
 or shared-output synchronization contracts.
+
+---
+
+## ADR-0057
+
+Date
+
+2026-11-14
+
+Status
+
+Accepted
+
+Title
+
+Run Benchmarks Manually and Treat Shared-Runner Timings as Informational
+
+Decision
+
+PR-0035 adds a separate manually dispatched GitHub Actions workflow that
+configures a Release build with `ENABLE_BENCHMARKS=ON`, builds all existing
+benchmark executables, runs bounded workloads, and uploads their raw output.
+
+The workflow fails on build errors, process failures, and benchmark-internal
+correctness failures. It has no elapsed-time threshold, baseline comparison,
+schedule, or pull-request trigger. The fixed-workload Chudnovsky and final
+verification benchmarks retain their no-argument profiles and CSV schemas and
+accept one exact optional `--quick` profile for bounded automation.
+
+Reason
+
+Benchmark executables existed but normal CI did not build or run them.
+Later optimization work requires repeatable executable coverage, while timing
+from a shared hosted runner is too noisy to establish a stable performance
+regression gate. Manual dispatch controls cost and preserves measurements
+without presenting them as dedicated-hardware evidence.
+
+Consequences
+
+Benchmark build and correctness regressions become observable before
+optimization work starts. Raw results remain available as workflow artifacts,
+but performance acceptance still requires controlled local or dedicated
+hardware measurements. Release packaging, scheduled runs, pull-request gates,
+and performance thresholds remain separate future decisions.

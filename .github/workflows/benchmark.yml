@@ -1,0 +1,65 @@
+name: PiEngine Benchmarks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y cmake g++ libgmp-dev liblz4-dev
+
+      - name: Configure Release benchmarks
+        run: |
+          cmake -S . -B build-benchmark \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_BENCHMARKS=ON
+
+      - name: Build benchmark targets
+        run: |
+          cmake --build build-benchmark --parallel --target \
+            chudnovsky-benchmark \
+            storage-throughput-benchmark \
+            out-of-core-merge-benchmark \
+            reader-writer-concurrency-benchmark \
+            final-verification-benchmark
+
+      - name: Run bounded benchmark profiles
+        run: |
+          set -o pipefail
+          mkdir -p benchmark-results
+
+          ./build-benchmark/chudnovsky-benchmark --quick \
+            2>benchmark-results/chudnovsky.stderr \
+            | tee benchmark-results/chudnovsky.csv
+          ./build-benchmark/storage-throughput-benchmark \
+            8 none "${RUNNER_TEMP}/storage-throughput" cold \
+            2>&1 | tee benchmark-results/storage-throughput.txt
+          ./build-benchmark/out-of-core-merge-benchmark \
+            1000000 1 out-of-core async 2 8 \
+            2>&1 | tee benchmark-results/out-of-core-merge.txt
+          ./build-benchmark/reader-writer-concurrency-benchmark \
+            2 100000 2 2 none "${RUNNER_TEMP}/reader-writer" \
+            2>&1 | tee benchmark-results/reader-writer-concurrency.txt
+          ./build-benchmark/final-verification-benchmark --quick \
+            2>benchmark-results/final-verification.stderr \
+            | tee benchmark-results/final-verification.csv
+
+      - name: Upload benchmark output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results/
+          if-no-files-found: error

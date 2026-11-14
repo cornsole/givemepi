@@ -402,6 +402,25 @@ stdout·종료 상태 0, 잘못된 `config.toml`이 있어도 도움말과 사�
 설정 오류의 종료 상태 1, CLI override가 `config.toml` 값보다 우선하는 점을
 확인하는 Linux 전용 CLI 옵션 회귀 테스트(`CommandLineCliTest`)가 포함됩니다.
 
+### Benchmark workflow
+
+GitHub Actions의 `PiEngine Benchmarks` workflow는 수동으로 실행합니다. Release
+설정과 `ENABLE_BENCHMARKS=ON`으로 기존 benchmark 5개를 빌드하고 제한된
+workload를 실행한 뒤 원시 출력을 artifact로 보존합니다. 공유 runner의 실행
+시간은 정보성 측정값이며 pull request 통과 조건이나 성능 회귀 임계값으로
+사용하지 않습니다.
+
+로컬에서 같은 빠른 계산·검증 profile을 실행하려면 다음을 사용합니다.
+
+```bash
+cmake -S . -B build-benchmark \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_BENCHMARKS=ON
+cmake --build build-benchmark --parallel
+./build-benchmark/chudnovsky-benchmark --quick
+./build-benchmark/final-verification-benchmark --quick
+```
+
 Sanitizer 빌드는 다음처럼 구성할 수 있습니다.
 
 ```bash

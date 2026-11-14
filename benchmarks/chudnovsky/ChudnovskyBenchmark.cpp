@@ -80,12 +80,13 @@ Sample median(
 template <typename Calculate>
 Sample measure(
     Calculate&& calculate,
-    std::string& expected
+    std::string& expected,
+    int repetitions
 )
 {
     std::vector<Sample> samples;
 
-    for (int repetition = 0; repetition < 6; ++repetition)
+    for (int repetition = 0; repetition < repetitions; ++repetition)
     {
         PiCalculationResult result = calculate();
 
@@ -120,15 +121,44 @@ void print(
               << sample.format << ',' << sample.total << '\n';
 }
 
+
+struct Profile
+{
+    std::vector<std::size_t> digits;
+    std::vector<std::size_t> workers;
+    int repetitions;
+};
+
+
+const Profile defaultProfile{{1000U, 10000U, 100000U, 1000000U}, {4U, 8U}, 6};
+// CI-safe quick profile: one warmup plus one measured sample per row.
+const Profile quickProfile{{1000U, 10000U}, {4U}, 2};
+
 } // namespace
 
 
-int main()
+int main(
+    int argc,
+    char** argv
+)
 {
+    const Profile* profile = &defaultProfile;
+
+    if (argc == 2 && std::string(argv[1]) == "--quick")
+    {
+        profile = &quickProfile;
+    }
+    else if (argc != 1)
+    {
+        std::cerr << "chudnovsky-benchmark: unsupported arguments; "
+                     "usage: chudnovsky-benchmark [--quick]\n";
+        return 1;
+    }
+
     std::cout
         << "digits,mode,workers,split_us,finalize_us,format_us,total_us\n";
 
-    for (const std::size_t digits : {1000U, 10000U, 100000U, 1000000U})
+    for (const std::size_t digits : profile->digits)
     {
         std::string expected;
         const Sample sequential = measure(
@@ -138,11 +168,12 @@ int main()
                     PiCalculationRequest{digits}
                 );
             },
-            expected
+            expected,
+            profile->repetitions
         );
         print(digits, "sequential", 1, sequential);
 
-        for (const std::size_t workers : {4U, 8U})
+        for (const std::size_t workers : profile->workers)
         {
             Scheduler scheduler(workers, 512);
             scheduler.start();
@@ -155,7 +186,8 @@ int main()
                         ParallelSplitOptions{128, 4}
                     );
                 },
-                expected
+                expected,
+                profile->repetitions
             );
             scheduler.stop();
             print(digits, "parallel", workers, parallel);

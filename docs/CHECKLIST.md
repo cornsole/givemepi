@@ -64,7 +64,9 @@
 
 [x] Artifact Upload
 
-[ ] Benchmark Workflow
+[x] Informational Benchmark Workflow (PR-0035)
+
+[x] PR-0035 Verification Gate (five Release benchmark targets and bounded runs, invalid-argument checks, complete Debug build, 69/69 CTest)
 
 [ ] Release Workflow
 
@@ -200,7 +202,7 @@
 
 [x] In-Place Sign Negation
 
-[ ] FFT
+[x] GMP FFT Multiplication Used through GMP; No Custom Big Integer Multiplication
 
 -----------------
 
@@ -559,7 +561,7 @@ directory.
 
 ## ASM
 
-[ ] CPUID
+[x] CPUID Feature Detection (Platform Implementation; Custom Assembly Unnecessary)
 
 [ ] memcpy
 
@@ -571,10 +573,12 @@ directory.
 
 ## Benchmark
 
-[ ] Single Thread
+[x] Sequential and Parallel Chudnovsky Benchmark
 
-[ ] Multi Thread
+[x] Storage Throughput, Out-of-Core Merge, and Reader/Writer Concurrency Benchmarks
 
-[ ] Memory
+[x] Final Verification Benchmark
 
-[ ] Storage
+[x] Manually Dispatched Informational Benchmark Workflow (PR-0035)
+
+[ ] Dedicated Memory Allocator Benchmark

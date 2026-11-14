@@ -6,17 +6,36 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <vector>
 
-int main()
+int main(
+    int argc,
+    char** argv
+)
 {
+    std::vector<std::uint64_t> digitsMatrix{1000ULL, 10000ULL, 100000ULL};
+    int repetitions = 6;
+    if (argc == 2 && std::string(argv[1]) == "--quick")
+    {
+        // CI-safe quick profile: one warmup plus one measured sample per row.
+        digitsMatrix = {1000ULL, 10000ULL};
+        repetitions = 2;
+    }
+    else if (argc != 1)
+    {
+        std::cerr << "final-verification-benchmark: unsupported arguments; "
+                     "usage: final-verification-benchmark [--quick]\n";
+        return 1;
+    }
+
     using Clock = std::chrono::steady_clock;
     std::cout << "digits,samples,calculate_us,verify_us,verify_ratio\n";
-    for (const std::uint64_t digits : {1000ULL, 10000ULL, 100000ULL})
+    for (const std::uint64_t digits : digitsMatrix)
     {
         std::vector<std::int64_t> calculationSamples;
         std::vector<std::int64_t> verificationSamples;
-        for (int repetition = 0; repetition < 6; ++repetition)
+        for (int repetition = 0; repetition < repetitions; ++repetition)
         {
             const auto calculationStarted = Clock::now();
             const auto result =

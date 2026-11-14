@@ -20,9 +20,9 @@ Phase 1
 
 Platform
 
-- CPUID
-- Huge Pages
-- NUMA
+[x] CPUID and AVX Feature Detection
+[ ] Huge Pages
+[ ] NUMA
 
 ----------------------
 
@@ -30,9 +30,9 @@ Phase 2
 
 Memory
 
-- Arena
-- Pool
-- Alignment
+[x] Arena
+[x] Pool
+[x] Alignment and Scratch Buffer
 
 ----------------------
 
@@ -177,6 +177,11 @@ Assembly
 Phase 13
 
 Benchmark
+
+[x] Sequential and Parallel Chudnovsky Benchmark
+[x] Storage Throughput and Concurrency Benchmarks
+[x] Final Verification Benchmark
+[x] Informational GitHub Actions Workflow (PR-0035)
 
 ----------------------
 
