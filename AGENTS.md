@@ -1,11 +1,11 @@
-# AGENT.md
+# AGENTS.md
 
 Session Start Procedure
 
 When starting a new implementation session, always read the following files in order:
 
 
-1. AGENT.md
+1. AGENTS.md
 2. docs/DECISIONS.md
 3. docs/ROADMAP.md
 4. docs/IMPLEMENTATION_PLAN.md
