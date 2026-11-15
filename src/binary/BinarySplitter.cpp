@@ -274,6 +274,20 @@ std::uint64_t BinarySplitter::mergeWorkUnits(std::size_t termSpan) noexcept
 }
 
 
+std::uint64_t BinarySplitter::mergeLevelWorkUnits(
+    std::size_t termSpan,
+    std::size_t pairs,
+    std::size_t workers
+) noexcept
+{
+    const auto concurrency = static_cast<std::uint64_t>(
+        std::max<std::size_t>(std::min(workers, pairs), 1)
+    );
+    const std::uint64_t units = mergeWorkUnits(termSpan);
+    return units / concurrency + (units % concurrency != 0 ? 1 : 0);
+}
+
+
 BinaryNode BinarySplitter::merge(
     const BinaryNode& left,
     const BinaryNode& right
@@ -581,6 +595,10 @@ BinaryNode BinarySplitter::splitParallel(
     std::uint32_t mergeLevel = 0;
     completeStage(mergeLevel, !pendingBlocks.empty());
 
+    // Pairs of one level run on at most this many threads concurrently.
+    const std::size_t mergeWorkers =
+        parallelExecution ? executor.workerCount() : 1;
+
     if (observer != nullptr)
     {
         // Replay the pairing below on term spans to plan exact merge work.
@@ -597,7 +615,8 @@ BinaryNode BinarySplitter::splitParallel(
             for (std::size_t pair = 0; pair < pairs; ++pair)
             {
                 spans[pair] = spans[pair * 2] + spans[pair * 2 + 1];
-                const std::uint64_t units = mergeWorkUnits(spans[pair]);
+                const std::uint64_t units =
+                    mergeLevelWorkUnits(spans[pair], pairs, mergeWorkers);
                 plannedUnits =
                     units > std::numeric_limits<std::uint64_t>::max()
                             - plannedUnits
@@ -636,8 +655,8 @@ BinaryNode BinarySplitter::splitParallel(
         for (std::size_t pair = 0; pair < pairCount; ++pair)
         {
             const std::size_t leftIndex = pair * 2;
-            const auto mergePair =
-                [&nodes, &mergeResults, pair, leftIndex, observer]()
+            const auto mergePair = [&nodes, &mergeResults, pair, leftIndex,
+                                    pairCount, mergeWorkers, observer]()
             {
                 mergeResults[pair].emplace(
                     BinarySplitter::merge(
@@ -647,8 +666,10 @@ BinaryNode BinarySplitter::splitParallel(
                 );
                 if (observer != nullptr)
                 {
-                    observer->mergeWorkCompleted(mergeWorkUnits(
-                        nodes[leftIndex + 1].end() - nodes[leftIndex].start()
+                    observer->mergeWorkCompleted(mergeLevelWorkUnits(
+                        nodes[leftIndex + 1].end() - nodes[leftIndex].start(),
+                        pairCount,
+                        mergeWorkers
                     ));
                 }
             };

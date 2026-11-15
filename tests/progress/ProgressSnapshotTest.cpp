@@ -62,7 +62,7 @@ int main()
         CheckpointRangeProgress{48, 74, 1};
 
     const ProgressSnapshot snapshot(data);
-    assert(snapshot.schemaVersion() == 5);
+    assert(snapshot.schemaVersion() == 6);
     assert(snapshot.phase() == ProgressPhase::merging);
     assert(snapshot.terminalState() == ProgressTerminalState::running);
     assert(snapshot.targetDigits() == 1'000);
@@ -158,6 +158,11 @@ int main()
     work.elapsed = 3s;
     work.phaseElapsed = 1s;
     work.phaseBaselineUnits = 10;
+    work.sinceLastPhaseUnit = 400ms;
+    work.closedPhaseDurations[phaseIndex(ProgressPhase::initializing)] =
+        500ms;
+    work.closedPhaseDurations[phaseIndex(ProgressPhase::splitting)] = 1500ms;
+    work.closedPhaseUnits[phaseIndex(ProgressPhase::splitting)] = 6;
     const ProgressSnapshot workSnapshot(work);
     assert(workSnapshot.restoredTerms() == 4);
     assert(workSnapshot.restoredCheckpointBlocks() == 1);
@@ -170,6 +175,11 @@ int main()
     assert(workSnapshot.phaseCost(ProgressPhase::splitting) == 7);
     assert(workSnapshot.phaseElapsed() == 1s);
     assert(workSnapshot.phaseBaselineUnits() == 10);
+    assert(workSnapshot.sinceLastPhaseUnit() == 400ms);
+    assert(workSnapshot.closedPhaseDuration(ProgressPhase::splitting)
+        == 1500ms);
+    assert(workSnapshot.closedPhaseDuration(ProgressPhase::merging) == 0ns);
+    assert(workSnapshot.closedPhaseUnits(ProgressPhase::splitting) == 6);
 
     const auto rejects = [](ProgressSnapshotData invalid) {
         return throws<std::invalid_argument>([&invalid]() {
@@ -205,6 +215,28 @@ int main()
     assert(rejects(invalidWork));
     invalidWork = work;
     invalidWork.phaseBaselineUnits = 31;
+    assert(rejects(invalidWork));
+    invalidWork = work;
+    invalidWork.sinceLastPhaseUnit = 1001ms;
+    assert(rejects(invalidWork));
+    invalidWork = work;
+    invalidWork.sinceLastPhaseUnit = -1ns;
+    assert(rejects(invalidWork));
+    // Closed phases and the current phase cannot outlast the run.
+    invalidWork = work;
+    invalidWork.closedPhaseDurations[phaseIndex(ProgressPhase::splitting)] =
+        1500ms + 1ns;
+    assert(rejects(invalidWork));
+    invalidWork = work;
+    invalidWork.closedPhaseDurations[phaseIndex(ProgressPhase::merging)] =
+        -1ns;
+    assert(rejects(invalidWork));
+    // Closed units exclude the 4 restored terms.
+    invalidWork = work;
+    invalidWork.closedPhaseUnits[phaseIndex(ProgressPhase::splitting)] = 7;
+    assert(rejects(invalidWork));
+    invalidWork = work;
+    invalidWork.closedPhaseUnits[phaseIndex(ProgressPhase::completed)] = 1;
     assert(rejects(invalidWork));
 
     return 0;

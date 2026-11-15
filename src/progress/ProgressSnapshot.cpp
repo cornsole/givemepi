@@ -25,6 +25,9 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
       phaseCosts_(data.phaseCosts),
       phaseElapsed_(data.phaseElapsed),
       phaseBaselineUnits_(data.phaseBaselineUnits),
+      sinceLastPhaseUnit_(data.sinceLastPhaseUnit),
+      closedPhaseDurations_(data.closedPhaseDurations),
+      closedPhaseUnits_(data.closedPhaseUnits),
       memoryBytes_(data.memoryBytes),
       checkpointBytes_(data.checkpointBytes),
       storageResidentBytes_(data.storageResidentBytes),
@@ -126,6 +129,39 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
         throw std::invalid_argument(
             "Phase baseline cannot exceed completed phase units"
         );
+    }
+
+    if (sinceLastPhaseUnit_ < std::chrono::nanoseconds::zero()
+        || sinceLastPhaseUnit_ > phaseElapsed_)
+    {
+        throw std::invalid_argument(
+            "Time since the last phase unit must lie within phase elapsed time"
+        );
+    }
+
+    std::chrono::nanoseconds closedTotal = std::chrono::nanoseconds::zero();
+    for (std::size_t index = 0; index < PROGRESS_PHASE_COUNT; ++index)
+    {
+        const auto phase = static_cast<ProgressPhase>(index);
+        const std::chrono::nanoseconds duration = closedPhaseDurations_[index];
+        if (duration < std::chrono::nanoseconds::zero()
+            || duration > elapsed_ - phaseElapsed_ - closedTotal)
+        {
+            throw std::invalid_argument(
+                "Closed phase durations must fit within elapsed time"
+            );
+        }
+        closedTotal += duration;
+
+        const PhaseWorkUnits units = phaseWork(phase);
+        const std::uint64_t restored =
+            phase == ProgressPhase::splitting ? restoredTerms_ : 0;
+        if (closedPhaseUnits_[index] > units.completed - restored)
+        {
+            throw std::invalid_argument(
+                "Closed phase units cannot exceed newly completed units"
+            );
+        }
     }
 }
 
@@ -258,6 +294,28 @@ std::uint64_t ProgressSnapshot::memoryBytes() const noexcept
 std::uint64_t ProgressSnapshot::checkpointBytes() const noexcept
 {
     return checkpointBytes_;
+}
+
+
+std::chrono::nanoseconds ProgressSnapshot::sinceLastPhaseUnit() const noexcept
+{
+    return sinceLastPhaseUnit_;
+}
+
+
+std::chrono::nanoseconds ProgressSnapshot::closedPhaseDuration(
+    ProgressPhase phase
+) const noexcept
+{
+    return closedPhaseDurations_[phaseIndex(phase)];
+}
+
+
+std::uint64_t ProgressSnapshot::closedPhaseUnits(
+    ProgressPhase phase
+) const noexcept
+{
+    return closedPhaseUnits_[phaseIndex(phase)];
 }
 
 std::uint64_t ProgressSnapshot::storageResidentBytes() const noexcept

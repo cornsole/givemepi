@@ -22,7 +22,7 @@ bool addWithinLimit(
         if (value.compare_exchange_weak(
                 current,
                 current + count,
-                std::memory_order_relaxed,
+                std::memory_order_release,
                 std::memory_order_relaxed))
         {
             return true;
@@ -75,6 +75,7 @@ bool ProgressTracker::transitionTo(ProgressPhase next)
     }
 
     const auto now = std::chrono::steady_clock::now();
+    closeCurrentPhase(current, now);
     phase_.store(next, std::memory_order_release);
     if (isTerminal(next) && !finishedAt_.has_value())
     {
@@ -88,8 +89,12 @@ bool ProgressTracker::transitionTo(ProgressPhase next)
 
 bool ProgressTracker::addCompletedTerms(std::uint64_t count) noexcept
 {
-    return isRunning()
-        && addWithinLimit(completedTerms_, count, plan_.totalTerms);
+    if (!isRunning())
+    {
+        return false;
+    }
+    stampUnit(ProgressPhase::splitting, count);
+    return addWithinLimit(completedTerms_, count, plan_.totalTerms);
 }
 
 
@@ -169,6 +174,7 @@ bool ProgressTracker::addPhaseUnits(
         return false;
     }
     const std::size_t index = phaseIndex(phase);
+    stampUnit(phase, count);
     return addWithinLimit(
         phaseCompleted_[index],
         count,
@@ -319,8 +325,9 @@ bool ProgressTracker::markFailed(std::string detail)
     }
 
     failureDetail_ = std::move(detail);
-    phase_.store(ProgressPhase::failed, std::memory_order_release);
     finishedAt_ = std::chrono::steady_clock::now();
+    closeCurrentPhase(current, *finishedAt_);
+    phase_.store(ProgressPhase::failed, std::memory_order_release);
     phaseStartedAt_ = *finishedAt_;
     phaseBaselineUnits_ = 0;
     return true;
@@ -348,6 +355,8 @@ ProgressSnapshot ProgressTracker::snapshot() const
         data.failureDetail = failureDetail_;
         data.phaseCosts = phaseCosts_;
         data.phaseBaselineUnits = phaseBaselineUnits_;
+        data.closedPhaseDurations = closedPhaseDurations_;
+        data.closedPhaseUnits = closedPhaseUnits_;
         // Declarations take this mutex, so each total read here bounds the
         // completed count read after it.
         for (std::size_t index = 0; index < PROGRESS_PHASE_COUNT; ++index)
@@ -359,9 +368,16 @@ ProgressSnapshot ProgressTracker::snapshot() const
             data.phaseUnits[index].total =
                 phaseTotals_[index].load(std::memory_order_relaxed);
             data.phaseUnits[index].completed =
-                phaseCompleted_[index].load(std::memory_order_relaxed);
+                phaseCompleted_[index].load(std::memory_order_acquire);
         }
+        data.completedTerms = completedTerms_.load(std::memory_order_acquire);
 
+        // Units stamp their time before publishing their count, so reading
+        // the stamp after the counters covers every counted unit.
+        const std::size_t current = phaseIndex(data.phase);
+        const auto lastUnitAt = startedAt_ + std::chrono::nanoseconds(
+            lastUnitNs_[current].load(std::memory_order_acquire)
+        );
         const auto endpoint = finishedAt_.value_or(
             std::chrono::steady_clock::now()
         );
@@ -372,9 +388,15 @@ ProgressSnapshot ProgressTracker::snapshot() const
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 endpoint - phaseStartedAt_
             );
+        data.sinceLastPhaseUnit = std::clamp(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                endpoint - std::max(phaseStartedAt_, lastUnitAt)
+            ),
+            std::chrono::nanoseconds::zero(),
+            data.phaseElapsed
+        );
     }
 
-    data.completedTerms = completedTerms_.load(std::memory_order_relaxed);
     data.activeTasks = activeTasks_.load(std::memory_order_relaxed);
     data.queuedTasks = queuedTasks_.load(std::memory_order_relaxed);
     data.memoryBytes = memoryBytes_.load(std::memory_order_relaxed);
@@ -413,6 +435,47 @@ std::uint64_t ProgressTracker::completedUnitsOf(
         return 0;
     }
     return phaseCompleted_[phaseIndex(phase)].load(std::memory_order_relaxed);
+}
+
+
+void ProgressTracker::stampUnit(
+    ProgressPhase phase,
+    std::uint64_t count
+) noexcept
+{
+    if (count == 0)
+    {
+        return;
+    }
+    const std::int64_t now =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - startedAt_
+        ).count();
+    std::atomic<std::int64_t>& stamp = lastUnitNs_[phaseIndex(phase)];
+    std::int64_t previous = stamp.load(std::memory_order_relaxed);
+    while (previous < now
+        && !stamp.compare_exchange_weak(
+            previous,
+            now,
+            std::memory_order_release,
+            std::memory_order_relaxed))
+    {
+    }
+}
+
+
+void ProgressTracker::closeCurrentPhase(
+    ProgressPhase current,
+    std::chrono::steady_clock::time_point now
+) noexcept
+{
+    const std::size_t index = phaseIndex(current);
+    closedPhaseDurations_[index] +=
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now - phaseStartedAt_
+        );
+    closedPhaseUnits_[index] +=
+        completedUnitsOf(current) - phaseBaselineUnits_;
 }
 
 } // namespace pi::progress

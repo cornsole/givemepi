@@ -53,6 +53,7 @@ int main()
     metrics.checkpointBlocksPerSecond = 0.4;
     metrics.estimatedTotalTimeRemaining = 15s;
     metrics.estimatedPhaseTimeRemaining = 4s;
+    metrics.totalBasis = pi::progress::EtaBasis::measured;
 
     const auto fixedTime = JsonProgressReporter::Clock::time_point{0s};
     std::ostringstream output;
@@ -70,10 +71,10 @@ int main()
     ) != std::string::npos);
     assert(record.find(
         "\"reads\":{\"queued\":0,\"active\":0,\"completed\":0,\"failed\":0}},"
-        "\"schema_version\":5"
+        "\"schema_version\":6"
     ) != std::string::npos);
     assert(record.find(
-        "\"schema_version\":5,\"sampled_at\":\"1970-01-01T00:00:00Z\""
+        "\"schema_version\":6,\"sampled_at\":\"1970-01-01T00:00:00Z\""
     ) != std::string::npos);
     assert(record.find("\"phase\":\"merging\"") != std::string::npos);
     assert(record.find("\"terminal_state\":\"running\"")
@@ -102,10 +103,11 @@ int main()
         "\"phase_work\":{\"completed_units\":50,\"total_units\":200,"
         "\"baseline_units\":10,\"elapsed_ns\":2000000000}"
     ) != std::string::npos);
-    // Default selection: total only; the phase key stays present as null.
+    // Default selection: total only; phase keys stay present as null.
     assert(record.find(
         "\"estimated_total_time_remaining_ns\":15000000000,"
-        "\"estimated_phase_time_remaining_ns\":null}"
+        "\"estimated_phase_time_remaining_ns\":null,"
+        "\"eta_total_basis\":\"measured\",\"eta_phase_overdue\":null}"
     ) != std::string::npos);
     assert(record.find("\"estimated_time_remaining_ns\"")
         == std::string::npos);
@@ -121,8 +123,32 @@ int main()
     both.report(ProgressSnapshot(data), metrics);
     assert(bothOutput.str().find(
         "\"estimated_total_time_remaining_ns\":15000000000,"
-        "\"estimated_phase_time_remaining_ns\":4000000000}"
+        "\"estimated_phase_time_remaining_ns\":4000000000,"
+        "\"eta_total_basis\":\"measured\",\"eta_phase_overdue\":false}"
     ) != std::string::npos);
+
+    // Overdue estimates stay null and are flagged rather than reported as 0.
+    ProgressMetrics overdue = metrics;
+    overdue.estimatedTotalTimeRemaining.reset();
+    overdue.estimatedPhaseTimeRemaining.reset();
+    overdue.totalBasis = pi::progress::EtaBasis::overdue;
+    overdue.phaseOverdue = true;
+    both.report(ProgressSnapshot(data), overdue);
+    assert(bothOutput.str().find(
+        "\"estimated_total_time_remaining_ns\":null,"
+        "\"estimated_phase_time_remaining_ns\":null,"
+        "\"eta_total_basis\":\"overdue\",\"eta_phase_overdue\":true}"
+    ) != std::string::npos);
+    ProgressMetrics calibrated = metrics;
+    calibrated.totalBasis = pi::progress::EtaBasis::calibratedPlan;
+    both.report(ProgressSnapshot(data), calibrated);
+    assert(bothOutput.str().find("\"eta_total_basis\":\"calibrated_plan\"")
+        != std::string::npos);
+    calibrated.totalBasis = pi::progress::EtaBasis::unknown;
+    calibrated.estimatedTotalTimeRemaining.reset();
+    both.report(ProgressSnapshot(data), calibrated);
+    assert(bothOutput.str().find("\"eta_total_basis\":\"unknown\"")
+        != std::string::npos);
 
     std::ostringstream phaseOutput;
     JsonProgressReporter phaseOnly(
@@ -133,7 +159,8 @@ int main()
     phaseOnly.report(ProgressSnapshot(data), metrics);
     assert(phaseOutput.str().find(
         "\"estimated_total_time_remaining_ns\":null,"
-        "\"estimated_phase_time_remaining_ns\":4000000000}"
+        "\"estimated_phase_time_remaining_ns\":4000000000,"
+        "\"eta_total_basis\":null,\"eta_phase_overdue\":false}"
     ) != std::string::npos);
 
     data.phaseBaselineUnits = 0;

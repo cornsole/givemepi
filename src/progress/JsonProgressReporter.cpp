@@ -225,6 +225,24 @@ void JsonProgressReporter::report(
             ? metrics.estimatedPhaseTimeRemaining
             : std::nullopt
     );
+    record << ",\"eta_total_basis\":";
+    if (selection_.total)
+    {
+        writeString(record, toString(metrics.totalBasis));
+    }
+    else
+    {
+        record << "null";
+    }
+    record << ",\"eta_phase_overdue\":";
+    if (selection_.phase)
+    {
+        record << (metrics.phaseOverdue ? "true" : "false");
+    }
+    else
+    {
+        record << "null";
+    }
     record << "}}\n";
 
     output_ << record.str();

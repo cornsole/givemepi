@@ -56,12 +56,14 @@ public:
     virtual void mergeLevelStarted(std::uint32_t level) noexcept = 0;
 
     /// Receives the total weighted merge work once, on the coordinating
-    /// thread, after the leaf stage and before the first merge level. Zero
-    /// means the frontier needs no merge. O(1) expected.
+    /// thread, after the leaf stage and before the first merge level. It is
+    /// the sum of BinarySplitter::mergeLevelWorkUnits() over every planned
+    /// pair. Zero means the frontier needs no merge. O(1) expected.
     virtual void mergeWorkPlanned(std::uint64_t units) noexcept = 0;
 
-    /// Receives the weighted units of one finished pair merge from a worker
-    /// or the caller. Must not throw or block. O(1) expected.
+    /// Receives the level-scaled units (mergeLevelWorkUnits()) of one
+    /// finished pair merge from a worker or the caller. Must not throw or
+    /// block. O(1) expected.
     virtual void mergeWorkCompleted(std::uint64_t units) noexcept = 0;
 };
 
@@ -185,6 +187,23 @@ public:
      */
     [[nodiscard]]
     static std::uint64_t mergeWorkUnits(std::size_t termSpan) noexcept;
+
+    /**
+     * Returns the progress units published for one pair merge spanning
+     * termSpan terms at a merge level of `pairs` pairs run on `workers`
+     * threads: mergeWorkUnits(termSpan) divided by min(workers, pairs),
+     * rounded up. Pairs of one level run concurrently, so a level's units
+     * are proportional to its wall time and the merge rate stays constant
+     * from wide to serial levels. Zero workers or pairs count as one.
+     *
+     * Time complexity: O(1). Memory complexity: O(1).
+     */
+    [[nodiscard]]
+    static std::uint64_t mergeLevelWorkUnits(
+        std::size_t termSpan,
+        std::size_t pairs,
+        std::size_t workers
+    ) noexcept;
 
 };
 

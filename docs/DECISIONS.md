@@ -2878,3 +2878,70 @@ arithmetic, storage, resume, and verification throughput may revise it in
 either direction. Raw counters remain authoritative, no timing profile is
 persisted across machines or processes, and output, checkpoint, and
 verification-manifest formats do not change.
+
+## ADR-0060
+
+Date
+
+2026-11-15
+
+Status
+
+Accepted
+
+Title
+
+Derive Total and Phase ETA from Measured Phase Evidence
+
+Decision
+
+PR-0038 replaces the stateless whole-run average of ADR-0059 with an
+evidence-driven estimator. The tracker records, per phase, the closed wall
+duration and the units newly completed while the phase was current, and the
+steady time of the latest unit of every phase. Snapshots expose the closed
+durations and units and the time since the current phase's latest unit.
+
+- Phase ETA measures the current phase up to its latest unit:
+  `r = (u - u0) / (phi - s)` and `R_phase = (U - u) / r - s`. The measured span
+  `phi - s` must reach the minimum sample time and the new units the minimum
+  phase-unit threshold. A negative remainder is reported as overdue with no
+  value; it is never clamped to zero.
+- Calibration `k` is the sum of closed planned-phase durations divided by the
+  planned cost newly completed in them; restored and pre-entry units are
+  excluded. Before any planned phase closes, the current phase's measured span
+  per newly completed planned cost is used; otherwise `k` is unknown.
+- Total ETA is `R_phase + k * W_later`. Without a phase sample the current
+  phase contributes `k * W_entry - phi`, its calibrated cost from the entry
+  baseline minus time already spent. A negative current-phase remainder
+  contributes zero while later work remains, and makes the total overdue when
+  none remains. The whole-run global-rate branch is removed.
+- Merge progress units of one pair are divided by `min(workers, pairs at its
+  level)` in both the published plan and completion, matching the cost model.
+- Verification decimal-import units are `8 * d + d^2 / 256` cumulative for `d`
+  imported digits, published as differences per batch.
+- Progress schema version 6 adds `eta_total_basis`
+  (`measured|calibrated_plan|overdue|unknown`) and `eta_phase_overdue`; both are
+  null when their ETA is unselected. Text renders `eta_total=overdue` and
+  `eta_phase=overdue`, and compact TTY lines stay within 80 columns.
+
+Reason
+
+The ADR-0059 estimator computed `remaining * elapsed / completed` on every
+sample. Because counters are published coarsely, wall time grew between
+publications while completed work stayed fixed, so both ETAs rose linearly
+with time. Serial merge levels were counted with the same units per pair as
+parallel levels, quadratic decimal import was counted linearly, and later
+phases were priced by a rate that splitting dominated. Measuring up to the
+latest unit makes a stall reduce the estimate by exactly the elapsed time, and
+closed phases are the best available evidence for converting planned cost to
+wall time.
+
+Consequences
+
+ETA changes only when a counter changes or by the wall time that passes.
+Estimates may still step up when a slower unit lands; they are not smoothed or
+forced to be monotonic. An overrun is visible as `overdue` instead of a
+misleading zero. Snapshot and progress JSON consumers must accept schema
+version 6. No timing profile is persisted, quadratic decimal import itself is
+not optimized, and output, checkpoint, and verification-manifest formats do
+not change.

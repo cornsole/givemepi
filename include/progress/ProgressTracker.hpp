@@ -60,10 +60,12 @@ public:
 
     /// Applies a legal, idempotent phase transition.
     ///
-    /// Entering a different phase restarts the phase clock and records the
-    /// phase's already completed units as its baseline, so phase rates count
-    /// only work done inside the phase. Returns false for an illegal
-    /// transition. Time and memory: O(1).
+    /// Entering a different phase closes the current one, recording its wall
+    /// duration and the units newly completed while it was current, then
+    /// restarts the phase clock and records the next phase's already
+    /// completed units as its baseline, so phase rates count only work done
+    /// inside the phase. Returns false for an illegal transition. Time and
+    /// memory: O(1).
     [[nodiscard]] bool transitionTo(ProgressPhase next);
 
     /// Atomically adds completed terms without exceeding the fixed total.
@@ -173,6 +175,14 @@ private:
     [[nodiscard]] bool isRunning() const noexcept;
     [[nodiscard]]
     std::uint64_t completedUnitsOf(ProgressPhase phase) const noexcept;
+    /// Advances a phase's latest-unit stamp to now for a non-zero count.
+    void stampUnit(ProgressPhase phase, std::uint64_t count) noexcept;
+    /// Records the duration and new units of the phase being left; requires
+    /// metadataMutex_.
+    void closeCurrentPhase(
+        ProgressPhase current,
+        std::chrono::steady_clock::time_point now
+    ) noexcept;
 
     const ProgressWorkPlan plan_;
     const std::chrono::steady_clock::time_point startedAt_;
@@ -197,6 +207,10 @@ private:
         phaseTotals_{};
     std::array<std::atomic<std::uint64_t>, PROGRESS_PHASE_COUNT>
         phaseCompleted_{};
+    /// Steady time of the latest published unit of each phase, in
+    /// nanoseconds since construction; stamped before the unit is counted.
+    std::array<std::atomic<std::int64_t>, PROGRESS_PHASE_COUNT>
+        lastUnitNs_{};
 
     mutable std::mutex metadataMutex_;
     std::optional<std::uint32_t> currentMergeLevel_;
@@ -207,6 +221,8 @@ private:
     ProgressPhaseCosts phaseCosts_{};
     std::chrono::steady_clock::time_point phaseStartedAt_;
     std::uint64_t phaseBaselineUnits_ = 0;
+    ProgressPhaseDurations closedPhaseDurations_{};
+    ProgressPhaseUnitCounts closedPhaseUnits_{};
     std::uint64_t durableCheckpointBlocks_ = 0;
     std::uint64_t checkpointBytes_ = 0;
     std::optional<CheckpointRangeProgress> lastValidatedCheckpoint_;

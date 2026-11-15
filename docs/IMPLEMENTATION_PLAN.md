@@ -1785,3 +1785,76 @@ direction when arithmetic, storage, or verification throughput changes. Keep
 raw counters authoritative, preserve the independent CLI selections and JSON
 fields, and do not move resume diagnostics behind progress output without a
 separate approved contract change.
+
+## PR-0038: Evidence-Driven Total ETA
+
+### Goal
+
+Stop total and phase ETA from rising merely because wall time passes between
+coarse progress publications, and price later phases from measured phase
+throughput instead of a splitting-dominated whole-run average.
+
+### Root Cause
+
+PR-0037 recomputes ETA statelessly as `remaining * elapsed / completed`.
+With counters fixed between publications, both terms grow linearly with
+time (slope `(U-u)/(u-u0) + W_later/W_new > 0`). Merge units are serial work
+while planned merge cost divides by level parallelism, verification decimal
+import is quadratic but counted linearly, and later phases are converted with
+`elapsed / normalized work` that splitting dominates.
+
+### Scope
+
+- Tracker records the steady time of the latest current-phase unit and the
+  wall duration of every closed phase.
+- Phase rate is measured up to the latest unit: `r = (u-u0)/(phi-s)`,
+  `R_phase = (U-u)/r - s`; negative remaining reports overdue (null), never 0.
+- Calibration `k` = closed phase durations / closed newly completed planned
+  cost; before any phase closes, the current phase's measured cost rate.
+- `R_total = R_phase + k * W_later`; without a phase sample the current phase
+  uses `k * W_cur - phi`. The whole-run global-rate branch is removed.
+- Merge progress units are divided by `min(workers, pairs at level)` in both
+  planning and completion.
+- Verification decimal-import units are weighted to the quadratic import cost.
+- JSON schema v6 adds `eta_total_basis`
+  (`measured|calibrated_plan|overdue|unknown`) and `eta_phase_overdue`; text
+  renders `eta_total=overdue` / `eta_phase=overdue`; compact lines stay within
+  80 columns.
+
+### Out of Scope
+
+- Smoothing or forcing monotonic ETA;
+- optimizing the quadratic decimal import (needs a benchmark-first PR);
+- persisting timing profiles across runs.
+
+### Verification
+
+- Deterministic metric tests with injected durations: stall decreases ETA by
+  exactly elapsed time, overdue, slowdown step, calibration independent of
+  elapsed, finalizing before first sample, resume exclusion, constant merge
+  rate across levels, completed/failed/disabled verification.
+- Full Debug build and CTest at 13 of 22 logical cores.
+- 5,000,000-digit dual-ETA JSONL run: total ETA does not rise between unit
+  publications and is zero on completion.
+
+### Verification Results
+
+- Built every Debug target and passed all 69 CTest tests with 13-way
+  parallelism.
+- A 5,000,000-digit, 13-thread dual-ETA JSONL run completed and passed final
+  verification in 59.4 seconds. Across 179 adjacent records with unchanged
+  counters, neither total nor phase ETA rose; phase ETA decreased by the
+  elapsed interval to nanosecond precision. Both ETAs were zero in the
+  completed record.
+- ETA rose on 2 of 88 counter-changing pairs, reflecting newly measured slower
+  work rather than time alone. The final BBP samples reported `overdue` instead
+  of a false zero.
+- Review found and fixed the final-unit publication gap: a phase with all units
+  complete now reports zero, not overdue, while waiting to transition. Its
+  focused regression test passed.
+
+### Next Contributor TODO
+
+PR-0038 is complete. Treat upward correction on new work evidence as expected.
+The BBP verification samples remain relatively underweighted; benchmark and
+model them in a separate optimization or progress-accounting PR.

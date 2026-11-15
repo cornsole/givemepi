@@ -46,14 +46,26 @@ public:
     ///
     /// Units approximate sequential byte passes: one per inspected file byte,
     /// one for the known-digit comparison, four per hashed canonical byte,
-    /// eight per fractional digit imported for BBP extraction, and for each
-    /// selected BBP position (position + 1) series units plus eight per
+    /// importWorkUnits(requestedDigits) for the BBP decimal import, and for
+    /// each selected BBP position (position + 1) series units plus eight per
     /// fractional digit for interval extraction. Saturates at UINT64_MAX.
     /// Time complexity: O(s) for s selected samples. Memory: O(s).
     [[nodiscard]] static std::uint64_t plannedFileWork(
         VerificationIdentity identity,
         const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{}
     );
+
+    /// Returns the cumulative work units of importing the first `digits`
+    /// fractional digits into the BBP extractor.
+    ///
+    /// The import multiplies a growing integer by each nine-digit chunk, so
+    /// its cost is quadratic: eight units per digit plus digits^2 / 256.
+    /// verifyFile publishes the difference of this function across each
+    /// import batch, so published import units sum to importWorkUnits(D) and
+    /// grow in proportion to wall time. Monotonic; saturates at UINT64_MAX.
+    /// Time and memory complexity: O(1).
+    [[nodiscard]] static std::uint64_t importWorkUnits(std::uint64_t digits)
+        noexcept;
 
     /// Verifies a stored output file.
     ///

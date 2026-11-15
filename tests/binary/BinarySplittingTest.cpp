@@ -1126,15 +1126,21 @@ int main()
 
     if (!nodesEqual(frontierReference, fullFrontierResult)
         || fullObserver.terms.load() != 0
-        // Pairs [0,20) and [20,40) weigh 20 * 5; the root [0,40) 40 * 6.
+        // Pairs [0,20) and [20,40) weigh 20 * 5 and share two of the four
+        // workers; the serial root [0,40) weighs 40 * 6.
         || fullObserver.mergePlans.load() != 1
-        || fullObserver.plannedMergeUnits.load() != 440
-        || fullObserver.completedMergeUnits.load() != 440
+        || fullObserver.plannedMergeUnits.load() != 340
+        || fullObserver.completedMergeUnits.load() != 340
         || BinarySplitter::mergeWorkUnits(0) != 0
         || BinarySplitter::mergeWorkUnits(20) != 100
         || BinarySplitter::mergeWorkUnits(
                std::numeric_limits<std::size_t>::max())
             != std::numeric_limits<std::uint64_t>::max()
+        // Level scaling divides by min(workers, pairs), rounding up.
+        || BinarySplitter::mergeLevelWorkUnits(20, 2, 4) != 50
+        || BinarySplitter::mergeLevelWorkUnits(20, 8, 3) != 34
+        || BinarySplitter::mergeLevelWorkUnits(20, 1, 4) != 100
+        || BinarySplitter::mergeLevelWorkUnits(20, 0, 0) != 100
         || !commitsValid(fullCheckpoint)
         || fullEvents != expectedFullEvents
         || fullCheckpoint.commits.size() != 2

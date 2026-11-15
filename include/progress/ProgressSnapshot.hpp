@@ -46,6 +46,15 @@ struct PhaseWorkUnits
 using ProgressPhaseCosts = std::array<std::uint64_t, PROGRESS_PHASE_COUNT>;
 
 
+/// Wall duration of each phase, indexed by phaseIndex().
+using ProgressPhaseDurations =
+    std::array<std::chrono::nanoseconds, PROGRESS_PHASE_COUNT>;
+
+
+/// Unit count of each phase, indexed by phaseIndex().
+using ProgressPhaseUnitCounts = std::array<std::uint64_t, PROGRESS_PHASE_COUNT>;
+
+
 /// Raw authoritative values used to construct one progress snapshot.
 struct ProgressSnapshotData
 {
@@ -77,6 +86,19 @@ struct ProgressSnapshotData
     std::chrono::nanoseconds phaseElapsed = std::chrono::nanoseconds::zero();
     /// Completed units of the current phase when it was entered.
     std::uint64_t phaseBaselineUnits = 0;
+    /// Time since the latest unit of the current phase was published, or
+    /// since the phase was entered when it has published none; never above
+    /// phaseElapsed and zero for terminal phases.
+    std::chrono::nanoseconds sinceLastPhaseUnit =
+        std::chrono::nanoseconds::zero();
+    /// Wall duration of every phase already left; zero for the current
+    /// phase and phases never entered. Their sum plus phaseElapsed never
+    /// exceeds elapsed.
+    ProgressPhaseDurations closedPhaseDurations{};
+    /// Units newly completed while each already left phase was current:
+    /// restored units and units completed before the phase was entered are
+    /// excluded. Zero for the current phase and phases never entered.
+    ProgressPhaseUnitCounts closedPhaseUnits{};
     std::uint64_t memoryBytes = 0;
     /// Exact file bytes of blocks referenced by the current manifest.
     std::uint64_t checkpointBytes = 0;
@@ -139,6 +161,19 @@ public:
 
     [[nodiscard]] std::chrono::nanoseconds phaseElapsed() const noexcept;
     [[nodiscard]] std::uint64_t phaseBaselineUnits() const noexcept;
+    [[nodiscard]] std::chrono::nanoseconds sinceLastPhaseUnit() const noexcept;
+
+    /// Returns the wall duration of a phase already left, zero otherwise.
+    [[nodiscard]]
+    std::chrono::nanoseconds closedPhaseDuration(
+        ProgressPhase phase
+    ) const noexcept;
+
+    /// Returns the units newly completed while a phase already left was
+    /// current, zero otherwise.
+    [[nodiscard]]
+    std::uint64_t closedPhaseUnits(ProgressPhase phase) const noexcept;
+
     [[nodiscard]] std::uint64_t memoryBytes() const noexcept;
     [[nodiscard]] std::uint64_t checkpointBytes() const noexcept;
     [[nodiscard]] std::uint64_t storageResidentBytes() const noexcept;
@@ -185,6 +220,9 @@ private:
     ProgressPhaseCosts phaseCosts_;
     std::chrono::nanoseconds phaseElapsed_;
     std::uint64_t phaseBaselineUnits_;
+    std::chrono::nanoseconds sinceLastPhaseUnit_;
+    ProgressPhaseDurations closedPhaseDurations_;
+    ProgressPhaseUnitCounts closedPhaseUnits_;
     std::uint64_t memoryBytes_;
     std::uint64_t checkpointBytes_;
     std::uint64_t storageResidentBytes_;

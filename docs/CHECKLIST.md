@@ -508,6 +508,18 @@
 
 [x] PR-0037 ETA Verification Gate (69/69 Debug CTest and real JSONL CLI runs with and without verification)
 
+[x] Phase ETA Measured to the Latest Unit; Stalls Reduce ETA by Exactly the Elapsed Time (PR-0038)
+
+[x] Overdue Phase and Total ETA Reported as Null with Flag, Never Zero (PR-0038)
+
+[x] Total ETA Calibrated from Closed Phase Durations, Restored Work Excluded (PR-0038)
+
+[x] Merge Units Scaled by `min(workers, pairs)` per Level; Quadratic Verification Import Units (PR-0038)
+
+[x] JSON Progress Schema Version 6 with `eta_total_basis` and `eta_phase_overdue`; Text `overdue` (PR-0038)
+
+[x] PR-0038 ETA Verification Gate (69/69 Debug CTest at 13 jobs; 5,000,000-digit dual-ETA JSONL run with no total-ETA rise across unchanged counters and zero on completion)
+
 [x] PR-0032 Verification Gate (7/7 changed-path ASan/UBSan tests, complete Debug build, 66/66 CTest)
 
 -----------------

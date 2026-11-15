@@ -16,6 +16,8 @@ namespace
 
 constexpr std::uint64_t HASH_UNITS_PER_BYTE = 4;
 constexpr std::uint64_t IMPORT_UNITS_PER_DIGIT = 8;
+/// Divisor of the digits^2 term of the quadratic decimal import cost.
+constexpr long double IMPORT_QUADRATIC_DIVISOR = 256.0L;
 constexpr std::uint64_t EXTRACTION_UNITS_PER_DIGIT = 8;
 constexpr std::uint64_t KNOWN_DIGITS_UNITS = 1;
 
@@ -45,6 +47,38 @@ std::uint64_t sampleUnits(
         saturatingMultiply(requestedDigits, EXTRACTION_UNITS_PER_DIGIT)
     );
 }
+
+/// Converts raw imported digit counts into quadratic import units.
+///
+/// Publishes importWorkUnits(after) - importWorkUnits(before) per batch, so
+/// the published sum telescopes to importWorkUnits(total digits).
+class QuadraticImportWork final : public VerificationWorkObserver
+{
+public:
+    explicit QuadraticImportWork(VerificationWorkObserver* target) noexcept
+        : target_(target)
+    {
+    }
+
+    void workCompleted(std::uint64_t digits) noexcept override
+    {
+        if (target_ == nullptr || digits == 0)
+        {
+            return;
+        }
+        const std::uint64_t before = FinalVerifier::importWorkUnits(imported_);
+        imported_ = saturatingAdd(imported_, digits);
+        const std::uint64_t after = FinalVerifier::importWorkUnits(imported_);
+        if (after > before)
+        {
+            target_->workCompleted(after - before);
+        }
+    }
+
+private:
+    VerificationWorkObserver* target_;
+    std::uint64_t imported_ = 0;
+};
 
 VerificationCheckResult skipped(VerificationStage stage)
 {
@@ -182,15 +216,26 @@ std::uint64_t FinalVerifier::plannedFileWork(
         units,
         saturatingMultiply(saturatingAdd(digits, 2), HASH_UNITS_PER_BYTE)
     );
-    units = saturatingAdd(
-        units,
-        saturatingMultiply(digits, IMPORT_UNITS_PER_DIGIT)
-    );
+    units = saturatingAdd(units, importWorkUnits(digits));
     for (const std::uint64_t position : samplePolicy.select(identity))
     {
         units = saturatingAdd(units, sampleUnits(position, digits));
     }
     return units;
+}
+
+std::uint64_t FinalVerifier::importWorkUnits(std::uint64_t digits) noexcept
+{
+    const auto value = static_cast<long double>(digits);
+    const long double quadratic = value * value / IMPORT_QUADRATIC_DIVISOR;
+    constexpr long double maximum = 18446744073709551615.0L;
+    const std::uint64_t square = quadratic >= maximum
+        ? ~std::uint64_t{0}
+        : static_cast<std::uint64_t>(quadratic);
+    return saturatingAdd(
+        saturatingMultiply(digits, IMPORT_UNITS_PER_DIGIT),
+        square
+    );
 }
 
 FinalVerificationRun FinalVerifier::verifyMemory(
@@ -296,7 +341,7 @@ FinalVerificationRun FinalVerifier::verifyFile(
     BBPCheck bbp{skipped(VerificationStage::bbp), {}};
     try
     {
-        ScaledVerificationWork importWork(observer, IMPORT_UNITS_PER_DIGIT);
+        QuadraticImportWork importWork(observer);
         auto extractor = DecimalHexDigitExtractor::fromFile(file, &importWork);
         bbp = verifySamples(extractor, identity, samplePolicy, observer);
     }

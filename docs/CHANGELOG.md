@@ -8,17 +8,38 @@
   ETA is the default; with both flags, both estimates are reported.
 - Added progress schema version 5 raw pipeline/phase work and separate nullable
   total and phase ETA fields for text and JSON progress reporting.
+- Added PR-0038 progress schema version 6 fields `eta_total_basis`
+  (`measured|calibrated_plan|overdue|unknown`) and `eta_phase_overdue`; text
+  progress renders `eta_total=overdue` and `eta_phase=overdue`.
+- Added PR-0038 tracker evidence: closed wall duration and newly completed
+  units of every phase, and the time since the current phase's latest unit.
 
 ### Changed
 - Extended progress instrumentation through splitting, weighted merging,
   fixed-point finalization, output writing, and optional final verification.
   Disabled stages are excluded from the end-to-end work plan.
+- Changed PR-0038 ETA to evidence-driven estimates. The phase rate is
+  measured up to the latest unit, `R_phase = (U - u) / r - s`; later phases are
+  priced with a calibration from closed phase durations per newly completed
+  planned cost (restored work excluded), or the current phase's measured rate
+  before any phase closes; without a phase sample the current phase uses its
+  calibrated plan cost minus time spent. The whole-run global-rate branch is
+  removed.
+- Changed merge progress units to divide each pair by `min(workers, pairs)` of
+  its level in both the published plan and completion, so wide and serial
+  levels report the same rate.
+- Changed verification decimal-import units to the quadratic import cost,
+  `8 * d + d^2 / 256` cumulative over `d` imported digits.
 
 ### Fixed
 - Fixed ETA disappearing after Chudnovsky leaf terms completed. ETA now remains
   available after a usable sample through output verification, resume-restored
   work is excluded from observed throughput, successful completion reports
   zero, and failure reports no ETA.
+- Fixed PR-0038 total and phase ETA rising linearly with wall time while
+  progress counters were unchanged between coarse publications. Stalls now
+  reduce both estimates by exactly the elapsed time, and an overrun reports
+  overdue instead of zero.
 
 ### Verification
 
@@ -32,6 +53,13 @@
 - Final review found no correctness, concurrency, overflow, schema, or
   consumer-visible defects. A live JSON parse exposed and fixed one missing
   `storage_io` closing brace before final verification.
+- PR-0038: built all Debug targets and passed all 69 CTest tests with 13 of 22
+  logical cores. A 5,000,000-digit, 13-thread dual-ETA run produced 298
+  schema-version-6 JSONL records in 59.4 s: across 179 consecutive record
+  pairs with unchanged counters neither ETA rose (phase ETA fell by the
+  elapsed time within 1 ns), both ETAs were 0 with basis `measured` on
+  completion, and BBP sample extraction at the end of verification reported
+  `overdue` rather than zero.
 
 ## [0.13.0] - PR-0036
 

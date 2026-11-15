@@ -749,6 +749,7 @@ target_include_directories(text-progress-reporter-test
 add_executable(json-progress-reporter-test
     tests/progress/JsonProgressReporterTest.cpp
     src/progress/JsonProgressReporter.cpp
+    src/progress/ProgressMetrics.cpp
     src/progress/ProgressReporter.cpp
     src/progress/ProgressSnapshot.cpp
     src/progress/ProgressState.cpp

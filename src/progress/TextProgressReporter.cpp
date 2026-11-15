@@ -124,10 +124,13 @@ void writeProgress(
 }
 
 
+/// Renders a selected ETA: seconds, `overdue` when the estimate has passed,
+/// or `unknown` when unavailable.
 void writeDuration(
     std::ostream& output,
     const char* label,
-    const std::optional<std::chrono::nanoseconds>& value
+    const std::optional<std::chrono::nanoseconds>& value,
+    bool overdue
 )
 {
     output << ' ' << label << '=';
@@ -137,7 +140,7 @@ void writeDuration(
     }
     else
     {
-        output << "unknown";
+        output << (overdue ? "overdue" : "unknown");
     }
 }
 
@@ -153,7 +156,8 @@ void writeEta(
         writeDuration(
             output,
             "eta_total",
-            metrics.estimatedTotalTimeRemaining
+            metrics.estimatedTotalTimeRemaining,
+            metrics.totalBasis == EtaBasis::overdue
         );
     }
     if (selection.phase)
@@ -161,7 +165,8 @@ void writeEta(
         writeDuration(
             output,
             "eta_phase",
-            metrics.estimatedPhaseTimeRemaining
+            metrics.estimatedPhaseTimeRemaining,
+            metrics.phaseOverdue
         );
     }
 }

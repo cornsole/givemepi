@@ -172,15 +172,28 @@ Checkpoint telemetry는 서로 다른 네 가지 개념을 구분합니다.
 
 Checkpoint telemetry는 manifest 교체가 성공한 뒤 coordinating thread에서 한
 번에 게시됩니다. 실패했거나 interval 때문에 생략됐거나 내용이 같은 commit은
-telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 5입니다.
+telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 6입니다.
 
 Progress ETA는 기본적으로 output writing과 선택된 final verification까지 남은
 전체 시간을 표시합니다. `--eta-total`은 전체 ETA만, `--eta-phase`는 현재
 단계 ETA만 선택하며 두 옵션을 함께 주면 두 값을 모두 표시합니다. 충분한
 관측 표본이 생기기 전에는 선택된 ETA가 `unknown`/`null`이고, 완료 시 0,
-실패 시 `unknown`/`null`입니다. JSON progress schema version 5는
-`estimated_total_time_remaining_ns`와
-`estimated_phase_time_remaining_ns`를 독립적으로 제공합니다.
+실패 시 `unknown`/`null`입니다.
+
+PR-0038부터 ETA는 관측 증거로만 계산합니다. 현재 단계 속도는 단계 진입부터
+마지막 작업 단위가 게시된 시점까지로 측정하므로, counter가 바뀌지 않는 동안
+두 ETA는 흐른 시간만큼 정확히 줄어들고 시간이 지난다는 이유만으로 늘어나지
+않습니다. 예측 시각을 넘긴 단계는 0이 아니라 `overdue`로 표시됩니다. 이후
+단계는 이미 끝난 단계의 실제 소요 시간을 그 단계들의 계획 비용으로 나눈
+보정값으로 환산하며, 끝난 단계가 없으면 현재 단계의 측정 속도를 씁니다.
+resume으로 복원된 작업은 보정에서 제외됩니다. Merge 작업 단위는 level마다
+`min(workers, pairs)`로 나누어 넓은 level과 직렬 root level의 속도가 같게
+보이며, verification의 decimal import 단위는 실제 비용처럼 자릿수의 제곱에
+비례합니다. JSON progress schema version 6은
+`estimated_total_time_remaining_ns`, `estimated_phase_time_remaining_ns`와 함께
+`eta_total_basis`(`measured`, `calibrated_plan`, `overdue`, `unknown`)와
+`eta_phase_overdue`를 제공하며, 선택되지 않은 ETA의 두 field는 `null`입니다.
+Text 출력은 `eta_total=overdue`, `eta_phase=overdue`로 표시합니다.
 
 ## 현재 구현 상태
 
@@ -198,7 +211,7 @@ Progress ETA는 기본적으로 output writing과 선택된 final verification�
 | Chudnovsky finalization | 완료 | precision plan, integer sqrt/division, rounded decimal API |
 | Storage·out-of-core | 완료 | 동기·비동기 spill/reload, concurrent I/O, LZ4 |
 | Checkpoint·무결성 | 완료 | interval-gated merge frontier, atomic manifest, verified resume, quarantine, 자동 CLI 중단·resume 회귀 테스트 |
-| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v5, 전체·단계 ETA 선택, live checkpoint telemetry, 기본·resume 완료 증거 |
+| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v6, 증거 기반 전체·단계 ETA 선택, live checkpoint telemetry, 기본·resume 완료 증거 |
 | 최종 결과 검증 | 완료 | streaming hash, BBP spot check, known digits, manifest |
 
 세부 구현 순서는 [Implementation Plan](docs/IMPLEMENTATION_PLAN.md), 완료 상태는

@@ -10,9 +10,10 @@ namespace pi::progress
 
 /// Version of the public progress snapshot and reporter schema.
 ///
-/// Version 5 replaces the single ETA with independently nullable total and
-/// current-phase ETA values and adds raw current-phase work counters.
-inline constexpr std::uint32_t PROGRESS_SCHEMA_VERSION = 5;
+/// Version 5 replaced the single ETA with independently nullable total and
+/// current-phase ETA values and added raw current-phase work counters.
+/// Version 6 adds the total ETA evidence basis and the phase-overdue flag.
+inline constexpr std::uint32_t PROGRESS_SCHEMA_VERSION = 6;
 
 
 /// High-level phase of one pi computation.

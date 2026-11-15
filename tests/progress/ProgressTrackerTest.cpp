@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -142,6 +143,84 @@ void testPhaseWork()
     assert((concurrent.snapshot().phaseWork(ProgressPhase::merging)
         == PhaseWorkUnits{4'000, 4'000}));
     assert(!concurrent.addPhaseUnits(ProgressPhase::merging, 1));
+}
+
+
+std::chrono::nanoseconds closedTotal(
+    const pi::progress::ProgressSnapshot& snapshot
+)
+{
+    std::chrono::nanoseconds total = std::chrono::nanoseconds::zero();
+    for (std::size_t index = 0; index < pi::progress::PROGRESS_PHASE_COUNT;
+         ++index)
+    {
+        total += snapshot.closedPhaseDuration(
+            static_cast<pi::progress::ProgressPhase>(index)
+        );
+    }
+    return total;
+}
+
+
+void testPhaseTiming()
+{
+    using namespace std::chrono_literals;
+    using pi::progress::ProgressPhase;
+    using pi::progress::ProgressTracker;
+    using pi::progress::ProgressWorkPlan;
+
+    ProgressTracker tracker(ProgressWorkPlan{100, 50, 0});
+    assert(tracker.transitionTo(ProgressPhase::validatingCheckpoints));
+    assert(tracker.restoreCompletedWork(10, 0, 0));
+    assert(tracker.transitionTo(ProgressPhase::splitting));
+
+    // Without a unit in the phase, the reference is the phase start.
+    std::this_thread::sleep_for(5ms);
+    auto snapshot = tracker.snapshot();
+    assert(snapshot.sinceLastPhaseUnit() == snapshot.phaseElapsed());
+
+    assert(tracker.addCompletedTerms(20));
+    std::this_thread::sleep_for(20ms);
+    snapshot = tracker.snapshot();
+    assert(snapshot.sinceLastPhaseUnit() >= 20ms);
+    assert(snapshot.phaseElapsed() - snapshot.sinceLastPhaseUnit() >= 5ms);
+    // Closed phases plus the current one cover the whole run exactly.
+    assert(closedTotal(snapshot) + snapshot.phaseElapsed()
+        == snapshot.elapsed());
+
+    // Units published before a phase is entered predate the phase.
+    assert(tracker.declarePhaseUnits(ProgressPhase::merging, 100));
+    assert(tracker.addPhaseUnits(ProgressPhase::merging, 40));
+    std::this_thread::sleep_for(5ms);
+    assert(tracker.transitionTo(ProgressPhase::merging));
+    snapshot = tracker.snapshot();
+    assert(snapshot.sinceLastPhaseUnit() == snapshot.phaseElapsed());
+    // Splitting closed with only its 20 newly computed terms.
+    assert(snapshot.closedPhaseUnits(ProgressPhase::splitting) == 20);
+    assert(snapshot.closedPhaseDuration(ProgressPhase::splitting) >= 25ms);
+    assert(snapshot.closedPhaseUnits(ProgressPhase::merging) == 0);
+    assert(snapshot.closedPhaseDuration(ProgressPhase::merging) == 0ns);
+
+    assert(tracker.addPhaseUnits(ProgressPhase::merging, 30));
+    assert(tracker.transitionTo(ProgressPhase::finalizing));
+    snapshot = tracker.snapshot();
+    assert(snapshot.closedPhaseUnits(ProgressPhase::merging) == 30);
+    assert(closedTotal(snapshot) + snapshot.phaseElapsed()
+        == snapshot.elapsed());
+
+    assert(tracker.transitionTo(ProgressPhase::completed));
+    snapshot = tracker.snapshot();
+    assert(snapshot.sinceLastPhaseUnit() == 0ns);
+    assert(closedTotal(snapshot) == snapshot.elapsed());
+
+    ProgressTracker failing(ProgressWorkPlan{100, 50, 0});
+    assert(failing.transitionTo(ProgressPhase::splitting));
+    assert(failing.addCompletedTerms(5));
+    assert(failing.markFailed("stopped"));
+    snapshot = failing.snapshot();
+    assert(snapshot.closedPhaseUnits(ProgressPhase::splitting) == 5);
+    assert(snapshot.sinceLastPhaseUnit() == 0ns);
+    assert(closedTotal(snapshot) == snapshot.elapsed());
 }
 
 } // namespace
@@ -349,6 +428,7 @@ int main()
     assert(!failing.transitionTo(ProgressPhase::splitting));
 
     testPhaseWork();
+    testPhaseTiming();
 
     return 0;
 }

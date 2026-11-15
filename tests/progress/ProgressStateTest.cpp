@@ -17,7 +17,7 @@ int main()
     using pi::progress::terminalState;
     using pi::progress::toString;
 
-    static_assert(PROGRESS_SCHEMA_VERSION == 5);
+    static_assert(PROGRESS_SCHEMA_VERSION == 6);
     static_assert(pi::progress::PROGRESS_PHASE_COUNT
         == pi::progress::phaseIndex(ProgressPhase::failed) + 1);
     static_assert(pi::progress::phaseIndex(ProgressPhase::splitting)

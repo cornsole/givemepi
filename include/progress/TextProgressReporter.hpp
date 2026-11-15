@@ -46,7 +46,8 @@ public:
     /// with the full field set, including progress percentage, speed,
     /// tasks, memory, checkpoint bytes, storage, I/O, merge,
     /// and ranges. Selected ETAs render as `eta_total=` and `eta_phase=`
-    /// (`unknown` when unavailable); unselected ETAs are omitted.
+    /// (`overdue` when the estimate has passed, `unknown` when otherwise
+    /// unavailable); unselected ETAs are omitted.
     /// Time and memory complexity: O(n) in the rendered record length.
     void report(
         const ProgressSnapshot& snapshot,

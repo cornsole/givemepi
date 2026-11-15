@@ -84,6 +84,42 @@ int main()
     assert(bothRecord.find("checkpoints=") == std::string::npos);
     assert(bothRecord.size() - controlBytes < 80);
 
+    // Overdue estimates render as `overdue`, never as 0.0s, and the compact
+    // line of a 5,000,000-digit run stays within 80 columns.
+    ProgressSnapshotData overdueData = data;
+    overdueData.phase = ProgressPhase::verifyingOutput;
+    overdueData.totalTerms = 352'620;
+    overdueData.completedTerms = 352'620;
+    ProgressMetrics overdueMetrics = metrics;
+    overdueMetrics.estimatedTotalTimeRemaining.reset();
+    overdueMetrics.estimatedPhaseTimeRemaining.reset();
+    overdueMetrics.totalBasis = pi::progress::EtaBasis::overdue;
+    overdueMetrics.phaseOverdue = true;
+    std::ostringstream overdueOutput;
+    TextProgressReporter overdueTerminal(
+        overdueOutput,
+        TextOutputMode::terminal,
+        EtaSelection{true, true}
+    );
+    overdueTerminal.report(ProgressSnapshot(overdueData), overdueMetrics);
+    const std::string overdueRecord = overdueOutput.str();
+    assert(overdueRecord ==
+        "\rphase=verifying_output terms=352620/352620"
+        " eta_total=overdue eta_phase=overdue\x1b[K");
+    assert(overdueRecord.size() - controlBytes <= 80);
+
+    // Only the overdue ETA says so; an unavailable one stays `unknown`.
+    overdueMetrics.totalBasis = pi::progress::EtaBasis::unknown;
+    std::ostringstream mixedOutput;
+    TextProgressReporter mixed(
+        mixedOutput,
+        TextOutputMode::terminal,
+        EtaSelection{true, true}
+    );
+    mixed.report(ProgressSnapshot(overdueData), overdueMetrics);
+    assert(mixedOutput.str().find("eta_total=unknown eta_phase=overdue")
+        != std::string::npos);
+
     data.phase = ProgressPhase::verifyingOutput;
     terminal.report(ProgressSnapshot(data), metrics);
     assert(terminalOutput.str().find("phase=verifying_output")

@@ -33,8 +33,10 @@ public:
     /// floating-point values are also encoded as null so output remains valid
     /// JSON. Both `estimated_total_time_remaining_ns` and
     /// `estimated_phase_time_remaining_ns` are always present; each is null
-    /// when unselected or not yet estimable. Time and memory complexity: O(n)
-    /// in the record length.
+    /// when unselected or not yet estimable. `eta_total_basis`
+    /// (`measured|calibrated_plan|overdue|unknown`) and the boolean
+    /// `eta_phase_overdue` are always present and null when their ETA is
+    /// unselected. Time and memory complexity: O(n) in the record length.
     void report(
         const ProgressSnapshot& snapshot,
         const ProgressMetrics& metrics

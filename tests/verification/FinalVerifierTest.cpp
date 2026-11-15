@@ -79,8 +79,17 @@ int main()
     assert(file.bbpSamples.size() == memory.bbpSamples.size());
 
     // Progress units of a complete run sum exactly to the planned work:
-    // 103 inspected bytes, 1 known-digit unit, 4 * 102 hashed bytes,
-    // 8 * 100 imported digits, and per sample (position + 1) + 8 * 100.
+    // 103 inspected bytes, 1 known-digit unit, 4 * 102 hashed bytes, the
+    // quadratic import of 100 digits (8 * 100 + 100^2 / 256 = 839), and per
+    // sample (position + 1) + 8 * 100.
+    assert(FinalVerifier::importWorkUnits(0) == 0);
+    assert(FinalVerifier::importWorkUnits(100) == 839);
+    // Ten times the digits costs about a hundred times the import work.
+    assert(FinalVerifier::importWorkUnits(1'000'000) == 3'914'250'000ULL);
+    assert(FinalVerifier::importWorkUnits(10'000'000)
+        == 390'705'000'000ULL);
+    assert(FinalVerifier::importWorkUnits(~std::uint64_t{0})
+        == ~std::uint64_t{0});
     RecordingWork work;
     const BBPSamplePolicy policy;
     const auto observed = FinalVerifier::verifyFile(
@@ -90,7 +99,7 @@ int main()
         &work
     );
     assert(observed.report.status() == VerificationStatus::passed);
-    std::uint64_t expected = 103 + 1 + 4 * 102 + 8 * 100;
+    std::uint64_t expected = 103 + 1 + 4 * 102 + 839;
     for (const std::uint64_t position : policy.select(identity))
     {
         expected += position + 1 + 8 * 100;
