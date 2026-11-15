@@ -148,6 +148,7 @@ Progress
 [x] Default Text Completion Evidence, Reporter Failure Propagation, and Compact TTY Record (PR-0032)
 [x] End-to-End and Current-Phase ETA through Final Verification, JSON Schema v5 (PR-0037)
 [x] Evidence-Driven Total and Phase ETA with Overdue Reporting, JSON Schema v6 (PR-0038)
+[x] Configurable Text ETA Unit and Precision (PR-0039)
 
 ----------------------
 

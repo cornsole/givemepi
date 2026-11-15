@@ -67,13 +67,44 @@ std::string byteCount(std::uint64_t bytes)
 }
 
 
-std::string seconds(std::chrono::nanoseconds duration)
+/// Renders an ETA in fixed-point notation with the configured fraction
+/// digits and unit label. `auto` compares the exact duration: `sec` below one
+/// minute, `min` below one hour, `hour` otherwise. Fixed units never switch.
+std::string etaDuration(std::chrono::nanoseconds duration, EtaFormat format)
 {
-    const long double value =
-        static_cast<long double>(duration.count()) / 1'000'000'000.0L;
+    using namespace std::chrono_literals;
+
+    struct Scale
+    {
+        long double nanoseconds;
+        const char* label;
+    };
+    constexpr Scale second{1'000'000'000.0L, "sec"};
+    constexpr Scale minute{60'000'000'000.0L, "min"};
+    constexpr Scale hour{3'600'000'000'000.0L, "hour"};
+
+    Scale scale = second;
+    switch (format.unit)
+    {
+        case EtaUnit::automatic:
+            scale = duration < 1min ? second
+                : duration < 1h ? minute
+                : hour;
+            break;
+        case EtaUnit::minutes:
+            scale = minute;
+            break;
+        case EtaUnit::hours:
+            scale = hour;
+            break;
+    }
+
     std::ostringstream output;
     output.imbue(std::locale::classic());
-    output << std::fixed << std::setprecision(1) << value << 's';
+    output << std::fixed
+           << std::setprecision(static_cast<int>(format.precision))
+           << static_cast<long double>(duration.count()) / scale.nanoseconds
+           << scale.label;
     return output.str();
 }
 
@@ -124,19 +155,20 @@ void writeProgress(
 }
 
 
-/// Renders a selected ETA: seconds, `overdue` when the estimate has passed,
-/// or `unknown` when unavailable.
+/// Renders a selected ETA: the formatted duration, `overdue` when the
+/// estimate has passed, or `unknown` when unavailable.
 void writeDuration(
     std::ostream& output,
     const char* label,
     const std::optional<std::chrono::nanoseconds>& value,
-    bool overdue
+    bool overdue,
+    EtaFormat format
 )
 {
     output << ' ' << label << '=';
     if (value.has_value())
     {
-        output << seconds(*value);
+        output << etaDuration(*value, format);
     }
     else
     {
@@ -148,7 +180,8 @@ void writeDuration(
 void writeEta(
     std::ostream& output,
     const ProgressMetrics& metrics,
-    EtaSelection selection
+    EtaSelection selection,
+    EtaFormat format
 )
 {
     if (selection.total)
@@ -157,7 +190,8 @@ void writeEta(
             output,
             "eta_total",
             metrics.estimatedTotalTimeRemaining,
-            metrics.totalBasis == EtaBasis::overdue
+            metrics.totalBasis == EtaBasis::overdue,
+            format
         );
     }
     if (selection.phase)
@@ -166,7 +200,8 @@ void writeEta(
             output,
             "eta_phase",
             metrics.estimatedPhaseTimeRemaining,
-            metrics.phaseOverdue
+            metrics.phaseOverdue,
+            format
         );
     }
 }
@@ -195,32 +230,56 @@ void writeFailure(std::ostream& output, const ProgressSnapshot& snapshot)
 
 /// Short single-row record for in-place terminal redraws. Excludes speed,
 /// task, memory, storage, I/O, merge, and range detail, and the progress
-/// percentage already implied by the term fraction, so routine updates stay
-/// inside common terminal widths and `\r` redraws do not wrap. When both
-/// ETAs are selected the checkpoint counts are also omitted for width.
+/// percentage already implied by the term fraction. It first omits checkpoint
+/// counts and then the term fraction when configured ETA precision would make
+/// a routine update wrap at 80 columns.
 std::string renderCompact(
     const ProgressSnapshot& snapshot,
     const ProgressMetrics& metrics,
-    EtaSelection selection
+    EtaSelection selection,
+    EtaFormat format
 )
 {
-    std::ostringstream output;
-    output.imbue(std::locale::classic());
-    writeTerms(output, snapshot);
-    writeEta(output, metrics, selection);
-    if (!(selection.total && selection.phase))
+    const auto render = [&](bool includeTerms, bool includeCheckpoints) {
+        std::ostringstream output;
+        output.imbue(std::locale::classic());
+        if (includeTerms)
+        {
+            writeTerms(output, snapshot);
+        }
+        else
+        {
+            output << "phase=" << toString(snapshot.phase());
+        }
+        writeEta(output, metrics, selection, format);
+        if (includeCheckpoints)
+        {
+            writeCheckpointCounts(output, snapshot);
+        }
+        writeFailure(output, snapshot);
+        return output.str();
+    };
+
+    bool includeCheckpoints = !(selection.total && selection.phase);
+    std::string record = render(true, includeCheckpoints);
+    if (record.size() >= 80 && includeCheckpoints)
     {
-        writeCheckpointCounts(output, snapshot);
+        includeCheckpoints = false;
+        record = render(true, false);
     }
-    writeFailure(output, snapshot);
-    return output.str();
+    if (record.size() >= 80)
+    {
+        record = render(false, includeCheckpoints);
+    }
+    return record;
 }
 
 
 std::string renderFull(
     const ProgressSnapshot& snapshot,
     const ProgressMetrics& metrics,
-    EtaSelection selection
+    EtaSelection selection,
+    EtaFormat format
 )
 {
     std::ostringstream output;
@@ -231,7 +290,7 @@ std::string renderFull(
         output << " speed=" << std::fixed << std::setprecision(2)
                << *metrics.termsPerSecond << " terms/s";
     }
-    writeEta(output, metrics, selection);
+    writeEta(output, metrics, selection, format);
 
     output << " tasks=" << snapshot.activeTasks() << " active/"
            << snapshot.queuedTasks() << " queued"
@@ -267,16 +326,25 @@ TextProgressReporter::TextProgressReporter(
     std::ostream& output,
     TextOutputMode mode,
     EtaSelection selection,
+    EtaFormat etaFormat,
     NowFunction now
 )
     : output_(output),
       mode_(mode),
       selection_(selection),
+      etaFormat_(etaFormat),
       now_(std::move(now))
 {
     if (!now_)
     {
         throw std::invalid_argument("Text reporter clock must be callable");
+    }
+    if (etaFormat_.precision > EtaFormat::maxPrecision)
+    {
+        throw std::invalid_argument(
+            "Text reporter ETA precision must be between 0 and "
+            + std::to_string(EtaFormat::maxPrecision)
+        );
     }
 }
 
@@ -288,7 +356,8 @@ void TextProgressReporter::report(
 {
     if (mode_ == TextOutputMode::terminal)
     {
-        output_ << '\r' << renderCompact(snapshot, metrics, selection_)
+        output_ << '\r'
+                << renderCompact(snapshot, metrics, selection_, etaFormat_)
                 << "\x1b[K";
         if (snapshot.terminalState() != ProgressTerminalState::running)
         {
@@ -298,7 +367,8 @@ void TextProgressReporter::report(
     else
     {
         output_ << '[' << utcTimestamp(now_()) << "] "
-                << renderFull(snapshot, metrics, selection_) << '\n';
+                << renderFull(snapshot, metrics, selection_, etaFormat_)
+                << '\n';
     }
     output_.flush();
     if (!output_)

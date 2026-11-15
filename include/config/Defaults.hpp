@@ -1,5 +1,7 @@
 #pragma once
 
+#include "progress/EtaFormat.hpp"
+
 #include <cstdint>
 #include <string_view>
 
@@ -37,6 +39,8 @@ inline constexpr std::uint32_t PROGRESS_INTERVAL_MS = 500;
 inline constexpr std::string_view PROGRESS_FORMAT = "text";
 inline constexpr bool PROGRESS_ETA_TOTAL = true;
 inline constexpr bool PROGRESS_ETA_PHASE = false;
+/// Text ETA presentation: automatic unit, two fractional digits.
+inline constexpr pi::progress::EtaFormat PROGRESS_ETA_FORMAT{};
 
 // Output
 inline constexpr std::string_view OUTPUT_FILE = "pi.txt";

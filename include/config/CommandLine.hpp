@@ -57,6 +57,11 @@ struct CommandLineOptions
     bool eta_total_requested = false;
     /// `--eta-phase` was given.
     bool eta_phase_requested = false;
+    /// `--eta-unit`: text ETA unit (`auto`, `min`, or `hour`).
+    std::optional<pi::progress::EtaUnit> eta_unit;
+    /// `--eta-precision`: text ETA fraction digits; the 0 through 9 range is
+    /// checked by configuration validation.
+    std::optional<std::uint32_t> eta_precision;
 
     // Out-of-core storage
     std::optional<std::string> storage_directory;

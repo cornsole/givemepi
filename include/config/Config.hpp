@@ -58,6 +58,9 @@ struct Config
     bool progress_eta_total = defaults::PROGRESS_ETA_TOTAL;
     /// Report the current-phase ETA.
     bool progress_eta_phase = defaults::PROGRESS_ETA_PHASE;
+    /// Text ETA unit and fixed fraction digits; command-line only.
+    pi::progress::EtaFormat progress_eta_format =
+        defaults::PROGRESS_ETA_FORMAT;
 
     // Output
     std::string output_file = std::string(defaults::OUTPUT_FILE);

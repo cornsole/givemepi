@@ -394,7 +394,7 @@ int main(int argc, char* argv[])
                     : pi::progress::TextOutputMode::log;
                 reporter = std::make_unique<
                     pi::progress::TextProgressReporter
-                >(std::cerr, mode, etaSelection);
+                >(std::cerr, mode, etaSelection, config.progress_eta_format);
             }
             runner = std::make_unique<pi::progress::ProgressReportingRunner>(
                 tracker,

@@ -211,7 +211,7 @@ Text 출력은 `eta_total=overdue`, `eta_phase=overdue`로 표시합니다.
 | Chudnovsky finalization | 완료 | precision plan, integer sqrt/division, rounded decimal API |
 | Storage·out-of-core | 완료 | 동기·비동기 spill/reload, concurrent I/O, LZ4 |
 | Checkpoint·무결성 | 완료 | interval-gated merge frontier, atomic manifest, verified resume, quarantine, 자동 CLI 중단·resume 회귀 테스트 |
-| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v6, 증거 기반 전체·단계 ETA 선택, live checkpoint telemetry, 기본·resume 완료 증거 |
+| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v6, 증거 기반 전체·단계 ETA 선택, text ETA 단위·정밀도 선택, live checkpoint telemetry, 기본·resume 완료 증거 |
 | 최종 결과 검증 | 완료 | streaming hash, BBP spot check, known digits, manifest |
 
 세부 구현 순서는 [Implementation Plan](docs/IMPLEMENTATION_PLAN.md), 완료 상태는
@@ -383,11 +383,21 @@ PR-0032 기준 동작은 다음과 같습니다.
   root checkpoint block이 남습니다.
 - progress reporter가 실패하면 CLI는 오래된 progress를 둔 채 성공으로 끝내지
   않고 실패 상태로 종료합니다.
+- Text ETA는 `--eta-unit <auto|min|hour>`(기본 `auto`)와
+  `--eta-precision <digits>`(0~9, 기본 2)로 표시 형식을 정합니다. `auto`는
+  60초 미만을 `sec`, 60분 미만을 `min`, 그 이상을 `hour`로 표시하며 경계는
+  반올림 전 실제 시간으로 판단합니다. `min`과 `hour`는 단위를 바꾸지 않습니다.
+  값은 classic locale의 고정 소수점(예: `eta_total=12.50min`)이고 `unknown`과
+  `overdue`는 그대로입니다. 두 옵션은 command line 전용(TOML key 없음)이며
+  JSON ETA는 정수 nanosecond와 schema version 6을 유지합니다. 정수가 아닌
+  precision은 usage error(종료 상태 2), 10 이상은 설정 검증 실패(종료 상태
+  1)입니다.
 
 ```bash
 ./build/pi-engine --progress --progress-interval 500 --progress-format json \
   2>progress.jsonl
 ./build/pi-engine --no-progress
+./build/pi-engine --eta-total --eta-phase --eta-unit hour --eta-precision 4
 ```
 
 ### Out-of-core 저장

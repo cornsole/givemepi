@@ -520,6 +520,12 @@
 
 [x] PR-0038 ETA Verification Gate (69/69 Debug CTest at 13 jobs; 5,000,000-digit dual-ETA JSONL run with no total-ETA rise across unchanged counters and zero on completion)
 
+[x] `--eta-unit <auto|min|hour>` and `--eta-precision <digits>` (0-9) Text ETA Format via Shared `EtaFormat`, CLI-Only (PR-0039)
+
+[x] Exact `auto` Boundaries (`sec` below 60 s, `min` below 60 min, `hour` otherwise); Fixed Units Never Switch; `unknown`/`overdue` and JSON Nanoseconds Unchanged (PR-0039)
+
+[x] PR-0039 ETA Format Verification Gate (69/69 Debug CTest at 13 jobs; live 5,000,000-digit text runs with default auto, fixed `min`, and fixed `hour` at precision 4)
+
 [x] PR-0032 Verification Gate (7/7 changed-path ASan/UBSan tests, complete Debug build, 66/66 CTest)
 
 -----------------

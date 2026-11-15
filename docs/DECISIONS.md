@@ -2945,3 +2945,58 @@ misleading zero. Snapshot and progress JSON consumers must accept schema
 version 6. No timing profile is persisted, quadratic decimal import itself is
 not optimized, and output, checkpoint, and verification-manifest formats do
 not change.
+
+## ADR-0061
+
+Date
+
+2026-11-15
+
+Status
+
+Accepted
+
+Title
+
+Configurable Text ETA Unit and Precision as Presentation Policy
+
+Decision
+
+PR-0039 adds the command-line-only options `--eta-unit <auto|min|hour>`
+(default `auto`) and `--eta-precision <digits>` (default 2, valid 0 through 9).
+A single header-only `pi::progress::EtaFormat` value type (unit and precision)
+is shared by `Config`, the built-in defaults, CLI help, and
+`TextProgressReporter`; no parallel configuration enum exists.
+
+- `auto` renders `sec` below 60 seconds, `min` from 60 seconds to below 60
+  minutes, and `hour` from 60 minutes. The unit is chosen from the exact
+  nanosecond duration before rounding, so one nanosecond below a boundary keeps
+  the smaller unit even when it rounds to `60.00`. Fixed `min` and `hour` never
+  switch.
+- Values render in fixed-point notation with exactly the configured fraction
+  digits and the classic locale, followed by `sec`, `min`, or `hour`, for both
+  `eta_total=` and `eta_phase=` in terminal and log records. `unknown` and
+  `overdue` are unchanged.
+- An unsupported unit spelling or a malformed precision integer is a usage
+  error (exit status 2). A well-formed precision above 9 fails post-merge
+  configuration validation (exit status 1); the reporter constructor rejects
+  it as well.
+- JSON ETA values remain integer nanoseconds in progress schema version 6, and
+  no TOML keys are added.
+
+Reason
+
+One-decimal seconds are hard to read for multi-hour runs. Display formatting is
+presentation policy and belongs to the reporter, not to ETA derivation or the
+machine-readable contract. Nine fractional digits of a second already reach the
+nanosecond resolution of the source duration, so larger precision adds no
+information.
+
+Consequences
+
+Text progress default output changes from `15.0s` to `15.00sec`; consumers
+parsing text ETA must accept the unit suffixes. To preserve single-line TTY
+redraws at high precision, compact output drops checkpoint counts first and
+then the term fraction when the record would reach 80 columns. JSON consumers,
+ETA calculation, checkpoint, output, and verification-manifest formats are
+unaffected.

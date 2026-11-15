@@ -2,6 +2,7 @@
 
 #include <charconv>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <ostream>
 #include <string>
@@ -61,6 +62,23 @@ ProgressFormat parseFormat(std::string_view option, std::string_view value)
         return ProgressFormat::json;
     }
     throwInvalidValue(option, value, "text or json");
+}
+
+
+pi::progress::EtaUnit parseEtaUnit(
+    std::string_view option,
+    std::string_view value)
+{
+    using pi::progress::EtaUnit;
+    for (const EtaUnit unit :
+         {EtaUnit::automatic, EtaUnit::minutes, EtaUnit::hours})
+    {
+        if (value == toString(unit))
+        {
+            return unit;
+        }
+    }
+    throwInvalidValue(option, value, "auto, min, or hour");
 }
 
 
@@ -183,6 +201,16 @@ CommandLineOptions CommandLine::parse(int argc, const char* const argv[])
         {
             options.eta_phase_requested = true;
         }
+        else if (arg == "--eta-unit")
+        {
+            options.eta_unit = parseEtaUnit(
+                arg, requireValue(arg, i, argc, argv));
+        }
+        else if (arg == "--eta-precision")
+        {
+            options.eta_precision = parseUnsigned<std::uint32_t>(
+                arg, requireValue(arg, i, argc, argv));
+        }
         else if (arg == "--storage-directory")
         {
             options.storage_directory =
@@ -260,6 +288,8 @@ void CommandLine::applyOverrides(
         config.progress_eta_total = options.eta_total_requested;
         config.progress_eta_phase = options.eta_phase_requested;
     }
+    applyIfSet(options.eta_unit, config.progress_eta_format.unit);
+    applyIfSet(options.eta_precision, config.progress_eta_format.precision);
     applyIfSet(options.storage_directory, config.storage_directory);
     applyIfSet(
         options.storage_memory_budget_bytes,
@@ -344,6 +374,16 @@ void CommandLine::writeHelp(std::ostream& output)
         << "      Report the current-phase ETA (eta_phase). The ETA options\n"
         << "      are independent: give both to report both. With neither,\n"
         << "      only the total ETA is reported.\n"
+        << "  --eta-unit <auto|min|hour>\n"
+        << "      Text ETA unit: auto uses sec below one minute, min below\n"
+        << "      one hour, and hour otherwise; min and hour never switch.\n"
+        << "      Command-line only. Default: "
+        << toString(defaults::PROGRESS_ETA_FORMAT.unit) << ".\n"
+        << "  --eta-precision <digits>\n"
+        << "      Text ETA fraction digits; integer from 0 to "
+        << pi::progress::EtaFormat::maxPrecision << ". JSON ETA stays\n"
+        << "      integer nanoseconds. Command-line only. Default: "
+        << defaults::PROGRESS_ETA_FORMAT.precision << ".\n"
         << "\n"
         << "Out-of-core storage (used when out_of_core is enabled in\n"
         << "config.toml; default: "

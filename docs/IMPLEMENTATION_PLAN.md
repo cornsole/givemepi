@@ -1858,3 +1858,63 @@ import is quadratic but counted linearly, and later phases are converted with
 PR-0038 is complete. Treat upward correction on new work evidence as expected.
 The BBP verification samples remain relatively underweighted; benchmark and
 model them in a separate optimization or progress-accounting PR.
+
+## PR-0039: Configurable Text ETA Units and Precision
+
+### Goal
+
+Render human-readable text ETA in seconds, minutes, or hours with a configurable
+fixed decimal precision while preserving JSON's exact nanosecond contract.
+
+### Scope
+
+- Add `--eta-unit <auto|min|hour>`; default `auto`.
+- In `auto`, use `sec` below 60 seconds, `min` below 60 minutes, and `hour`
+  otherwise. Fixed `min` and `hour` never switch units.
+- Add `--eta-precision <digits>`; default 2 and accept 0 through 9, matching
+  nanosecond resolution.
+- Apply the same format to selected total and phase ETA in terminal and log
+  text output. `unknown` and `overdue` remain unchanged.
+- Keep JSON ETA values as integer nanoseconds with schema version 6 unchanged.
+- Add parser, validation, help, reporter, and CLI regression coverage.
+
+### Out of Scope
+
+- TOML keys for ETA display formatting;
+- changing ETA calculation or JSON values;
+- locale-dependent decimal separators.
+
+### Verification
+
+- Focused unit and CLI tests cover automatic thresholds, fixed minute/hour
+  output, precision 0/2/9, invalid units, and precision outside 0 through 9.
+- Full Debug build and CTest use 13 of 22 logical cores.
+- Live text progress confirms defaults and both fixed units.
+
+### Verification Results
+
+- `TextProgressReporterTest` covers `auto` at 1 ns below and exactly 60 seconds
+  and 60 minutes, fixed `min` and `hour`, precision 0, 2, and 9, both ETAs in
+  log mode, rejected precision 10, and unchanged `unknown`/`overdue` output.
+  Parser, help, CLI-process, override, default, TOML-ignored, and
+  post-merge precision validation tests cover the new options.
+- Built every Debug target and passed all 69 CTest tests with 13-way
+  parallelism.
+- Three non-TTY 5,000,000-digit, 13-thread text runs passed final
+  verification. The default switched from `eta_total=1.11min` while finalizing
+  to `eta_total=26.30sec` while verifying and completed at
+  `eta_total=0.00sec eta_phase=0.00sec`. `--eta-unit min` stayed in minutes
+  (`0.75min` through `0.00min`), and `--eta-unit hour --eta-precision 4`
+  rendered `eta_total=0.0159hour` through `eta_total=0.0000hour`.
+- Final review found one compact-terminal width regression at precision 9.
+  Compact rendering now omits checkpoint counts and then the term fraction
+  only when needed to stay below 80 columns; its focused regression test
+  covers two selected fixed-hour ETAs at precision 9.
+
+### Next Contributor TODO
+
+PR-0039 implementation, documentation, and verification are done; the
+developer commit and push remain. Keep ETA unit and precision as
+command-line-only presentation policy in the shared `EtaFormat` type: do not
+change JSON nanosecond values or schema version 6 for display needs, and add
+TOML keys only through a separately approved plan.

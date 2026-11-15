@@ -69,7 +69,10 @@ int main()
              << "storage_max_concurrent_io = 3\n"
              << "verification = false\n"
              << "bbp_samples = 5\n"
-             << "verification_manifest = \"result.verify\"\n";
+             << "verification_manifest = \"result.verify\"\n"
+             // ETA display format is command-line only.
+             << "eta_unit = \"hour\"\n"
+             << "eta_precision = 7\n";
     }
 
     Config config = ConfigLoader::load(path);
@@ -94,6 +97,8 @@ int main()
     assert(!config.verification_enabled);
     assert(config.bbp_sample_count == 5);
     assert(config.verification_manifest_file == "result.verify");
+    assert(config.progress_eta_format
+        == pi::config::defaults::PROGRESS_ETA_FORMAT);
 
     apply(config, {
         "pi-engine",
@@ -145,6 +150,45 @@ int main()
     Config repeatedEta;
     apply(repeatedEta, {"pi-engine", "--eta-phase", "--eta-phase"});
     assert(!repeatedEta.progress_eta_total && repeatedEta.progress_eta_phase);
+    // ETA display format: CLI-only, default auto with two digits.
+    using pi::progress::EtaFormat;
+    using pi::progress::EtaUnit;
+    assert(defaultEta.progress_eta_format == EtaFormat{});
+    assert(defaultEta.progress_eta_format.unit == EtaUnit::automatic);
+    assert(defaultEta.progress_eta_format.precision == 2);
+    assert(config.progress_eta_format
+        == pi::config::defaults::PROGRESS_ETA_FORMAT);
+    Config minuteEta;
+    apply(minuteEta, {"pi-engine", "--eta-unit", "min"});
+    assert((minuteEta.progress_eta_format == EtaFormat{EtaUnit::minutes, 2}));
+    Config hourEta;
+    apply(hourEta, {
+        "pi-engine", "--eta-unit", "min", "--eta-unit", "hour",
+        "--eta-precision", "9"
+    });
+    assert((hourEta.progress_eta_format == EtaFormat{EtaUnit::hours, 9}));
+    Config autoEta;
+    apply(autoEta, {
+        "pi-engine", "--eta-unit", "auto", "--eta-precision", "0"
+    });
+    assert((autoEta.progress_eta_format == EtaFormat{EtaUnit::automatic, 0}));
+    assert(throws<std::invalid_argument>([]() {
+        Config invalid;
+        apply(invalid, {"pi-engine", "--eta-unit", "sec"});
+    }));
+    assert(throws<std::runtime_error>([]() {
+        Config invalid;
+        apply(invalid, {"pi-engine", "--eta-precision", "10"});
+    }));
+    assert(throws<std::runtime_error>([]() {
+        Config invalid;
+        invalid.progress_eta_format.precision = 10;
+        pi::config::validateConfig(invalid);
+    }));
+    assert(throws<std::invalid_argument>([]() {
+        Config invalid;
+        apply(invalid, {"pi-engine", "--eta-precision", "-1"});
+    }));
     assert(throws<std::runtime_error>([]() {
         Config invalid;
         invalid.progress_eta_total = false;

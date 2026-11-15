@@ -10,7 +10,9 @@
 int main()
 {
     using namespace std::chrono_literals;
+    using pi::progress::EtaFormat;
     using pi::progress::EtaSelection;
+    using pi::progress::EtaUnit;
     using pi::progress::ProgressMetrics;
     using pi::progress::ProgressPhase;
     using pi::progress::ProgressSnapshot;
@@ -54,7 +56,7 @@ int main()
     terminal.report(ProgressSnapshot(data), metrics);
     const std::string terminalRecord = terminalOutput.str();
     assert(terminalRecord ==
-        "\rphase=merging terms=25/100 eta_total=15.0s"
+        "\rphase=merging terms=25/100 eta_total=15.00sec"
         " checkpoints=2/10 durable=1\x1b[K");
     assert(terminalRecord.find("speed=") == std::string::npos);
     assert(terminalRecord.find("tasks=") == std::string::npos);
@@ -80,7 +82,8 @@ int main()
     bothTerminal.report(ProgressSnapshot(data), metrics);
     const std::string bothRecord = bothTerminalOutput.str();
     assert(bothRecord ==
-        "\rphase=merging terms=25/100 eta_total=15.0s eta_phase=4.0s\x1b[K");
+        "\rphase=merging terms=25/100 eta_total=15.00sec"
+        " eta_phase=4.00sec\x1b[K");
     assert(bothRecord.find("checkpoints=") == std::string::npos);
     assert(bothRecord.size() - controlBytes < 80);
 
@@ -135,7 +138,7 @@ int main()
     terminal.report(ProgressSnapshot(data), metrics);
     const std::string terminalFinal = terminalOutput.str();
     assert(terminalFinal.ends_with(
-        "\rphase=completed terms=100/100 eta_total=0.0s"
+        "\rphase=completed terms=100/100 eta_total=0.00sec"
         " checkpoints=10/10 durable=10\x1b[K\n"
     ));
 
@@ -147,7 +150,7 @@ int main()
     );
     phaseOnly.report(ProgressSnapshot(data), metrics);
     assert(phaseOnlyOutput.str()
-        == "\rphase=completed terms=100/100 eta_phase=0.0s"
+        == "\rphase=completed terms=100/100 eta_phase=0.00sec"
            " checkpoints=10/10 durable=10\x1b[K\n");
 
     std::ostringstream failedTerminalOutput;
@@ -169,6 +172,7 @@ int main()
         fullLogOutput,
         TextOutputMode::log,
         EtaSelection{true, true},
+        EtaFormat{},
         [fixedTime]() { return fixedTime; }
     );
     data.phase = ProgressPhase::merging;
@@ -190,7 +194,8 @@ int main()
     const std::string fullLogRecord = fullLogOutput.str();
     assert(fullLogRecord ==
         "[1970-01-01T00:00:00Z] phase=merging terms=25/100"
-        " progress=25.00% speed=5.00 terms/s eta_total=15.0s eta_phase=4.0s"
+        " progress=25.00% speed=5.00 terms/s"
+        " eta_total=15.00sec eta_phase=4.00sec"
         " tasks=4 active/2 queued memory=4.00 KiB"
         " checkpoints=2/10 durable=1 checkpoint_bytes=2.00 KiB"
         " storage=8.00 KiB resident/16.00 KiB stored/3 chunks"
@@ -204,6 +209,7 @@ int main()
         logOutput,
         TextOutputMode::log,
         EtaSelection{false, true},
+        EtaFormat{},
         [fixedTime]() { return fixedTime; }
     );
     data.phase = ProgressPhase::failed;
@@ -234,6 +240,7 @@ int main()
         failedOutput,
         TextOutputMode::log,
         EtaSelection{},
+        EtaFormat{},
         [fixedTime]() { return fixedTime; }
     );
     bool writeFailureReported = false;
@@ -256,6 +263,7 @@ int main()
             logOutput,
             TextOutputMode::log,
             EtaSelection{},
+            EtaFormat{},
             TextProgressReporter::NowFunction{}
         );
     }
@@ -264,6 +272,133 @@ int main()
         rejectedClock = true;
     }
     assert(rejectedClock);
+
+    bool rejectedPrecision = false;
+    try
+    {
+        TextProgressReporter invalid(
+            logOutput,
+            TextOutputMode::log,
+            EtaSelection{},
+            EtaFormat{EtaUnit::automatic, EtaFormat::maxPrecision + 1}
+        );
+    }
+    catch (const std::invalid_argument&)
+    {
+        rejectedPrecision = true;
+    }
+    assert(rejectedPrecision);
+
+    // Renders one total ETA in terminal mode and returns its value text.
+    const auto renderEta = [&data](
+        std::chrono::nanoseconds eta,
+        EtaFormat format
+    ) {
+        ProgressMetrics etaMetrics;
+        etaMetrics.estimatedTotalTimeRemaining = eta;
+        std::ostringstream output;
+        TextProgressReporter reporter(
+            output,
+            TextOutputMode::terminal,
+            EtaSelection{},
+            format
+        );
+        reporter.report(ProgressSnapshot(data), etaMetrics);
+        const std::string record = output.str();
+        const std::string key = "eta_total=";
+        const std::size_t begin = record.find(key) + key.size();
+        return record.substr(begin, record.find(' ', begin) - begin);
+    };
+    const EtaFormat automatic{};
+    const EtaFormat automatic9{EtaUnit::automatic, 9};
+
+    // Automatic unit boundaries compare the exact duration, not the rounded
+    // value: one nanosecond below a minute or hour keeps the smaller unit.
+    assert(renderEta(0ns, automatic) == "0.00sec");
+    assert(renderEta(59'999'999'999ns, automatic) == "60.00sec");
+    assert(renderEta(59'999'999'999ns, automatic9) == "59.999999999sec");
+    assert(renderEta(60s, automatic) == "1.00min");
+    assert(renderEta(90s, automatic) == "1.50min");
+    assert(renderEta(1h - 1ns, automatic) == "60.00min");
+    assert(renderEta(59min + 30s, automatic) == "59.50min");
+    assert(renderEta(1h, automatic) == "1.00hour");
+    assert(renderEta(36h + 45min, automatic) == "36.75hour");
+
+    // Fixed units never switch.
+    const EtaFormat minutes{EtaUnit::minutes, 2};
+    assert(renderEta(0ns, minutes) == "0.00min");
+    assert(renderEta(30s, minutes) == "0.50min");
+    assert(renderEta(2h, minutes) == "120.00min");
+    const EtaFormat hours{EtaUnit::hours, 2};
+    assert(renderEta(30s, hours) == "0.01hour");
+    assert(renderEta(90min, hours) == "1.50hour");
+    assert(renderEta(100h, hours) == "100.00hour");
+
+    // Precision 0 has no decimal point; precision 9 reaches nanoseconds.
+    assert(renderEta(15s, EtaFormat{EtaUnit::automatic, 0}) == "15sec");
+    assert(renderEta(100s, EtaFormat{EtaUnit::automatic, 0}) == "2min");
+    assert(renderEta(3h, EtaFormat{EtaUnit::hours, 0}) == "3hour");
+    assert(renderEta(1ns, automatic9) == "0.000000001sec");
+    assert(renderEta(4s, automatic9) == "4.000000000sec");
+    assert(renderEta(90s, EtaFormat{EtaUnit::minutes, 9}) == "1.500000000min");
+
+    // High precision drops lower-priority compact fields rather than wrapping
+    // an in-place terminal update.
+    ProgressMetrics preciseMetrics;
+    preciseMetrics.estimatedTotalTimeRemaining = 15s;
+    preciseMetrics.estimatedPhaseTimeRemaining = 4s;
+    std::ostringstream preciseOutput;
+    TextProgressReporter preciseTerminal(
+        preciseOutput,
+        TextOutputMode::terminal,
+        EtaSelection{true, true},
+        EtaFormat{EtaUnit::hours, 9}
+    );
+    preciseTerminal.report(ProgressSnapshot(overdueData), preciseMetrics);
+    const std::string preciseRecord = preciseOutput.str();
+    assert(preciseRecord ==
+        "\rphase=verifying_output eta_total=0.004166667hour"
+        " eta_phase=0.001111111hour\x1b[K");
+    assert(preciseRecord.find("terms=") == std::string::npos);
+    assert(preciseRecord.size() - controlBytes < 80);
+
+    // Both ETAs share the format in log mode.
+    std::ostringstream minuteLogOutput;
+    TextProgressReporter minuteLog(
+        minuteLogOutput,
+        TextOutputMode::log,
+        EtaSelection{true, true},
+        minutes,
+        [fixedTime]() { return fixedTime; }
+    );
+    ProgressMetrics minuteMetrics;
+    minuteMetrics.estimatedTotalTimeRemaining = 15s;
+    minuteMetrics.estimatedPhaseTimeRemaining = 4s;
+    minuteLog.report(ProgressSnapshot(data), minuteMetrics);
+    assert(minuteLogOutput.str().find(" eta_total=0.25min eta_phase=0.07min ")
+        != std::string::npos);
+
+    // `unknown` and `overdue` are unchanged by the format.
+    overdueMetrics.totalBasis = pi::progress::EtaBasis::overdue;
+    std::ostringstream fixedOverdueOutput;
+    TextProgressReporter fixedOverdue(
+        fixedOverdueOutput,
+        TextOutputMode::terminal,
+        EtaSelection{true, true},
+        EtaFormat{EtaUnit::hours, 9}
+    );
+    fixedOverdue.report(ProgressSnapshot(overdueData), overdueMetrics);
+    assert(fixedOverdueOutput.str() == overdueRecord);
+    overdueMetrics.totalBasis = pi::progress::EtaBasis::unknown;
+    std::ostringstream fixedMixedOutput;
+    TextProgressReporter fixedMixed(
+        fixedMixedOutput,
+        TextOutputMode::terminal,
+        EtaSelection{true, true},
+        EtaFormat{EtaUnit::minutes, 0}
+    );
+    fixedMixed.report(ProgressSnapshot(overdueData), overdueMetrics);
+    assert(fixedMixedOutput.str() == mixedOutput.str());
 
     return 0;
 }

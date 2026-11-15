@@ -42,6 +42,8 @@ constexpr SupportedOption supportedOptions[] = {
     {"--progress-format", "json"},
     {"--eta-total", nullptr},
     {"--eta-phase", nullptr},
+    {"--eta-unit", "hour"},
+    {"--eta-precision", "3"},
     {"--storage-directory", "st"},
     {"--storage-memory-budget-bytes", "1048576"},
     {"--storage-chunk-size-bytes", "4096"},
@@ -123,6 +125,7 @@ void testNoArgumentsKeepConfiguration()
     assert(!options.digits && !options.threads && !options.output_file);
     assert(!options.checkpoint_enabled && !options.resume_enabled);
     assert(!options.progress_enabled && !options.progress_format);
+    assert(!options.eta_unit && !options.eta_precision);
     assert(!options.storage_directory && !options.verification_enabled);
 
     pi::config::Config config;
@@ -180,6 +183,15 @@ void testMalformedValuesAreUsageErrors()
         == "invalid value for --progress-format: 'xml' (expected text or json)");
     assert(usageError({"--bbp-samples", "eight"}).rfind(
         "invalid value for --bbp-samples:", 0) == 0);
+    assert(usageError({"--eta-unit"}) == "missing value for --eta-unit");
+    assert(usageError({"--eta-unit", "sec"})
+        == "invalid value for --eta-unit: 'sec' (expected auto, min, or hour)");
+    assert(usageError({"--eta-unit", "Min"}).rfind(
+        "invalid value for --eta-unit: 'Min'", 0) == 0);
+    assert(usageError({"--eta-precision", "two"}).rfind(
+        "invalid value for --eta-precision: 'two'", 0) == 0);
+    assert(usageError({"--eta-precision", "-1"}).rfind(
+        "invalid value for --eta-precision: '-1'", 0) == 0);
 }
 
 
@@ -202,6 +214,27 @@ void testConfigurationConstraintsAreNotUsageErrors()
         rejected = true;
     }
     assert(rejected);
+
+    // --eta-precision 10 parses; the 0 through 9 range is a config rule.
+    const CommandLineOptions precision = parse({"--eta-precision", "10"});
+    assert(precision.eta_precision == 10u);
+    bool precisionRejected = false;
+    pi::config::Config precisionConfig;
+    try
+    {
+        CommandLine::applyOverrides(precisionConfig, precision);
+    }
+    catch (const CommandLineUsageError&)
+    {
+        assert(false && "validation must not be reported as usage error");
+    }
+    catch (const std::runtime_error& error)
+    {
+        precisionRejected = std::string(error.what())
+            == "Config validation failed: ETA precision must be between 0 "
+               "and 9.";
+    }
+    assert(precisionRejected);
 }
 
 
@@ -220,6 +253,8 @@ void testSupportedOverrides()
         "--no-progress",
         "--progress-interval", "125",
         "--progress-format", "json",
+        "--eta-unit", "min",
+        "--eta-precision", "0",
         "--storage-directory", "st",
         "--storage-memory-budget-bytes", "2097152",
         "--storage-chunk-size-bytes", "524288",
@@ -239,6 +274,8 @@ void testSupportedOverrides()
     assert(!config.progress_enabled);
     assert(config.progress_interval_ms == 125);
     assert(config.progress_format == pi::config::ProgressFormat::json);
+    assert(config.progress_eta_format.unit == pi::progress::EtaUnit::minutes);
+    assert(config.progress_eta_format.precision == 0);
     assert(config.storage_directory == "st");
     assert(config.storage_memory_budget_bytes == 2097152);
     assert(config.storage_target_chunk_size_bytes == 524288);
@@ -251,11 +288,14 @@ void testSupportedOverrides()
         "--digits", "18446744073709551615",
         "--checkpoint", "--resume", "--progress", "--verify",
         "--progress-format", "text",
+        "--eta-unit", "hour", "--eta-precision", "9",
     }));
     assert(config.digits == 18446744073709551615ULL);
     assert(config.checkpoint_enabled && config.resume_enabled);
     assert(config.progress_enabled && config.verification_enabled);
     assert(config.progress_format == pi::config::ProgressFormat::text);
+    assert((config.progress_eta_format
+        == pi::progress::EtaFormat{pi::progress::EtaUnit::hours, 9}));
 }
 
 
@@ -318,6 +358,9 @@ void testHelpContent()
     assert(hasDefault(std::to_string(defaults::PROGRESS_INTERVAL_MS)));
     assert(hasDefault(std::string(defaults::PROGRESS_FORMAT)));
     assert(help.find("only the total ETA is reported.") != std::string::npos);
+    assert(hasDefault(std::string(
+        toString(defaults::PROGRESS_ETA_FORMAT.unit))));
+    assert(hasDefault(std::to_string(defaults::PROGRESS_ETA_FORMAT.precision)));
     assert(hasDefault(std::string(defaults::STORAGE_DIRECTORY)));
     assert(hasDefault(std::to_string(defaults::STORAGE_MEMORY_BUDGET_BYTES)));
     assert(hasDefault(
@@ -330,6 +373,11 @@ void testHelpContent()
 
     for (std::string_view text : {
              "<text|json>",
+             "<auto|min|hour>",
+             "<digits>",
+             "integer from 0 to 9",
+             "auto uses sec below one minute, min below",
+             "min and hour never switch",
              "integer from 1 to 32",
              "0 uses all hardware threads, maximum 1024",
              "<milliseconds>",

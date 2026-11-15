@@ -13,6 +13,11 @@
   progress renders `eta_total=overdue` and `eta_phase=overdue`.
 - Added PR-0038 tracker evidence: closed wall duration and newly completed
   units of every phase, and the time since the current phase's latest unit.
+- Added PR-0039 command-line-only `--eta-unit <auto|min|hour>` (default
+  `auto`) and `--eta-precision <digits>` (default 2, valid 0 through 9) for
+  text ETA, backed by the shared `pi::progress::EtaFormat` type. `auto` uses
+  `sec` below 60 seconds, `min` below 60 minutes, and `hour` otherwise,
+  compared on the exact duration; fixed `min` and `hour` never switch.
 
 ### Changed
 - Extended progress instrumentation through splitting, weighted merging,
@@ -30,6 +35,13 @@
   levels report the same rate.
 - Changed verification decimal-import units to the quadratic import cost,
   `8 * d + d^2 / 256` cumulative over `d` imported digits.
+- Changed PR-0039 text `eta_total=` and `eta_phase=` values from one-decimal
+  seconds (`15.0s`) to fixed-point values with the configured precision and a
+  `sec`, `min`, or `hour` suffix in the classic locale (default `15.00sec`) in
+  both terminal and log records. `unknown` and `overdue` are unchanged, and
+  JSON ETA remains integer nanoseconds in schema version 6. A malformed
+  precision is a usage error; a precision above 9 fails post-merge
+  configuration validation.
 
 ### Fixed
 - Fixed ETA disappearing after Chudnovsky leaf terms completed. ETA now remains
@@ -60,6 +72,14 @@
   elapsed time within 1 ns), both ETAs were 0 with basis `measured` on
   completion, and BBP sample extraction at the end of verification reported
   `overdue` rather than zero.
+- PR-0039: built all Debug targets and passed all 69 CTest tests with 13 of 22
+  logical cores. Three non-TTY 5,000,000-digit, 13-thread text runs passed
+  final verification: the default unit switched from `eta_total=1.11min`
+  during finalizing to `eta_total=26.30sec` in `verifying_output` and ended
+  at `eta_total=0.00sec eta_phase=0.00sec`; `--eta-unit min` stayed in
+  minutes (`eta_total=0.75min eta_phase=0.75min` through `0.00min`); and
+  `--eta-unit hour --eta-precision 4` rendered `eta_total=0.0159hour` through
+  `eta_total=0.0000hour`. No record used the old seconds suffix.
 
 ## [0.13.0] - PR-0036
 

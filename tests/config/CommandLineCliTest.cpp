@@ -254,6 +254,20 @@ void requireConfigurationFailures(
         "--bbp-samples 33 diagnostic mismatch: " + rangeRun.err);
     require(entries(range.work) == std::set<std::string>{"config.toml"},
         "--bbp-samples 33 created files in the working directory");
+
+    const Case precision = makeCase(root, "eta-precision-range", "");
+    const RunResult precisionRun = run(
+        executable, {"--eta-precision", "10"},
+        precision.work, precision.logs, 30s);
+    require(precisionRun.status == 1,
+        "--eta-precision 10 exited with "
+            + std::to_string(precisionRun.status));
+    require(precisionRun.err
+            == "pi-engine: Config validation failed: "
+               "ETA precision must be between 0 and 9.\n",
+        "--eta-precision 10 diagnostic mismatch: " + precisionRun.err);
+    require(entries(precision.work) == std::set<std::string>{"config.toml"},
+        "--eta-precision 10 created files in the working directory");
 }
 
 /// CLI options override config.toml, and config.toml values remain in effect
@@ -348,6 +362,15 @@ int main(int argc, char* argv[])
             {"--progress-format", "xml"},
             "pi-engine: invalid value for --progress-format: 'xml' "
             "(expected text or json)\n" + std::string(usageHint));
+        requireUsageError(executable, root, "invalid-eta-unit",
+            {"--eta-unit", "sec"},
+            "pi-engine: invalid value for --eta-unit: 'sec' "
+            "(expected auto, min, or hour)\n" + std::string(usageHint));
+        requireUsageError(executable, root, "invalid-eta-precision",
+            {"--eta-precision", "2.5"},
+            "pi-engine: invalid value for --eta-precision: '2.5' (expected a "
+            "non-negative integer up to 4294967295)\n"
+                + std::string(usageHint));
 
         requireConfigurationFailures(executable, root);
         requireSupportedOverrides(executable, root);

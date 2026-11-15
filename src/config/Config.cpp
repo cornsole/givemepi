@@ -77,6 +77,14 @@ void validateConfig(Config& config)
             "selected."
         );
     }
+    if (config.progress_eta_format.precision
+        > pi::progress::EtaFormat::maxPrecision)
+    {
+        throw std::runtime_error(
+            "Config validation failed: ETA precision must be between 0 and "
+            + std::to_string(pi::progress::EtaFormat::maxPrecision) + '.'
+        );
+    }
     if (config.output_file.empty())
     {
         throw std::runtime_error(
