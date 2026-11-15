@@ -146,6 +146,7 @@ Progress
 [x] Resume Progress Reconstruction (PR-0023)
 [x] Durable Checkpoint Gauge, Last-Committed Range, and JSON Schema v4 (PR-0031)
 [x] Default Text Completion Evidence, Reporter Failure Propagation, and Compact TTY Record (PR-0032)
+[x] End-to-End and Current-Phase ETA through Final Verification, JSON Schema v5 (PR-0037)
 
 ----------------------
 

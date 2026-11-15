@@ -2816,3 +2816,65 @@ Release notes come from the matching changelog section. Prebuilt binaries,
 `--version`, install rules, CPack, signing, and multi-platform packages require
 separate decisions. Pull requests continue to update `[Unreleased]` without
 allocating a new semantic version.
+
+---
+
+## ADR-0059
+
+Date
+
+2026-11-15
+
+Status
+
+Accepted
+
+Title
+
+Expose Independent End-to-End and Current-Phase ETA
+
+Decision
+
+PR-0037 replaces the term-only ETA with two independently selectable derived
+estimates:
+
+- total ETA: remaining wall-clock time through optional final verification;
+- phase ETA: remaining wall-clock time in the current progress phase.
+
+`--eta-total` and `--eta-phase` are additive CLI selections. Supplying both
+reports both estimates. Supplying neither preserves a simple default by
+reporting total ETA. Progress schema version 5 exposes separate nullable fields
+for the two estimates; text output omits unselected estimates.
+
+The tracker records authoritative bounded work for splitting, weighted merge
+work, fixed-point finalization, output bytes, and final-verification work.
+Resume-restored work is an initial baseline and is excluded from observed
+throughput. Checkpoint validation remains before tracker and reporter
+construction so warnings preserve their established ordering. Disabled stages
+are excluded from the pipeline plan. Reporters continue to consume immutable
+snapshots and never infer progress by inspecting scheduler or filesystem
+internals. ETA values are derived from observed work and elapsed time, remain
+unavailable until a usable sample exists, are zero on successful completion,
+and are unavailable on failure.
+
+Reason
+
+The previous estimator used only completed Chudnovsky leaf terms. All terms
+were complete before high-level merging, finalization, output writing, and
+verification, so valid long-running work displayed `eta=unknown` and the
+term-based completion ratio misleadingly remained at 100 percent.
+
+A single ETA label also cannot answer both operator questions: when the current
+stage will finish and when the complete command will finish. Independent
+selections keep those meanings explicit, while the dual selection supports
+diagnosis of a slow current stage without losing the end-to-end deadline
+estimate.
+
+Consequences
+
+Progress instrumentation expands into the remaining pipeline stages and JSON
+progress advances to schema version 5. ETA is still an estimate: changing
+arithmetic, storage, resume, and verification throughput may revise it in
+either direction. Raw counters remain authoritative, no timing profile is
+persisted across machines or processes, and output, checkpoint, and
+verification-manifest formats do not change.

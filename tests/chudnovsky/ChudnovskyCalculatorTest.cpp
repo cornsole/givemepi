@@ -1,5 +1,6 @@
 #include "chudnovsky/ChudnovskyCalculator.hpp"
 #include "scheduler/Scheduler.hpp"
+#include "progress/ProgressCostModel.hpp"
 #include "progress/ProgressTracker.hpp"
 
 #include <iostream>
@@ -172,10 +173,13 @@ int main()
         &parallelProgress
     ));
     progressScheduler.stop();
-    if (parallelProgress.snapshot().phase()
-            != pi::progress::ProgressPhase::completed
-        || parallelProgress.snapshot().completedTerms()
-            != progressPlan.termCount)
+    const auto parallelSnapshot = parallelProgress.snapshot();
+    const auto mergeWork =
+        parallelSnapshot.phaseWork(pi::progress::ProgressPhase::merging);
+    if (parallelSnapshot.phase() != pi::progress::ProgressPhase::completed
+        || parallelSnapshot.completedTerms() != progressPlan.termCount
+        || mergeWork.total == 0
+        || mergeWork.completed != mergeWork.total)
     {
         std::cerr << "End-to-end parallel progress mismatch\n";
         return 1;
@@ -190,8 +194,16 @@ int main()
         PiCalculationRequest{100, 32, true},
         &deferredProgress
     ));
-    if (deferredProgress.snapshot().phase()
-        != pi::progress::ProgressPhase::finalizing)
+    const auto deferredSnapshot = deferredProgress.snapshot();
+    const auto finalization = deferredSnapshot.phaseWork(
+        pi::progress::ProgressPhase::finalizing
+    );
+    const std::uint64_t expectedFinalization =
+        pi::progress::finalizationWork(progressPlan.workingDigits).total();
+    if (deferredSnapshot.phase() != pi::progress::ProgressPhase::finalizing
+        || deferredSnapshot.phaseBaselineUnits() != 0
+        || finalization.total != expectedFinalization
+        || finalization.completed != expectedFinalization)
     {
         std::cerr << "Deferred CLI progress ownership mismatch\n";
         return 1;

@@ -11,6 +11,24 @@
 namespace pi::progress
 {
 
+/// Plans the frontier nodes the parallel splitter will merge.
+///
+/// Accepted resume blocks each form one node; every recalculated range adds
+/// the parallel splitter's leaf count, capped at workerCount * tasksPerWorker.
+///
+/// Input: a resume plan, split options, and the worker count.
+/// Output: the planned node count, saturating at UINT64_MAX.
+/// Throws std::invalid_argument for zero cutoff or tasks per worker when a
+/// range must be recalculated.
+/// Time complexity: O(r) for r recalculated ranges. Memory complexity: O(1).
+[[nodiscard]]
+std::uint64_t planFrontierNodes(
+    const checkpoint::CheckpointResumePlan& plan,
+    const binary::ParallelSplitOptions& options,
+    std::size_t workerCount
+);
+
+
 /// Plans the checkpoint-block total reported by a CLI run.
 ///
 /// Verified accepted resume blocks always count, because they are restored
@@ -44,7 +62,9 @@ public:
     /// percentages are intentionally ignored. Accepted ranges must be
     /// non-overlapping, within the tracker's term count, and fit its configured
     /// checkpoint-block total. The tracker must not already contain completed
-    /// work.
+    /// work and must not have started splitting. Restored terms and blocks
+    /// are published as restored work, so they never count as newly
+    /// completed work in observed rates or phase baselines.
     ///
     /// Input: a verified resume plan and the tracker to initialize.
     /// Output: true after complete restoration; false without tracker mutation

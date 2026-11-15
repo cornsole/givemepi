@@ -54,6 +54,15 @@ public:
 
     /// Receives each merge level on the coordinating thread. O(1) expected.
     virtual void mergeLevelStarted(std::uint32_t level) noexcept = 0;
+
+    /// Receives the total weighted merge work once, on the coordinating
+    /// thread, after the leaf stage and before the first merge level. Zero
+    /// means the frontier needs no merge. O(1) expected.
+    virtual void mergeWorkPlanned(std::uint64_t units) noexcept = 0;
+
+    /// Receives the weighted units of one finished pair merge from a worker
+    /// or the caller. Must not throw or block. O(1) expected.
+    virtual void mergeWorkCompleted(std::uint64_t units) noexcept = 0;
 };
 
 
@@ -166,6 +175,16 @@ public:
         const BinaryNode& left,
         const BinaryNode& right
     );
+
+    /**
+     * Returns the weighted progress units of merging a node pair spanning
+     * termSpan terms: termSpan * bit_width(termSpan), an n log n proxy for
+     * the multiplication cost, saturating at UINT64_MAX.
+     *
+     * Time complexity: O(1). Memory complexity: O(1).
+     */
+    [[nodiscard]]
+    static std::uint64_t mergeWorkUnits(std::size_t termSpan) noexcept;
 
 };
 

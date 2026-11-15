@@ -14,11 +14,17 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
       completedTerms_(data.completedTerms),
       totalCheckpointBlocks_(data.totalCheckpointBlocks),
       completedCheckpointBlocks_(data.completedCheckpointBlocks),
+      restoredCheckpointBlocks_(data.restoredCheckpointBlocks),
       durableCheckpointBlocks_(data.durableCheckpointBlocks),
       currentMergeLevel_(data.currentMergeLevel),
       activeTasks_(data.activeTasks),
       queuedTasks_(data.queuedTasks),
       elapsed_(data.elapsed),
+      restoredTerms_(data.restoredTerms),
+      phaseUnits_(data.phaseUnits),
+      phaseCosts_(data.phaseCosts),
+      phaseElapsed_(data.phaseElapsed),
+      phaseBaselineUnits_(data.phaseBaselineUnits),
       memoryBytes_(data.memoryBytes),
       checkpointBytes_(data.checkpointBytes),
       storageResidentBytes_(data.storageResidentBytes),
@@ -73,6 +79,54 @@ ProgressSnapshot::ProgressSnapshot(ProgressSnapshotData data)
             "Failure detail is valid only in the failed phase"
         );
     }
+
+    if (restoredTerms_ > completedTerms_
+        || restoredCheckpointBlocks_ > completedCheckpointBlocks_)
+    {
+        throw std::invalid_argument(
+            "Restored work cannot exceed completed work"
+        );
+    }
+
+    for (std::size_t index = 0; index < PROGRESS_PHASE_COUNT; ++index)
+    {
+        const auto phase = static_cast<ProgressPhase>(index);
+        const PhaseWorkUnits& units = phaseUnits_[index];
+        if ((!isWorkPhase(phase) || phase == ProgressPhase::splitting)
+            && units != PhaseWorkUnits{})
+        {
+            throw std::invalid_argument(
+                "Phase units are valid only for non-splitting work phases"
+            );
+        }
+        if (units.completed > units.total)
+        {
+            throw std::invalid_argument(
+                "Completed phase units cannot exceed total phase units"
+            );
+        }
+        if (!isWorkPhase(phase) && phaseCosts_[index] != 0)
+        {
+            throw std::invalid_argument(
+                "Only work phases may carry a pipeline cost"
+            );
+        }
+    }
+
+    if (phaseElapsed_ < std::chrono::nanoseconds::zero()
+        || phaseElapsed_ > elapsed_)
+    {
+        throw std::invalid_argument(
+            "Phase elapsed time must lie within total elapsed time"
+        );
+    }
+
+    if (phaseBaselineUnits_ > phaseWork(phase_).completed)
+    {
+        throw std::invalid_argument(
+            "Phase baseline cannot exceed completed phase units"
+        );
+    }
 }
 
 
@@ -124,6 +178,12 @@ std::uint64_t ProgressSnapshot::completedCheckpointBlocks() const noexcept
 }
 
 
+std::uint64_t ProgressSnapshot::restoredCheckpointBlocks() const noexcept
+{
+    return restoredCheckpointBlocks_;
+}
+
+
 std::uint64_t ProgressSnapshot::durableCheckpointBlocks() const noexcept
 {
     return durableCheckpointBlocks_;
@@ -152,6 +212,40 @@ std::uint64_t ProgressSnapshot::queuedTasks() const noexcept
 std::chrono::nanoseconds ProgressSnapshot::elapsed() const noexcept
 {
     return elapsed_;
+}
+
+
+std::uint64_t ProgressSnapshot::restoredTerms() const noexcept
+{
+    return restoredTerms_;
+}
+
+
+PhaseWorkUnits ProgressSnapshot::phaseWork(ProgressPhase phase) const noexcept
+{
+    if (phase == ProgressPhase::splitting)
+    {
+        return PhaseWorkUnits{totalTerms_, completedTerms_};
+    }
+    return phaseUnits_[phaseIndex(phase)];
+}
+
+
+std::uint64_t ProgressSnapshot::phaseCost(ProgressPhase phase) const noexcept
+{
+    return phaseCosts_[phaseIndex(phase)];
+}
+
+
+std::chrono::nanoseconds ProgressSnapshot::phaseElapsed() const noexcept
+{
+    return phaseElapsed_;
+}
+
+
+std::uint64_t ProgressSnapshot::phaseBaselineUnits() const noexcept
+{
+    return phaseBaselineUnits_;
 }
 
 

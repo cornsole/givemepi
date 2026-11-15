@@ -17,7 +17,17 @@ int main()
     using pi::progress::terminalState;
     using pi::progress::toString;
 
-    static_assert(PROGRESS_SCHEMA_VERSION == 4);
+    static_assert(PROGRESS_SCHEMA_VERSION == 5);
+    static_assert(pi::progress::PROGRESS_PHASE_COUNT
+        == pi::progress::phaseIndex(ProgressPhase::failed) + 1);
+    static_assert(pi::progress::phaseIndex(ProgressPhase::splitting)
+        < pi::progress::phaseIndex(ProgressPhase::verifyingOutput));
+    static_assert(!pi::progress::isWorkPhase(ProgressPhase::initializing));
+    static_assert(pi::progress::isWorkPhase(
+        ProgressPhase::validatingCheckpoints));
+    static_assert(pi::progress::isWorkPhase(ProgressPhase::verifyingOutput));
+    static_assert(!pi::progress::isWorkPhase(ProgressPhase::completed));
+    static_assert(!pi::progress::isWorkPhase(ProgressPhase::failed));
     static_assert(!isTerminal(ProgressPhase::initializing));
     static_assert(isTerminal(ProgressPhase::completed));
     static_assert(isTerminal(ProgressPhase::failed));

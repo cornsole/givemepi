@@ -1,5 +1,7 @@
 #pragma once
 
+#include "verification/VerificationProgress.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -43,12 +45,14 @@ public:
 
     /// Hashes exactly byteCount bytes from the beginning of a file.
     ///
-    /// The file is read in fixed-size chunks. Throws on open/read failure or if
+    /// The file is read in fixed-size chunks; an optional observer receives
+    /// the byte count of every hashed chunk. Throws on open/read failure or if
     /// the file ends before byteCount. Time O(byteCount), memory O(1).
     [[nodiscard]]
     static SHA256Digest hashFilePrefix(
         const std::filesystem::path& path,
-        std::uint64_t byteCount
+        std::uint64_t byteCount,
+        VerificationWorkObserver* observer = nullptr
     );
 
 private:

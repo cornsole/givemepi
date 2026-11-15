@@ -35,6 +35,8 @@ inline constexpr std::uint32_t STORAGE_MAX_CONCURRENT_IO = 1;
 inline constexpr bool PROGRESS_ENABLED = true;
 inline constexpr std::uint32_t PROGRESS_INTERVAL_MS = 500;
 inline constexpr std::string_view PROGRESS_FORMAT = "text";
+inline constexpr bool PROGRESS_ETA_TOTAL = true;
+inline constexpr bool PROGRESS_ETA_PHASE = false;
 
 // Output
 inline constexpr std::string_view OUTPUT_FILE = "pi.txt";

@@ -1,11 +1,33 @@
 #include "verification/FinalVerifier.hpp"
 
 #include <cassert>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <string_view>
 #include <unistd.h>
+
+namespace
+{
+
+/// Records published verification units and call count.
+class RecordingWork final : public pi::verification::VerificationWorkObserver
+{
+public:
+    void workCompleted(std::uint64_t units) noexcept override
+    {
+        assert(units != 0);
+        total += units;
+        ++calls;
+    }
+
+    std::uint64_t total = 0;
+    std::uint64_t calls = 0;
+};
+
+} // namespace
+
 
 int main()
 {
@@ -55,6 +77,27 @@ int main()
     assert(file.report.status() == VerificationStatus::passed);
     assert(file.sha256 == memory.sha256);
     assert(file.bbpSamples.size() == memory.bbpSamples.size());
+
+    // Progress units of a complete run sum exactly to the planned work:
+    // 103 inspected bytes, 1 known-digit unit, 4 * 102 hashed bytes,
+    // 8 * 100 imported digits, and per sample (position + 1) + 8 * 100.
+    RecordingWork work;
+    const BBPSamplePolicy policy;
+    const auto observed = FinalVerifier::verifyFile(
+        path,
+        identity,
+        policy,
+        &work
+    );
+    assert(observed.report.status() == VerificationStatus::passed);
+    std::uint64_t expected = 103 + 1 + 4 * 102 + 8 * 100;
+    for (const std::uint64_t position : policy.select(identity))
+    {
+        expected += position + 1 + 8 * 100;
+    }
+    assert(FinalVerifier::plannedFileWork(identity, policy) == expected);
+    assert(work.total == expected);
+    assert(work.calls >= 4 + policy.select(identity).size());
 
     std::string middleMutation = canonical;
     middleMutation[50] = middleMutation[50] == '0' ? '1' : '0';

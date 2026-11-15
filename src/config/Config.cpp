@@ -70,6 +70,13 @@ void validateConfig(Config& config)
             "Config validation failed: progress interval must be greater than 0."
         );
     }
+    if (!config.progress_eta_total && !config.progress_eta_phase)
+    {
+        throw std::runtime_error(
+            "Config validation failed: at least one progress ETA must be "
+            "selected."
+        );
+    }
     if (config.output_file.empty())
     {
         throw std::runtime_error(

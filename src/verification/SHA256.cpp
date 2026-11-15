@@ -164,7 +164,8 @@ SHA256Digest SHA256::hash(std::string_view bytes)
 
 SHA256Digest SHA256::hashFilePrefix(
     const std::filesystem::path& path,
-    std::uint64_t byteCount
+    std::uint64_t byteCount,
+    VerificationWorkObserver* observer
 )
 {
     std::ifstream input(path, std::ios::binary);
@@ -197,6 +198,10 @@ SHA256Digest SHA256::hashFilePrefix(
             static_cast<std::size_t>(count)
         ));
         remaining -= static_cast<std::uint64_t>(count);
+        if (observer != nullptr)
+        {
+            observer->workCompleted(static_cast<std::uint64_t>(count));
+        }
         if (static_cast<std::size_t>(count) != requested && remaining != 0)
         {
             throw std::runtime_error(

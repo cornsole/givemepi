@@ -40,6 +40,8 @@ constexpr SupportedOption supportedOptions[] = {
     {"--no-progress", nullptr},
     {"--progress-interval", "250"},
     {"--progress-format", "json"},
+    {"--eta-total", nullptr},
+    {"--eta-phase", nullptr},
     {"--storage-directory", "st"},
     {"--storage-memory-budget-bytes", "1048576"},
     {"--storage-chunk-size-bytes", "4096"},
@@ -315,6 +317,7 @@ void testHelpContent()
     assert(hasDefault(std::string(defaults::CHECKPOINT_QUARANTINE_DIRECTORY)));
     assert(hasDefault(std::to_string(defaults::PROGRESS_INTERVAL_MS)));
     assert(hasDefault(std::string(defaults::PROGRESS_FORMAT)));
+    assert(help.find("only the total ETA is reported.") != std::string::npos);
     assert(hasDefault(std::string(defaults::STORAGE_DIRECTORY)));
     assert(hasDefault(std::to_string(defaults::STORAGE_MEMORY_BUDGET_BYTES)));
     assert(hasDefault(

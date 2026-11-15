@@ -36,7 +36,9 @@ bool addWithinLimit(
 
 ProgressTracker::ProgressTracker(ProgressWorkPlan plan)
     : plan_(plan),
-      startedAt_(std::chrono::steady_clock::now())
+      startedAt_(std::chrono::steady_clock::now()),
+      phaseCosts_(plan.phaseCosts),
+      phaseStartedAt_(startedAt_)
 {
     if (plan_.targetDigits == 0)
     {
@@ -45,6 +47,16 @@ ProgressTracker::ProgressTracker(ProgressWorkPlan plan)
     if (plan_.totalTerms == 0)
     {
         throw std::invalid_argument("Total terms must be greater than zero");
+    }
+    for (std::size_t index = 0; index < PROGRESS_PHASE_COUNT; ++index)
+    {
+        if (!isWorkPhase(static_cast<ProgressPhase>(index))
+            && phaseCosts_[index] != 0)
+        {
+            throw std::invalid_argument(
+                "Only work phases may carry a pipeline cost"
+            );
+        }
     }
 }
 
@@ -57,12 +69,19 @@ bool ProgressTracker::transitionTo(ProgressPhase next)
     {
         return false;
     }
+    if (current == next)
+    {
+        return true;
+    }
 
+    const auto now = std::chrono::steady_clock::now();
     phase_.store(next, std::memory_order_release);
     if (isTerminal(next) && !finishedAt_.has_value())
     {
-        finishedAt_ = std::chrono::steady_clock::now();
+        finishedAt_ = now;
     }
+    phaseStartedAt_ = now;
+    phaseBaselineUnits_ = completedUnitsOf(next);
     return true;
 }
 
@@ -71,6 +90,90 @@ bool ProgressTracker::addCompletedTerms(std::uint64_t count) noexcept
 {
     return isRunning()
         && addWithinLimit(completedTerms_, count, plan_.totalTerms);
+}
+
+
+bool ProgressTracker::restoreCompletedWork(
+    std::uint64_t terms,
+    std::uint64_t checkpointBlocks,
+    std::uint64_t checkpointBytes
+)
+{
+    std::lock_guard lock(metadataMutex_);
+    const ProgressPhase current = phase_.load(std::memory_order_relaxed);
+    if ((current != ProgressPhase::initializing
+            && current != ProgressPhase::validatingCheckpoints)
+        || completedCheckpointBlocks_ != 0
+        || terms > plan_.totalTerms
+        || checkpointBlocks > plan_.totalCheckpointBlocks)
+    {
+        return false;
+    }
+
+    std::uint64_t expected = 0;
+    if (!completedTerms_.compare_exchange_strong(
+            expected,
+            terms,
+            std::memory_order_relaxed,
+            std::memory_order_relaxed))
+    {
+        return false;
+    }
+    restoredTerms_ = terms;
+    completedCheckpointBlocks_ = checkpointBlocks;
+    restoredCheckpointBlocks_ = checkpointBlocks;
+    durableCheckpointBlocks_ = checkpointBlocks;
+    checkpointBytes_ = checkpointBytes;
+    return true;
+}
+
+
+bool ProgressTracker::declarePhaseUnits(
+    ProgressPhase phase,
+    std::uint64_t total
+)
+{
+    if (!isWorkPhase(phase) || phase == ProgressPhase::splitting)
+    {
+        return false;
+    }
+
+    std::lock_guard lock(metadataMutex_);
+    const ProgressPhase current = phase_.load(std::memory_order_relaxed);
+    const std::size_t index = phaseIndex(phase);
+    if (isTerminal(current)
+        || phaseIndex(current) > index
+        || phaseDeclared_[index])
+    {
+        return false;
+    }
+
+    phaseDeclared_[index] = true;
+    phaseTotals_[index].store(total, std::memory_order_relaxed);
+    if (total == 0)
+    {
+        phaseCosts_[index] = 0;
+    }
+    return true;
+}
+
+
+bool ProgressTracker::addPhaseUnits(
+    ProgressPhase phase,
+    std::uint64_t count
+) noexcept
+{
+    if (!isWorkPhase(phase) || phase == ProgressPhase::splitting
+        || !isRunning())
+    {
+        return false;
+    }
+    const std::size_t index = phaseIndex(phase);
+    return addWithinLimit(
+        phaseCompleted_[index],
+        count,
+        phaseTotals_[index].load(std::memory_order_relaxed)
+    );
 }
 
 
@@ -218,6 +321,8 @@ bool ProgressTracker::markFailed(std::string detail)
     failureDetail_ = std::move(detail);
     phase_.store(ProgressPhase::failed, std::memory_order_release);
     finishedAt_ = std::chrono::steady_clock::now();
+    phaseStartedAt_ = *finishedAt_;
+    phaseBaselineUnits_ = 0;
     return true;
 }
 
@@ -234,11 +339,28 @@ ProgressSnapshot ProgressTracker::snapshot() const
         data.phase = phase_.load(std::memory_order_acquire);
         data.currentMergeLevel = currentMergeLevel_;
         data.completedCheckpointBlocks = completedCheckpointBlocks_;
+        data.restoredCheckpointBlocks = restoredCheckpointBlocks_;
+        data.restoredTerms = restoredTerms_;
         data.durableCheckpointBlocks = durableCheckpointBlocks_;
         data.checkpointBytes = checkpointBytes_;
         data.lastValidatedCheckpoint = lastValidatedCheckpoint_;
         data.lastCommittedCheckpoint = lastCommittedCheckpoint_;
         data.failureDetail = failureDetail_;
+        data.phaseCosts = phaseCosts_;
+        data.phaseBaselineUnits = phaseBaselineUnits_;
+        // Declarations take this mutex, so each total read here bounds the
+        // completed count read after it.
+        for (std::size_t index = 0; index < PROGRESS_PHASE_COUNT; ++index)
+        {
+            if (!phaseDeclared_[index])
+            {
+                continue;
+            }
+            data.phaseUnits[index].total =
+                phaseTotals_[index].load(std::memory_order_relaxed);
+            data.phaseUnits[index].completed =
+                phaseCompleted_[index].load(std::memory_order_relaxed);
+        }
 
         const auto endpoint = finishedAt_.value_or(
             std::chrono::steady_clock::now()
@@ -246,6 +368,10 @@ ProgressSnapshot ProgressTracker::snapshot() const
         data.elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
             endpoint - startedAt_
         );
+        data.phaseElapsed =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                endpoint - phaseStartedAt_
+            );
     }
 
     data.completedTerms = completedTerms_.load(std::memory_order_relaxed);
@@ -271,6 +397,22 @@ ProgressSnapshot ProgressTracker::snapshot() const
 bool ProgressTracker::isRunning() const noexcept
 {
     return !isTerminal(phase_.load(std::memory_order_acquire));
+}
+
+
+std::uint64_t ProgressTracker::completedUnitsOf(
+    ProgressPhase phase
+) const noexcept
+{
+    if (phase == ProgressPhase::splitting)
+    {
+        return completedTerms_.load(std::memory_order_relaxed);
+    }
+    if (!isWorkPhase(phase))
+    {
+        return 0;
+    }
+    return phaseCompleted_[phaseIndex(phase)].load(std::memory_order_relaxed);
 }
 
 } // namespace pi::progress

@@ -3,10 +3,35 @@
 ## [Unreleased]
 
 ### Added
+- Added independently selectable total-completion and current-phase ETA with
+  additive `--eta-total` and `--eta-phase` CLI flags. With neither flag, total
+  ETA is the default; with both flags, both estimates are reported.
+- Added progress schema version 5 raw pipeline/phase work and separate nullable
+  total and phase ETA fields for text and JSON progress reporting.
 
 ### Changed
+- Extended progress instrumentation through splitting, weighted merging,
+  fixed-point finalization, output writing, and optional final verification.
+  Disabled stages are excluded from the end-to-end work plan.
 
 ### Fixed
+- Fixed ETA disappearing after Chudnovsky leaf terms completed. ETA now remains
+  available after a usable sample through output verification, resume-restored
+  work is excluded from observed throughput, successful completion reports
+  zero, and failure reports no ETA.
+
+### Verification
+
+- Built all Debug targets with 13 of 22 logical cores and passed all 69 CTest
+  tests.
+- Parsed live schema-version-5 JSONL from a 5,000,000-digit, 13-thread run:
+  total and phase ETA were available in merging, finalizing, and
+  `verifying_output`, and both selected estimates reached zero on completion.
+- A verification-disabled JSONL run skipped `verifying_output` and completed
+  with both selected ETA values at zero.
+- Final review found no correctness, concurrency, overflow, schema, or
+  consumer-visible defects. A live JSON parse exposed and fixed one missing
+  `storage_io` closing brace before final verification.
 
 ## [0.13.0] - PR-0036
 

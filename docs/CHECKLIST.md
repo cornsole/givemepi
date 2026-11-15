@@ -498,6 +498,16 @@
 
 [x] Compact TTY Text Record; Full Non-TTY Text Log and JSON Schema v4 Unchanged (PR-0032)
 
+[x] End-to-End ETA through Output Verification (PR-0037)
+
+[x] Current-Phase ETA and Independent `--eta-total` / `--eta-phase` Selection (PR-0037)
+
+[x] JSON Progress Schema Version 5 with Separate Total and Phase ETA Fields (PR-0037)
+
+[x] Resume-Safe ETA Rate Excluding Restored Work (PR-0037)
+
+[x] PR-0037 ETA Verification Gate (69/69 Debug CTest and real JSONL CLI runs with and without verification)
+
 [x] PR-0032 Verification Gate (7/7 changed-path ASan/UBSan tests, complete Debug build, 66/66 CTest)
 
 -----------------

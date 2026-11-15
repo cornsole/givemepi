@@ -175,6 +175,14 @@ CommandLineOptions CommandLine::parse(int argc, const char* const argv[])
             options.progress_format = parseFormat(
                 arg, requireValue(arg, i, argc, argv));
         }
+        else if (arg == "--eta-total")
+        {
+            options.eta_total_requested = true;
+        }
+        else if (arg == "--eta-phase")
+        {
+            options.eta_phase_requested = true;
+        }
         else if (arg == "--storage-directory")
         {
             options.storage_directory =
@@ -247,6 +255,11 @@ void CommandLine::applyOverrides(
     applyIfSet(options.progress_enabled, config.progress_enabled);
     applyIfSet(options.progress_interval_ms, config.progress_interval_ms);
     applyIfSet(options.progress_format, config.progress_format);
+    if (options.eta_total_requested || options.eta_phase_requested)
+    {
+        config.progress_eta_total = options.eta_total_requested;
+        config.progress_eta_phase = options.eta_phase_requested;
+    }
     applyIfSet(options.storage_directory, config.storage_directory);
     applyIfSet(
         options.storage_memory_budget_bytes,
@@ -325,6 +338,12 @@ void CommandLine::writeHelp(std::ostream& output)
         << "  --progress-format <text|json>\n"
         << "      text, or json for JSON Lines records. Default: "
         << defaults::PROGRESS_FORMAT << ".\n"
+        << "  --eta-total\n"
+        << "      Report the end-to-end completion ETA (eta_total).\n"
+        << "  --eta-phase\n"
+        << "      Report the current-phase ETA (eta_phase). The ETA options\n"
+        << "      are independent: give both to report both. With neither,\n"
+        << "      only the total ETA is reported.\n"
         << "\n"
         << "Out-of-core storage (used when out_of_core is enabled in\n"
         << "config.toml; default: "

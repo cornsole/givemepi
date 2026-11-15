@@ -101,15 +101,21 @@ void writeRange(
 }
 
 
+void writeTerms(std::ostream& output, const ProgressSnapshot& snapshot)
+{
+    output << "phase=" << toString(snapshot.phase())
+           << " terms=" << snapshot.completedTerms()
+           << '/' << snapshot.totalTerms();
+}
+
+
 void writeProgress(
     std::ostream& output,
     const ProgressSnapshot& snapshot,
     const ProgressMetrics& metrics
 )
 {
-    output << "phase=" << toString(snapshot.phase())
-           << " terms=" << snapshot.completedTerms()
-           << '/' << snapshot.totalTerms();
+    writeTerms(output, snapshot);
     if (metrics.completionRatio.has_value())
     {
         output << " progress=" << std::fixed << std::setprecision(2)
@@ -118,16 +124,45 @@ void writeProgress(
 }
 
 
-void writeEta(std::ostream& output, const ProgressMetrics& metrics)
+void writeDuration(
+    std::ostream& output,
+    const char* label,
+    const std::optional<std::chrono::nanoseconds>& value
+)
 {
-    output << " eta=";
-    if (metrics.estimatedTimeRemaining.has_value())
+    output << ' ' << label << '=';
+    if (value.has_value())
     {
-        output << seconds(*metrics.estimatedTimeRemaining);
+        output << seconds(*value);
     }
     else
     {
         output << "unknown";
+    }
+}
+
+
+void writeEta(
+    std::ostream& output,
+    const ProgressMetrics& metrics,
+    EtaSelection selection
+)
+{
+    if (selection.total)
+    {
+        writeDuration(
+            output,
+            "eta_total",
+            metrics.estimatedTotalTimeRemaining
+        );
+    }
+    if (selection.phase)
+    {
+        writeDuration(
+            output,
+            "eta_phase",
+            metrics.estimatedPhaseTimeRemaining
+        );
     }
 }
 
@@ -154,18 +189,24 @@ void writeFailure(std::ostream& output, const ProgressSnapshot& snapshot)
 
 
 /// Short single-row record for in-place terminal redraws. Excludes speed,
-/// task, memory, storage, I/O, merge, and range detail so routine updates
-/// stay well inside common terminal widths and `\r` redraws do not wrap.
+/// task, memory, storage, I/O, merge, and range detail, and the progress
+/// percentage already implied by the term fraction, so routine updates stay
+/// inside common terminal widths and `\r` redraws do not wrap. When both
+/// ETAs are selected the checkpoint counts are also omitted for width.
 std::string renderCompact(
     const ProgressSnapshot& snapshot,
-    const ProgressMetrics& metrics
+    const ProgressMetrics& metrics,
+    EtaSelection selection
 )
 {
     std::ostringstream output;
     output.imbue(std::locale::classic());
-    writeProgress(output, snapshot, metrics);
-    writeEta(output, metrics);
-    writeCheckpointCounts(output, snapshot);
+    writeTerms(output, snapshot);
+    writeEta(output, metrics, selection);
+    if (!(selection.total && selection.phase))
+    {
+        writeCheckpointCounts(output, snapshot);
+    }
     writeFailure(output, snapshot);
     return output.str();
 }
@@ -173,7 +214,8 @@ std::string renderCompact(
 
 std::string renderFull(
     const ProgressSnapshot& snapshot,
-    const ProgressMetrics& metrics
+    const ProgressMetrics& metrics,
+    EtaSelection selection
 )
 {
     std::ostringstream output;
@@ -184,7 +226,7 @@ std::string renderFull(
         output << " speed=" << std::fixed << std::setprecision(2)
                << *metrics.termsPerSecond << " terms/s";
     }
-    writeEta(output, metrics);
+    writeEta(output, metrics, selection);
 
     output << " tasks=" << snapshot.activeTasks() << " active/"
            << snapshot.queuedTasks() << " queued"
@@ -219,10 +261,12 @@ std::string renderFull(
 TextProgressReporter::TextProgressReporter(
     std::ostream& output,
     TextOutputMode mode,
+    EtaSelection selection,
     NowFunction now
 )
     : output_(output),
       mode_(mode),
+      selection_(selection),
       now_(std::move(now))
 {
     if (!now_)
@@ -239,7 +283,8 @@ void TextProgressReporter::report(
 {
     if (mode_ == TextOutputMode::terminal)
     {
-        output_ << '\r' << renderCompact(snapshot, metrics) << "\x1b[K";
+        output_ << '\r' << renderCompact(snapshot, metrics, selection_)
+                << "\x1b[K";
         if (snapshot.terminalState() != ProgressTerminalState::running)
         {
             output_ << '\n';
@@ -248,7 +293,7 @@ void TextProgressReporter::report(
     else
     {
         output_ << '[' << utcTimestamp(now_()) << "] "
-                << renderFull(snapshot, metrics) << '\n';
+                << renderFull(snapshot, metrics, selection_) << '\n';
     }
     output_.flush();
     if (!output_)

@@ -80,7 +80,8 @@ DecimalHexDigitExtractor::DecimalHexDigitExtractor(
 }
 
 DecimalHexDigitExtractor DecimalHexDigitExtractor::fromFile(
-    const InspectedOutputFile& file
+    const InspectedOutputFile& file,
+    VerificationWorkObserver* observer
 )
 {
     if (file.requestedDigits == 0
@@ -101,6 +102,8 @@ DecimalHexDigitExtractor DecimalHexDigitExtractor::fromFile(
 
     pi::bigint::GMPInteger numerator;
     std::uint64_t remaining = file.requestedDigits;
+    constexpr std::uint64_t publishBatch = 64 * 1024;
+    std::uint64_t unpublished = 0;
     std::string chunk(9, '\0');
     while (remaining != 0)
     {
@@ -114,6 +117,13 @@ DecimalHexDigitExtractor DecimalHexDigitExtractor::fromFile(
         }
         appendDecimalChunk(numerator, std::string_view(chunk.data(), count));
         remaining -= count;
+        unpublished += count;
+        if (observer != nullptr
+            && (unpublished >= publishBatch || remaining == 0))
+        {
+            observer->workCompleted(unpublished);
+            unpublished = 0;
+        }
     }
     char newline = '\0';
     input.get(newline);

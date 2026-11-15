@@ -42,10 +42,30 @@ public:
         const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{}
     );
 
+    /// Returns the work units verifyFile publishes for an accepted output.
+    ///
+    /// Units approximate sequential byte passes: one per inspected file byte,
+    /// one for the known-digit comparison, four per hashed canonical byte,
+    /// eight per fractional digit imported for BBP extraction, and for each
+    /// selected BBP position (position + 1) series units plus eight per
+    /// fractional digit for interval extraction. Saturates at UINT64_MAX.
+    /// Time complexity: O(s) for s selected samples. Memory: O(s).
+    [[nodiscard]] static std::uint64_t plannedFileWork(
+        VerificationIdentity identity,
+        const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{}
+    );
+
+    /// Verifies a stored output file.
+    ///
+    /// An optional observer receives completed units as structure, known
+    /// digits, hash, BBP import, and each BBP sample finish; their sum
+    /// equals plannedFileWork() when every stage runs to completion. Units
+    /// are published on the calling thread only.
     [[nodiscard]] static FinalVerificationRun verifyFile(
         const std::filesystem::path& path,
         VerificationIdentity identity,
-        const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{}
+        const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{},
+        VerificationWorkObserver* observer = nullptr
     );
 
     [[nodiscard]] static FinalVerificationRun verifyFile(

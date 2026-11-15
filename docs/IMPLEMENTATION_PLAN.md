@@ -1682,3 +1682,106 @@ pull request.
 PR-0036 is complete. Publish binaries only after portable architecture,
 runtime dependency, and installation contracts are approved. Replace
 side-effecting assert-based tests before treating Release CTest as meaningful.
+
+---
+
+## PR-0037: End-to-End and Phase ETA
+
+### Goal
+
+Keep an ETA visible from the first usable progress sample through output
+verification, while allowing operators to select total completion ETA, current
+phase ETA, or both.
+
+### Architecture Contract
+
+Progress schema version 5 carries separate total and current-phase remaining
+durations. `--eta-total` and `--eta-phase` are independent CLI selections; when
+both are present both values are reported. With neither option, total ETA is
+the default. Text output omits unselected values. JSON keeps both stable keys
+and represents an unselected or not-yet-estimable value as `null`.
+
+ETA remains derived telemetry. Raw phase and work counters are authoritative.
+Resume-restored work is recorded as an initial baseline rather than observed
+throughput. Splitting, weighted merge work, fixed-point finalization, output
+bytes, final-verification file work, verification stages, and BBP samples
+publish bounded progress units. Disabled stages are removed from the total work
+plan. The estimator uses observed work rates, resets the phase estimate at each
+transition, continuously corrects the total estimate, and returns unknown until
+the configured minimum sample is available. A completed run reports zero; a
+failed run reports no ETA. Checkpoint validation remains before tracker and
+reporter construction so resume warnings retain their established ordering.
+
+### Work Sequence
+
+1. Extend the progress work plan, tracker, snapshot, and schema with
+   phase-specific and total pipeline work.
+2. Publish actual progress from Binary Splitting and merging, finalization,
+   output writing, and final verification; exclude resume-restored work from
+   observed rates.
+3. Derive independent total and current-phase ETA values from immutable
+   snapshots without moving formatting into computation workers.
+4. Add independent `--eta-total` and `--eta-phase` CLI selections and document
+   the default-total behavior.
+5. Update text and JSON reporters for the two ETA values and schema version 5.
+6. Cover startup, resume, phase transitions, writing, verification,
+   verification-disabled, short-run, failure, completion, and dual-selection
+   behavior.
+7. Run changed-path tests and one real JSONL CLI scenario through
+   `verifying_output` under the agent CPU limit.
+8. Update README, roadmap, checklist, decisions, and changelog.
+
+### Acceptance
+
+- The default progress output reports total completion ETA after the minimum
+  usable sample and continues through `verifying_output`.
+- `--eta-total` reports only total ETA, `--eta-phase` reports only phase ETA,
+  and both options report both.
+- Resume-restored work does not appear as newly completed work or inflate the
+  observed rate.
+- Phase ETA resets at each phase boundary; total ETA remains an end-to-end
+  estimate and is corrected as actual work completes.
+- Verification-disabled runs exclude verification work and transition from
+  writing to completed.
+- JSON schema version 5 exposes stable, independently nullable total and phase
+  ETA fields.
+- Completed records report zero selected ETA values; failed records report
+  null selected ETA values.
+- Progress workers publish counters only and never format output or perform
+  additional blocking I/O.
+
+### Out of Scope
+
+- Persisting timing profiles across processes or machines;
+- promising deadline accuracy or a monotonic ETA under changing storage and
+  arithmetic throughput;
+- Reordering resume diagnostics after progress output or estimating work that
+  completes before tracker construction;
+- changing checkpoint, verification-manifest, or decimal-output formats;
+- performance optimization unrelated to progress instrumentation.
+
+### Verification
+
+- Configured and built all Debug targets with the agent limit set to 13 of 22
+  logical cores.
+- Passed all 69 CTest tests with 13-way test parallelism.
+- A 1,000,000-digit dual-ETA JSONL run passed final verification and published
+  non-null total and phase ETA during `verifying_output`; both were zero in the
+  completed record.
+- A 5,000,000-digit dual-ETA JSONL run published non-null total and phase ETA
+  during merging, finalization, and `verifying_output`, then completed with
+  both values at zero.
+- A verification-disabled JSONL run omitted `verifying_output` and completed
+  with both selected ETA values at zero.
+- Final review found no correctness, concurrency, overflow, schema, or
+  consumer-visible issue. The live JSONL scenario caught one missing
+  `storage_io` closing brace; the reporter and its regression assertion were
+  corrected before the complete test run.
+
+### Next Contributor TODO
+
+PR-0037 is complete. Treat total ETA as a heuristic that may move in either
+direction when arithmetic, storage, or verification throughput changes. Keep
+raw counters authoritative, preserve the independent CLI selections and JSON
+fields, and do not move resume diagnostics behind progress output without a
+separate approved contract change.

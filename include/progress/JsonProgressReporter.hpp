@@ -17,11 +17,13 @@ public:
     using Clock = std::chrono::system_clock;
     using NowFunction = std::function<Clock::time_point()>;
 
-    /// Creates a JSON reporter for an injected stream and optional clock.
+    /// Creates a JSON reporter for an injected stream, ETA selection, and
+    /// optional clock.
     ///
     /// Time and memory complexity: O(1).
     explicit JsonProgressReporter(
         std::ostream& output,
+        EtaSelection selection = {},
         NowFunction now = []() { return Clock::now(); }
     );
 
@@ -29,7 +31,10 @@ public:
     ///
     /// Unavailable optional values are encoded as JSON null. Non-finite derived
     /// floating-point values are also encoded as null so output remains valid
-    /// JSON. Time and memory complexity: O(n) in the record length.
+    /// JSON. Both `estimated_total_time_remaining_ns` and
+    /// `estimated_phase_time_remaining_ns` are always present; each is null
+    /// when unselected or not yet estimable. Time and memory complexity: O(n)
+    /// in the record length.
     void report(
         const ProgressSnapshot& snapshot,
         const ProgressMetrics& metrics
@@ -37,6 +42,7 @@ public:
 
 private:
     std::ostream& output_;
+    EtaSelection selection_;
     NowFunction now_;
 };
 

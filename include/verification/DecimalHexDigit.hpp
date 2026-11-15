@@ -30,9 +30,12 @@ public:
     explicit DecimalHexDigitExtractor(const CanonicalDecimal& decimal);
 
     /// Streams an already inspected file into the same reusable GMP form.
+    /// An optional observer receives converted digit counts in batches of
+    /// about 64 Ki digits; the batches sum to requestedDigits on success.
     /// Throws when the file changed, cannot be read, or metadata is invalid.
     [[nodiscard]] static DecimalHexDigitExtractor fromFile(
-        const InspectedOutputFile& file
+        const InspectedOutputFile& file,
+        VerificationWorkObserver* observer = nullptr
     );
 
     /// Extracts a zero-based hexadecimal fractional digit. The digit resolves

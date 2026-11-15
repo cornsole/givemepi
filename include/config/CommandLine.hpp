@@ -52,6 +52,11 @@ struct CommandLineOptions
     std::optional<bool> progress_enabled;
     std::optional<std::uint32_t> progress_interval_ms;
     std::optional<ProgressFormat> progress_format;
+    /// `--eta-total` was given. ETA flags are independent; when either flag
+    /// is present the given flags replace the configured ETA selection.
+    bool eta_total_requested = false;
+    /// `--eta-phase` was given.
+    bool eta_phase_requested = false;
 
     // Out-of-core storage
     std::optional<std::string> storage_directory;

@@ -3,6 +3,7 @@
 #include "bigint/GMPInteger.hpp"
 #include "binary/BinaryNode.hpp"
 #include "scheduler/Scheduler.hpp"
+#include "progress/ProgressCostModel.hpp"
 #include "progress/ProgressTracker.hpp"
 
 #include <chrono>
@@ -56,15 +57,55 @@ public:
         }
     }
 
+    void mergeWorkPlanned(std::uint64_t units) noexcept override
+    {
+        if (tracker_ != nullptr)
+        {
+            static_cast<void>(tracker_->declarePhaseUnits(
+                progress::ProgressPhase::merging,
+                units
+            ));
+        }
+    }
+
+    void mergeWorkCompleted(std::uint64_t units) noexcept override
+    {
+        if (tracker_ != nullptr)
+        {
+            static_cast<void>(tracker_->addPhaseUnits(
+                progress::ProgressPhase::merging,
+                units
+            ));
+        }
+    }
+
 private:
     progress::ProgressTracker* tracker_;
     bool merging_ = false;
 };
 
 
+/// Publishes completed finalization step units; a null tracker is ignored.
+void publishFinalization(
+    progress::ProgressTracker* progress,
+    std::uint64_t units
+) noexcept
+{
+    if (progress != nullptr)
+    {
+        static_cast<void>(progress->addPhaseUnits(
+            progress::ProgressPhase::finalizing,
+            units
+        ));
+    }
+}
+
+
 GMPInteger finalizeFixedPoint(
     const BinaryNode& node,
-    const PrecisionPlan& precision
+    const PrecisionPlan& precision,
+    const progress::FinalizationWork& work,
+    progress::ProgressTracker* progress
 )
 {
     if (precision.workingDigits
@@ -82,6 +123,7 @@ GMPInteger finalizeFixedPoint(
     squareRootScale.setPowerOfTen(squareRootScaleExponent);
     squareRootScale.mul(GMPInteger(10005));
     squareRootScale.floorSquareRoot();
+    publishFinalization(progress, work.squareRoot);
 
     GMPInteger scaledPi(squareRootScale);
     scaledPi.mul(GMPInteger(426880));
@@ -96,6 +138,7 @@ GMPInteger finalizeFixedPoint(
     GMPInteger guardScale;
     guardScale.setPowerOfTen(precision.guardDigits);
     scaledPi.floorDivide(guardScale);
+    publishFinalization(progress, work.scaling);
 
     return scaledPi;
 }
@@ -139,8 +182,13 @@ PiCalculationResult makeResult(
     bool deferProgressCompletion
 )
 {
+    const progress::FinalizationWork work =
+        progress::finalizationWork(precision.workingDigits);
     if (progress != nullptr
-        && !progress->transitionTo(progress::ProgressPhase::finalizing))
+        && (!progress->declarePhaseUnits(
+                progress::ProgressPhase::finalizing,
+                work.total())
+            || !progress->transitionTo(progress::ProgressPhase::finalizing)))
     {
         throw std::logic_error("Cannot enter progress finalization phase");
     }
@@ -149,10 +197,12 @@ PiCalculationResult makeResult(
         static_cast<void>(progress->clearCurrentMergeLevel());
     }
     const auto finalizeStart = Clock::now();
-    GMPInteger scaledPi = finalizeFixedPoint(node, precision);
+    GMPInteger scaledPi =
+        finalizeFixedPoint(node, precision, work, progress);
     const auto finalizeEnd = Clock::now();
 
     std::string decimal = formatDecimal(scaledPi, precision);
+    publishFinalization(progress, work.conversion);
     const auto formatEnd = Clock::now();
 
     PiCalculationResult result{

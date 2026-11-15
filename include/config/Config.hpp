@@ -54,6 +54,10 @@ struct Config
     std::uint32_t progress_interval_ms =
         defaults::PROGRESS_INTERVAL_MS;
     ProgressFormat progress_format = ProgressFormat::text;
+    /// Report the end-to-end completion ETA.
+    bool progress_eta_total = defaults::PROGRESS_ETA_TOTAL;
+    /// Report the current-phase ETA.
+    bool progress_eta_phase = defaults::PROGRESS_ETA_PHASE;
 
     // Output
     std::string output_file = std::string(defaults::OUTPUT_FILE);

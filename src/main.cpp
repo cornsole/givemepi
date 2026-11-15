@@ -6,6 +6,7 @@
 #include "config/ConfigLoader.hpp"
 #include "logging/Logger.hpp"
 #include "progress/JsonProgressReporter.hpp"
+#include "progress/ProgressCostModel.hpp"
 #include "progress/ProgressReportingRunner.hpp"
 #include "progress/ResumeProgress.hpp"
 #include "progress/TextProgressReporter.hpp"
@@ -78,6 +79,48 @@ bool belongsToRejectedCheckpoint(
     }
     return false;
 }
+
+
+/// Progress units of publishing the verification manifest.
+constexpr std::uint64_t manifestPublicationUnits = 1;
+
+
+pi::verification::VerificationIdentity verificationIdentityOf(
+    const pi::chudnovsky::PrecisionPlan& precision
+) noexcept
+{
+    return pi::verification::VerificationIdentity{
+        precision.requestedDigits,
+        precision.guardDigits,
+        precision.workingDigits,
+        precision.termCount
+    };
+}
+
+
+/// Forwards final-verification units to the tracker's verifying phase.
+class TrackerVerificationObserver final
+    : public pi::verification::VerificationWorkObserver
+{
+public:
+    explicit TrackerVerificationObserver(
+        pi::progress::ProgressTracker& tracker
+    ) noexcept
+        : tracker_(tracker)
+    {
+    }
+
+    void workCompleted(std::uint64_t units) noexcept override
+    {
+        static_cast<void>(tracker_.addPhaseUnits(
+            pi::progress::ProgressPhase::verifyingOutput,
+            units
+        ));
+    }
+
+private:
+    pi::progress::ProgressTracker& tracker_;
+};
 
 } // namespace
 
@@ -207,6 +250,19 @@ int main(int argc, char* argv[])
             });
         }
 
+        const std::uint64_t outputBytes = precision.requestedDigits + 3;
+        std::uint64_t verificationUnits = 0;
+        if (config.verification_enabled)
+        {
+            const std::uint64_t fileWork =
+                pi::verification::FinalVerifier::plannedFileWork(
+                    verificationIdentityOf(precision),
+                    pi::verification::BBPSamplePolicy(config.bbp_sample_count)
+                );
+            verificationUnits = fileWork == UINT64_MAX
+                ? fileWork
+                : fileWork + manifestPublicationUnits;
+        }
         pi::progress::ProgressTracker tracker({
             precision.requestedDigits,
             precision.termCount,
@@ -215,8 +271,24 @@ int main(int argc, char* argv[])
                 splitOptions,
                 workerCount,
                 config.checkpoint_enabled
-            )
+            ),
+            pi::progress::planPipelineCosts({
+                precision.workingDigits,
+                precision.termCount,
+                pi::progress::planFrontierNodes(
+                    resumePlan,
+                    splitOptions,
+                    workerCount
+                ),
+                workerCount,
+                outputBytes,
+                verificationUnits
+            })
         });
+        // Checkpoint validation ran above, before the tracker and reporter
+        // exist, so its warnings precede every progress record. It therefore
+        // publishes no phase units and carries no pipeline cost; elapsed time
+        // and rates start after it, and restored work is never new work.
         if (config.resume_enabled)
         {
             if (!tracker.transitionTo(
@@ -305,11 +377,15 @@ int main(int argc, char* argv[])
         std::unique_ptr<pi::progress::ProgressReportingRunner> runner;
         if (config.progress_enabled)
         {
+            const pi::progress::EtaSelection etaSelection{
+                config.progress_eta_total,
+                config.progress_eta_phase
+            };
             if (config.progress_format == pi::config::ProgressFormat::json)
             {
                 reporter = std::make_unique<
                     pi::progress::JsonProgressReporter
-                >(std::cerr);
+                >(std::cerr, etaSelection);
             }
             else
             {
@@ -318,7 +394,7 @@ int main(int argc, char* argv[])
                     : pi::progress::TextOutputMode::log;
                 reporter = std::make_unique<
                     pi::progress::TextProgressReporter
-                >(std::cerr, mode);
+                >(std::cerr, mode, etaSelection);
             }
             runner = std::make_unique<pi::progress::ProgressReportingRunner>(
                 tracker,
@@ -358,7 +434,11 @@ int main(int argc, char* argv[])
             );
             scheduler.stop();
 
-            if (!tracker.transitionTo(
+            if (result->decimal.size() + 1 != outputBytes
+                || !tracker.declarePhaseUnits(
+                    pi::progress::ProgressPhase::writingOutput,
+                    outputBytes)
+                || !tracker.transitionTo(
                     pi::progress::ProgressPhase::writingOutput))
             {
                 throw std::logic_error("Cannot enter output writing phase");
@@ -372,38 +452,71 @@ int main(int argc, char* argv[])
             {
                 throw std::runtime_error("Cannot open pi output file");
             }
-            output << result->decimal << '\n';
+            // Chunked writes on the coordinating thread publish byte progress.
+            constexpr std::size_t outputChunkBytes = 4 * 1024 * 1024;
+            const std::string& decimal = result->decimal;
+            for (std::size_t offset = 0; offset < decimal.size();)
+            {
+                const std::size_t count =
+                    std::min(outputChunkBytes, decimal.size() - offset);
+                output.write(
+                    decimal.data() + offset,
+                    static_cast<std::streamsize>(count)
+                );
+                if (!output)
+                {
+                    throw std::runtime_error("Cannot write pi output file");
+                }
+                offset += count;
+                static_cast<void>(tracker.addPhaseUnits(
+                    pi::progress::ProgressPhase::writingOutput,
+                    count
+                ));
+            }
+            output.put('\n');
             output.close();
             if (!output)
             {
                 throw std::runtime_error("Cannot write pi output file");
             }
+            static_cast<void>(tracker.addPhaseUnits(
+                pi::progress::ProgressPhase::writingOutput,
+                1
+            ));
 
             std::optional<std::filesystem::path> manifestPath;
             std::optional<std::string> verificationHash;
             if (config.verification_enabled)
             {
-                if (!tracker.transitionTo(
+                const pi::verification::VerificationIdentity identity =
+                    verificationIdentityOf(result->precision);
+                const pi::verification::BBPSamplePolicy samplePolicy(
+                    config.bbp_sample_count
+                );
+                const std::uint64_t fileWork =
+                    pi::verification::FinalVerifier::plannedFileWork(
+                        identity,
+                        samplePolicy
+                    );
+                if (!tracker.declarePhaseUnits(
+                        pi::progress::ProgressPhase::verifyingOutput,
+                        fileWork == UINT64_MAX
+                            ? fileWork
+                            : fileWork + manifestPublicationUnits)
+                    || !tracker.transitionTo(
                         pi::progress::ProgressPhase::verifyingOutput))
                 {
                     throw std::logic_error(
                         "Cannot enter output verification phase"
                     );
                 }
-                const pi::verification::VerificationIdentity identity{
-                    result->precision.requestedDigits,
-                    result->precision.guardDigits,
-                    result->precision.workingDigits,
-                    result->precision.termCount
-                };
-                const pi::verification::BBPSamplePolicy samplePolicy(
-                    config.bbp_sample_count
-                );
+                TrackerVerificationObserver verificationProgress(tracker);
                 const auto verification =
                     pi::verification::FinalVerifier::verifyFile(
                         config.output_file,
                         identity,
-                        samplePolicy
+                        samplePolicy,
+                        &verificationProgress
                     );
                 if (verification.report.status()
                     != pi::verification::VerificationStatus::passed)
@@ -456,6 +569,10 @@ int main(int argc, char* argv[])
                     *manifestPath,
                     manifest
                 );
+                static_cast<void>(tracker.addPhaseUnits(
+                    pi::progress::ProgressPhase::verifyingOutput,
+                    manifestPublicationUnits
+                ));
             }
 
             if (!tracker.transitionTo(pi::progress::ProgressPhase::completed))

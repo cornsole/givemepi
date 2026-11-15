@@ -7,6 +7,21 @@
 namespace pi::progress
 {
 
+/// Operator-selected ETA values a reporter presents.
+///
+/// Selection is presentation policy only: metrics always derive both values.
+/// The default reports the total completion ETA alone.
+struct EtaSelection
+{
+    bool total = true;
+    bool phase = false;
+
+    [[nodiscard]]
+    bool operator==(const EtaSelection&) const noexcept = default;
+};
+
+
+
 /// Extension boundary for presenting immutable computation progress.
 ///
 /// Reporters consume already captured raw state and derived metrics. They do

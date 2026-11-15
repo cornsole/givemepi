@@ -11,6 +11,7 @@
 int main()
 {
     using namespace std::chrono_literals;
+    using pi::progress::EtaSelection;
     using pi::progress::JsonProgressReporter;
     using pi::progress::ProgressMetrics;
     using pi::progress::ProgressPhase;
@@ -39,17 +40,25 @@ int main()
         CheckpointRangeProgress{0, 25, 2};
     data.lastCommittedCheckpoint =
         CheckpointRangeProgress{25, 100, 3};
+    data.restoredTerms = 5;
+    data.restoredCheckpointBlocks = 1;
+    data.phaseUnits[pi::progress::phaseIndex(ProgressPhase::merging)] =
+        pi::progress::PhaseWorkUnits{200, 50};
+    data.phaseBaselineUnits = 10;
+    data.phaseElapsed = 2s;
 
     ProgressMetrics metrics;
     metrics.completionRatio = 0.25;
     metrics.termsPerSecond = 5.0;
     metrics.checkpointBlocksPerSecond = 0.4;
-    metrics.estimatedTimeRemaining = 15s;
+    metrics.estimatedTotalTimeRemaining = 15s;
+    metrics.estimatedPhaseTimeRemaining = 4s;
 
     const auto fixedTime = JsonProgressReporter::Clock::time_point{0s};
     std::ostringstream output;
     JsonProgressReporter reporter(
         output,
+        EtaSelection{},
         [fixedTime]() { return fixedTime; }
     );
     reporter.report(ProgressSnapshot(data), metrics);
@@ -60,7 +69,11 @@ int main()
         "\"storage_io\":{\"writes\":{\"queued\":0,\"active\":0"
     ) != std::string::npos);
     assert(record.find(
-        "\"schema_version\":4,\"sampled_at\":\"1970-01-01T00:00:00Z\""
+        "\"reads\":{\"queued\":0,\"active\":0,\"completed\":0,\"failed\":0}},"
+        "\"schema_version\":5"
+    ) != std::string::npos);
+    assert(record.find(
+        "\"schema_version\":5,\"sampled_at\":\"1970-01-01T00:00:00Z\""
     ) != std::string::npos);
     assert(record.find("\"phase\":\"merging\"") != std::string::npos);
     assert(record.find("\"terminal_state\":\"running\"")
@@ -83,11 +96,47 @@ int main()
         != std::string::npos);
     assert(record.find("\"completion_ratio\":0.25")
         != std::string::npos);
-    assert(record.find("\"estimated_time_remaining_ns\":15000000000")
+    assert(record.find("\"restored_terms\":5,\"restored_checkpoint_blocks\":1")
         != std::string::npos);
+    assert(record.find(
+        "\"phase_work\":{\"completed_units\":50,\"total_units\":200,"
+        "\"baseline_units\":10,\"elapsed_ns\":2000000000}"
+    ) != std::string::npos);
+    // Default selection: total only; the phase key stays present as null.
+    assert(record.find(
+        "\"estimated_total_time_remaining_ns\":15000000000,"
+        "\"estimated_phase_time_remaining_ns\":null}"
+    ) != std::string::npos);
+    assert(record.find("\"estimated_time_remaining_ns\"")
+        == std::string::npos);
     assert(record.ends_with("}}\n"));
     assert(record.find('\n') == record.size() - 1);
 
+    std::ostringstream bothOutput;
+    JsonProgressReporter both(
+        bothOutput,
+        EtaSelection{true, true},
+        [fixedTime]() { return fixedTime; }
+    );
+    both.report(ProgressSnapshot(data), metrics);
+    assert(bothOutput.str().find(
+        "\"estimated_total_time_remaining_ns\":15000000000,"
+        "\"estimated_phase_time_remaining_ns\":4000000000}"
+    ) != std::string::npos);
+
+    std::ostringstream phaseOutput;
+    JsonProgressReporter phaseOnly(
+        phaseOutput,
+        EtaSelection{false, true},
+        [fixedTime]() { return fixedTime; }
+    );
+    phaseOnly.report(ProgressSnapshot(data), metrics);
+    assert(phaseOutput.str().find(
+        "\"estimated_total_time_remaining_ns\":null,"
+        "\"estimated_phase_time_remaining_ns\":4000000000}"
+    ) != std::string::npos);
+
+    data.phaseBaselineUnits = 0;
     data.phase = ProgressPhase::verifyingOutput;
     reporter.report(ProgressSnapshot(data), metrics);
     assert(output.str().find("\"phase\":\"verifying_output\"")
@@ -100,7 +149,8 @@ int main()
     metrics.completionRatio = std::numeric_limits<double>::infinity();
     metrics.termsPerSecond.reset();
     metrics.checkpointBlocksPerSecond.reset();
-    metrics.estimatedTimeRemaining.reset();
+    metrics.estimatedTotalTimeRemaining.reset();
+    metrics.estimatedPhaseTimeRemaining.reset();
     reporter.report(ProgressSnapshot(data), metrics);
 
     const std::string allRecords = output.str();
@@ -124,6 +174,7 @@ int main()
     failedOutput.setstate(std::ios::badbit);
     JsonProgressReporter failedReporter(
         failedOutput,
+        EtaSelection{},
         [fixedTime]() { return fixedTime; }
     );
     bool writeFailureReported = false;
@@ -144,6 +195,7 @@ int main()
     {
         JsonProgressReporter invalid(
             output,
+            EtaSelection{},
             JsonProgressReporter::NowFunction{}
         );
     }

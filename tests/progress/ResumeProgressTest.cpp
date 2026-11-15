@@ -77,6 +77,12 @@ int main()
     const CheckpointRangeProgress expectedLast{20, 30, 2};
     assert(restored.lastValidatedCheckpoint() == expectedLast);
     assert(!restored.lastCommittedCheckpoint().has_value());
+    // Restored work is completed but never newly completed work, and the
+    // splitting baseline starts after it.
+    assert(restored.restoredTerms() == 20);
+    assert(restored.restoredCheckpointBlocks() == 2);
+    assert(tracker.transitionTo(ProgressPhase::splitting));
+    assert(tracker.snapshot().phaseBaselineUnits() == 20);
 
     CheckpointResumePlan empty;
     ProgressTracker emptyTracker(ProgressWorkPlan{1'000, 74, 2});
@@ -200,6 +206,16 @@ int main()
         == 3);
     assert(planCheckpointBlocks(fresh, ParallelSplitOptions{32, 4}, 8, false)
         == 0);
+    assert(pi::progress::planFrontierNodes(
+        resumeOnlyAccepted,
+        ParallelSplitOptions{4, 2},
+        3
+    ) == 2 + 3 + 6);
+    assert(pi::progress::planFrontierNodes(
+        fresh,
+        ParallelSplitOptions{32, 4},
+        8
+    ) == 3);
 
     assert(planCheckpointBlocks(fresh, ParallelSplitOptions{0, 4}, 8, false)
         == 0);

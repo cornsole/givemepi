@@ -121,9 +121,11 @@ void writeOptionalRange(
 
 JsonProgressReporter::JsonProgressReporter(
     std::ostream& output,
+    EtaSelection selection,
     NowFunction now
 )
     : output_(output),
+      selection_(selection),
       now_(std::move(now))
 {
     if (!now_)
@@ -149,7 +151,7 @@ void JsonProgressReporter::report(
            << R"(},"reads":{"queued":)" << snapshot.storageQueuedReads()
            << R"(,"active":)" << snapshot.storageActiveReads()
            << R"(,"completed":)" << snapshot.storageCompletedReads()
-           << R"(,"failed":)" << snapshot.storageFailedReads() << "},";
+           << R"(,"failed":)" << snapshot.storageFailedReads() << "}},";
     record << "\"schema_version\":" << snapshot.schemaVersion();
     record << ",\"sampled_at\":";
     writeString(record, utcTimestamp(now_()));
@@ -176,6 +178,14 @@ void JsonProgressReporter::report(
     record << ",\"tasks\":{\"active\":" << snapshot.activeTasks()
            << ",\"queued\":" << snapshot.queuedTasks() << '}';
     record << ",\"elapsed_ns\":" << snapshot.elapsed().count();
+    record << ",\"restored_terms\":" << snapshot.restoredTerms();
+    record << ",\"restored_checkpoint_blocks\":"
+           << snapshot.restoredCheckpointBlocks();
+    const PhaseWorkUnits phaseWork = snapshot.phaseWork(snapshot.phase());
+    record << ",\"phase_work\":{\"completed_units\":" << phaseWork.completed
+           << ",\"total_units\":" << phaseWork.total
+           << ",\"baseline_units\":" << snapshot.phaseBaselineUnits()
+           << ",\"elapsed_ns\":" << snapshot.phaseElapsed().count() << '}';
     record << ",\"memory_bytes\":" << snapshot.memoryBytes();
     record << ",\"checkpoint_bytes\":" << snapshot.checkpointBytes();
     record << ",\"storage\":{\"resident_bytes\":"
@@ -201,8 +211,20 @@ void JsonProgressReporter::report(
     writeOptionalDouble(record, metrics.termsPerSecond);
     record << ",\"checkpoint_blocks_per_second\":";
     writeOptionalDouble(record, metrics.checkpointBlocksPerSecond);
-    record << ",\"estimated_time_remaining_ns\":";
-    writeOptionalDuration(record, metrics.estimatedTimeRemaining);
+    record << ",\"estimated_total_time_remaining_ns\":";
+    writeOptionalDuration(
+        record,
+        selection_.total
+            ? metrics.estimatedTotalTimeRemaining
+            : std::nullopt
+    );
+    record << ",\"estimated_phase_time_remaining_ns\":";
+    writeOptionalDuration(
+        record,
+        selection_.phase
+            ? metrics.estimatedPhaseTimeRemaining
+            : std::nullopt
+    );
     record << "}}\n";
 
     output_ << record.str();

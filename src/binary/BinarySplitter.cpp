@@ -3,6 +3,7 @@
 #include "scheduler/Task.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -261,6 +262,18 @@ void sortAndValidateFrontier(
 
 } // namespace
 
+std::uint64_t BinarySplitter::mergeWorkUnits(std::size_t termSpan) noexcept
+{
+    const auto span = static_cast<std::uint64_t>(termSpan);
+    const auto bits = static_cast<std::uint64_t>(std::bit_width(span));
+    if (bits != 0 && span > std::numeric_limits<std::uint64_t>::max() / bits)
+    {
+        return std::numeric_limits<std::uint64_t>::max();
+    }
+    return span * bits;
+}
+
+
 BinaryNode BinarySplitter::merge(
     const BinaryNode& left,
     const BinaryNode& right
@@ -424,6 +437,7 @@ BinaryNode BinarySplitter::splitParallel(
         if (observer != nullptr)
         {
             observer->termsCompleted(termCount);
+            observer->mergeWorkPlanned(0);
         }
         if (checkpointCoordinator != nullptr)
         {
@@ -567,6 +581,38 @@ BinaryNode BinarySplitter::splitParallel(
     std::uint32_t mergeLevel = 0;
     completeStage(mergeLevel, !pendingBlocks.empty());
 
+    if (observer != nullptr)
+    {
+        // Replay the pairing below on term spans to plan exact merge work.
+        std::vector<std::size_t> spans;
+        spans.reserve(nodes.size());
+        for (const BinaryNode& node : nodes)
+        {
+            spans.push_back(node.end() - node.start());
+        }
+        std::uint64_t plannedUnits = 0;
+        while (spans.size() > 1)
+        {
+            const std::size_t pairs = spans.size() / 2;
+            for (std::size_t pair = 0; pair < pairs; ++pair)
+            {
+                spans[pair] = spans[pair * 2] + spans[pair * 2 + 1];
+                const std::uint64_t units = mergeWorkUnits(spans[pair]);
+                plannedUnits =
+                    units > std::numeric_limits<std::uint64_t>::max()
+                            - plannedUnits
+                        ? std::numeric_limits<std::uint64_t>::max()
+                        : plannedUnits + units;
+            }
+            if (spans.size() % 2 != 0)
+            {
+                spans[pairs] = spans.back();
+            }
+            spans.resize(pairs + spans.size() % 2);
+        }
+        observer->mergeWorkPlanned(plannedUnits);
+    }
+
 
     while (nodes.size() > 1)
     {
@@ -590,7 +636,8 @@ BinaryNode BinarySplitter::splitParallel(
         for (std::size_t pair = 0; pair < pairCount; ++pair)
         {
             const std::size_t leftIndex = pair * 2;
-            const auto mergePair = [&nodes, &mergeResults, pair, leftIndex]()
+            const auto mergePair =
+                [&nodes, &mergeResults, pair, leftIndex, observer]()
             {
                 mergeResults[pair].emplace(
                     BinarySplitter::merge(
@@ -598,6 +645,12 @@ BinaryNode BinarySplitter::splitParallel(
                         nodes[leftIndex + 1]
                     )
                 );
+                if (observer != nullptr)
+                {
+                    observer->mergeWorkCompleted(mergeWorkUnits(
+                        nodes[leftIndex + 1].end() - nodes[leftIndex].start()
+                    ));
+                }
             };
 
             scheduler::TaskHandle handle;

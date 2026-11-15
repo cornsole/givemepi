@@ -444,8 +444,23 @@ public:
     {
     }
 
+    void mergeWorkPlanned(std::uint64_t units) noexcept override
+    {
+        plannedMergeUnits.store(units, std::memory_order_relaxed);
+        mergePlans.fetch_add(1, std::memory_order_relaxed);
+    }
+
+
+    void mergeWorkCompleted(std::uint64_t units) noexcept override
+    {
+        completedMergeUnits.fetch_add(units, std::memory_order_relaxed);
+    }
+
 
     std::atomic<std::size_t> terms{0};
+    std::atomic<std::uint64_t> plannedMergeUnits{0};
+    std::atomic<std::uint64_t> completedMergeUnits{0};
+    std::atomic<std::uint32_t> mergePlans{0};
 };
 
 
@@ -1111,6 +1126,15 @@ int main()
 
     if (!nodesEqual(frontierReference, fullFrontierResult)
         || fullObserver.terms.load() != 0
+        // Pairs [0,20) and [20,40) weigh 20 * 5; the root [0,40) 40 * 6.
+        || fullObserver.mergePlans.load() != 1
+        || fullObserver.plannedMergeUnits.load() != 440
+        || fullObserver.completedMergeUnits.load() != 440
+        || BinarySplitter::mergeWorkUnits(0) != 0
+        || BinarySplitter::mergeWorkUnits(20) != 100
+        || BinarySplitter::mergeWorkUnits(
+               std::numeric_limits<std::size_t>::max())
+            != std::numeric_limits<std::uint64_t>::max()
         || !commitsValid(fullCheckpoint)
         || fullEvents != expectedFullEvents
         || fullCheckpoint.commits.size() != 2
@@ -1320,6 +1344,9 @@ int main()
 
         if (!nodesEqual(frontierReference, fallbackResult)
             || fallbackObserver.terms.load() != 40
+            || fallbackObserver.mergePlans.load() != 1
+            || fallbackObserver.plannedMergeUnits.load() != 0
+            || fallbackObserver.completedMergeUnits.load() != 0
             || !commitsValid(fallbackCheckpoint)
             || fallbackCheckpoint.commits.size() != 1
             || fallbackCheckpoint.commits.front().treeLevels

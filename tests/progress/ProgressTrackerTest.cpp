@@ -26,6 +26,124 @@ bool throws(Function&& function)
     return false;
 }
 
+
+void testPhaseWork()
+{
+    using pi::progress::PhaseWorkUnits;
+    using pi::progress::ProgressPhase;
+    using pi::progress::ProgressPhaseCosts;
+    using pi::progress::ProgressTracker;
+    using pi::progress::ProgressWorkPlan;
+    using pi::progress::phaseIndex;
+
+    ProgressPhaseCosts invalidCosts{};
+    invalidCosts[phaseIndex(ProgressPhase::completed)] = 1;
+    assert(throws<std::invalid_argument>([&invalidCosts]() {
+        static_cast<void>(ProgressTracker(
+            ProgressWorkPlan{1, 1, 0, invalidCosts}
+        ));
+    }));
+
+    ProgressPhaseCosts costs{};
+    costs[phaseIndex(ProgressPhase::splitting)] = 40;
+    costs[phaseIndex(ProgressPhase::merging)] = 30;
+    costs[phaseIndex(ProgressPhase::writingOutput)] = 20;
+    costs[phaseIndex(ProgressPhase::verifyingOutput)] = 10;
+    ProgressTracker tracker(ProgressWorkPlan{100, 50, 4, costs});
+
+    // Restored work is published once, before splitting, as restored work.
+    assert(!tracker.restoreCompletedWork(51, 0, 0));
+    assert(!tracker.restoreCompletedWork(0, 5, 0));
+    assert(tracker.transitionTo(ProgressPhase::validatingCheckpoints));
+    assert(tracker.restoreCompletedWork(10, 2, 300));
+    assert(!tracker.restoreCompletedWork(10, 2, 300));
+    assert(tracker.transitionTo(ProgressPhase::splitting));
+    assert(!tracker.restoreCompletedWork(0, 0, 0));
+    auto snapshot = tracker.snapshot();
+    assert(snapshot.restoredTerms() == 10);
+    assert(snapshot.completedTerms() == 10);
+    assert(snapshot.restoredCheckpointBlocks() == 2);
+    assert(snapshot.completedCheckpointBlocks() == 2);
+    assert(snapshot.durableCheckpointBlocks() == 2);
+    assert(snapshot.checkpointBytes() == 300);
+    assert(snapshot.phaseBaselineUnits() == 10);
+    assert(snapshot.phaseElapsed() <= snapshot.elapsed());
+    assert(snapshot.phaseCost(ProgressPhase::merging) == 30);
+
+    assert(tracker.addCompletedTerms(20));
+    assert((tracker.snapshot().phaseWork(ProgressPhase::splitting)
+        == PhaseWorkUnits{50, 30}));
+    // A repeated transition keeps the phase clock and baseline.
+    assert(tracker.transitionTo(ProgressPhase::splitting));
+    assert(tracker.snapshot().phaseBaselineUnits() == 10);
+
+    assert(!tracker.declarePhaseUnits(ProgressPhase::splitting, 1));
+    assert(!tracker.declarePhaseUnits(ProgressPhase::initializing, 1));
+    assert(!tracker.declarePhaseUnits(ProgressPhase::completed, 1));
+    assert(!tracker.declarePhaseUnits(
+        ProgressPhase::validatingCheckpoints, 1));
+    assert(!tracker.addPhaseUnits(ProgressPhase::merging, 1));
+    assert(!tracker.addPhaseUnits(ProgressPhase::splitting, 1));
+
+    assert(tracker.declarePhaseUnits(ProgressPhase::merging, 100));
+    assert(!tracker.declarePhaseUnits(ProgressPhase::merging, 200));
+    assert(tracker.addPhaseUnits(ProgressPhase::merging, 60));
+    assert(!tracker.addPhaseUnits(ProgressPhase::merging, 41));
+    assert((tracker.snapshot().phaseWork(ProgressPhase::merging)
+        == PhaseWorkUnits{100, 60}));
+
+    assert(tracker.transitionTo(ProgressPhase::merging));
+    snapshot = tracker.snapshot();
+    assert(snapshot.phaseBaselineUnits() == 60);
+    assert(snapshot.phaseElapsed() <= snapshot.elapsed());
+
+    // A zero total removes the phase from the end-to-end plan.
+    assert(tracker.declarePhaseUnits(ProgressPhase::writingOutput, 0));
+    assert(tracker.snapshot().phaseCost(ProgressPhase::writingOutput) == 0);
+    assert(tracker.snapshot().phaseCost(ProgressPhase::verifyingOutput) == 10);
+
+    assert(tracker.transitionTo(ProgressPhase::finalizing));
+    assert(tracker.snapshot().phaseBaselineUnits() == 0);
+    assert(!tracker.declarePhaseUnits(ProgressPhase::merging, 1));
+
+    assert(tracker.markFailed("stopped"));
+    snapshot = tracker.snapshot();
+    assert(snapshot.phaseElapsed() == std::chrono::nanoseconds::zero());
+    assert(snapshot.phaseBaselineUnits() == 0);
+    assert(!tracker.addPhaseUnits(ProgressPhase::merging, 1));
+    assert(!tracker.declarePhaseUnits(ProgressPhase::verifyingOutput, 1));
+
+    ProgressTracker completing(ProgressWorkPlan{10, 10, 0});
+    assert(completing.transitionTo(ProgressPhase::splitting));
+    assert(completing.transitionTo(ProgressPhase::finalizing));
+    assert(completing.transitionTo(ProgressPhase::completed));
+    assert(completing.snapshot().phaseElapsed()
+        == std::chrono::nanoseconds::zero());
+
+    // Concurrent bounded phase units never exceed the declared total.
+    ProgressTracker concurrent(ProgressWorkPlan{10, 10, 0});
+    assert(concurrent.declarePhaseUnits(ProgressPhase::merging, 4'000));
+    std::vector<std::thread> workers;
+    for (int worker = 0; worker < 4; ++worker)
+    {
+        workers.emplace_back([&concurrent]() {
+            for (int unit = 0; unit < 1'000; ++unit)
+            {
+                static_cast<void>(
+                    concurrent.addPhaseUnits(ProgressPhase::merging, 1));
+                static_cast<void>(concurrent.snapshot());
+            }
+        });
+    }
+    for (std::thread& worker : workers)
+    {
+        worker.join();
+    }
+    assert((concurrent.snapshot().phaseWork(ProgressPhase::merging)
+        == PhaseWorkUnits{4'000, 4'000}));
+    assert(!concurrent.addPhaseUnits(ProgressPhase::merging, 1));
+}
+
 } // namespace
 
 
@@ -229,6 +347,8 @@ int main()
     assert(failed.failureDetail()
         == std::optional<std::string>{"invalid checkpoint"});
     assert(!failing.transitionTo(ProgressPhase::splitting));
+
+    testPhaseWork();
 
     return 0;
 }

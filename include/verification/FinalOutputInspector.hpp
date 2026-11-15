@@ -1,6 +1,7 @@
 #pragma once
 
 #include "verification/CanonicalDecimal.hpp"
+#include "verification/VerificationProgress.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -51,12 +52,14 @@ public:
     ///
     /// The file is read in fixed-size chunks and is never copied into one large
     /// string. Accepted metadata identifies the canonical prefix for subsequent
-    /// streaming hash verification.
+    /// streaming hash verification. An optional observer receives the byte
+    /// count of every chunk read.
     /// Time complexity: O(n). Memory complexity: O(1).
     [[nodiscard]]
     static OutputFileInspection inspectFile(
         const std::filesystem::path& path,
-        std::uint64_t requestedDigits
+        std::uint64_t requestedDigits,
+        VerificationWorkObserver* observer = nullptr
     );
 };
 

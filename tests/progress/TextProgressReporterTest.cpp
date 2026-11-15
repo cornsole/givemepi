@@ -10,6 +10,7 @@
 int main()
 {
     using namespace std::chrono_literals;
+    using pi::progress::EtaSelection;
     using pi::progress::ProgressMetrics;
     using pi::progress::ProgressPhase;
     using pi::progress::ProgressSnapshot;
@@ -42,7 +43,8 @@ int main()
     ProgressMetrics metrics;
     metrics.completionRatio = 0.25;
     metrics.termsPerSecond = 5.0;
-    metrics.estimatedTimeRemaining = 15s;
+    metrics.estimatedTotalTimeRemaining = 15s;
+    metrics.estimatedPhaseTimeRemaining = 4s;
 
     std::ostringstream terminalOutput;
     TextProgressReporter terminal(
@@ -52,10 +54,12 @@ int main()
     terminal.report(ProgressSnapshot(data), metrics);
     const std::string terminalRecord = terminalOutput.str();
     assert(terminalRecord ==
-        "\rphase=merging terms=25/100 progress=25.00% eta=15.0s"
+        "\rphase=merging terms=25/100 eta_total=15.0s"
         " checkpoints=2/10 durable=1\x1b[K");
     assert(terminalRecord.find("speed=") == std::string::npos);
     assert(terminalRecord.find("tasks=") == std::string::npos);
+    assert(terminalRecord.find("eta_phase=") == std::string::npos);
+    assert(terminalRecord.find("progress=") == std::string::npos);
     assert(terminalRecord.find("memory=") == std::string::npos);
     assert(terminalRecord.find("checkpoint_bytes=") == std::string::npos);
     assert(terminalRecord.find("storage=") == std::string::npos);
@@ -67,6 +71,19 @@ int main()
     const std::size_t controlBytes = std::string("\r\x1b[K").size();
     assert(terminalRecord.size() - controlBytes < 80);
 
+    std::ostringstream bothTerminalOutput;
+    TextProgressReporter bothTerminal(
+        bothTerminalOutput,
+        TextOutputMode::terminal,
+        EtaSelection{true, true}
+    );
+    bothTerminal.report(ProgressSnapshot(data), metrics);
+    const std::string bothRecord = bothTerminalOutput.str();
+    assert(bothRecord ==
+        "\rphase=merging terms=25/100 eta_total=15.0s eta_phase=4.0s\x1b[K");
+    assert(bothRecord.find("checkpoints=") == std::string::npos);
+    assert(bothRecord.size() - controlBytes < 80);
+
     data.phase = ProgressPhase::verifyingOutput;
     terminal.report(ProgressSnapshot(data), metrics);
     assert(terminalOutput.str().find("phase=verifying_output")
@@ -77,13 +94,25 @@ int main()
     data.completedCheckpointBlocks = 10;
     data.durableCheckpointBlocks = 10;
     metrics.completionRatio = 1.0;
-    metrics.estimatedTimeRemaining = 0ns;
+    metrics.estimatedTotalTimeRemaining = 0ns;
+    metrics.estimatedPhaseTimeRemaining = 0ns;
     terminal.report(ProgressSnapshot(data), metrics);
     const std::string terminalFinal = terminalOutput.str();
     assert(terminalFinal.ends_with(
-        "\rphase=completed terms=100/100 progress=100.00% eta=0.0s"
+        "\rphase=completed terms=100/100 eta_total=0.0s"
         " checkpoints=10/10 durable=10\x1b[K\n"
     ));
+
+    std::ostringstream phaseOnlyOutput;
+    TextProgressReporter phaseOnly(
+        phaseOnlyOutput,
+        TextOutputMode::terminal,
+        EtaSelection{false, true}
+    );
+    phaseOnly.report(ProgressSnapshot(data), metrics);
+    assert(phaseOnlyOutput.str()
+        == "\rphase=completed terms=100/100 eta_phase=0.0s"
+           " checkpoints=10/10 durable=10\x1b[K\n");
 
     std::ostringstream failedTerminalOutput;
     TextProgressReporter failedTerminal(
@@ -103,6 +132,7 @@ int main()
     TextProgressReporter fullLog(
         fullLogOutput,
         TextOutputMode::log,
+        EtaSelection{true, true},
         [fixedTime]() { return fixedTime; }
     );
     data.phase = ProgressPhase::merging;
@@ -118,12 +148,13 @@ int main()
     data.storageCompletedReads = 4;
     data.storageFailedReads = 0;
     metrics.completionRatio = 0.25;
-    metrics.estimatedTimeRemaining = 15s;
+    metrics.estimatedTotalTimeRemaining = 15s;
+    metrics.estimatedPhaseTimeRemaining = 4s;
     fullLog.report(ProgressSnapshot(data), metrics);
     const std::string fullLogRecord = fullLogOutput.str();
     assert(fullLogRecord ==
         "[1970-01-01T00:00:00Z] phase=merging terms=25/100"
-        " progress=25.00% speed=5.00 terms/s eta=15.0s"
+        " progress=25.00% speed=5.00 terms/s eta_total=15.0s eta_phase=4.0s"
         " tasks=4 active/2 queued memory=4.00 KiB"
         " checkpoints=2/10 durable=1 checkpoint_bytes=2.00 KiB"
         " storage=8.00 KiB resident/16.00 KiB stored/3 chunks"
@@ -136,6 +167,7 @@ int main()
     TextProgressReporter log(
         logOutput,
         TextOutputMode::log,
+        EtaSelection{false, true},
         [fixedTime]() { return fixedTime; }
     );
     data.phase = ProgressPhase::failed;
@@ -144,12 +176,14 @@ int main()
     data.lastValidatedCheckpoint.reset();
     data.lastCommittedCheckpoint.reset();
     metrics.completionRatio = 0.5;
-    metrics.estimatedTimeRemaining.reset();
+    metrics.estimatedTotalTimeRemaining.reset();
+    metrics.estimatedPhaseTimeRemaining.reset();
     log.report(ProgressSnapshot(data), metrics);
 
     const std::string logRecord = logOutput.str();
     assert(logRecord.starts_with("[1970-01-01T00:00:00Z] phase=failed"));
-    assert(logRecord.find("eta=unknown") != std::string::npos);
+    assert(logRecord.find("eta_phase=unknown") != std::string::npos);
+    assert(logRecord.find("eta_total=") == std::string::npos);
     assert(logRecord.find("failure=\"line one line two\"")
         != std::string::npos);
     assert(logRecord.find('\r') == std::string::npos);
@@ -163,6 +197,7 @@ int main()
     TextProgressReporter failedReporter(
         failedOutput,
         TextOutputMode::log,
+        EtaSelection{},
         [fixedTime]() { return fixedTime; }
     );
     bool writeFailureReported = false;
@@ -184,6 +219,7 @@ int main()
         TextProgressReporter invalid(
             logOutput,
             TextOutputMode::log,
+            EtaSelection{},
             TextProgressReporter::NowFunction{}
         );
     }

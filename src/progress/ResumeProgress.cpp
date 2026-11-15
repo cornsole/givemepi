@@ -20,17 +20,16 @@ struct AcceptedMetadata
 } // namespace
 
 
-std::uint64_t planCheckpointBlocks(
+std::uint64_t planFrontierNodes(
     const checkpoint::CheckpointResumePlan& plan,
     const binary::ParallelSplitOptions& options,
-    std::size_t workerCount,
-    bool checkpointWritingEnabled
+    std::size_t workerCount
 )
 {
     constexpr std::uint64_t maximum =
         std::numeric_limits<std::uint64_t>::max();
     std::uint64_t total = plan.acceptedBlocks.size();
-    if (!checkpointWritingEnabled || plan.rangesToRecalculate.empty())
+    if (plan.rangesToRecalculate.empty())
     {
         return total;
     }
@@ -60,6 +59,21 @@ std::uint64_t planCheckpointBlocks(
         total = blocks > maximum - total ? maximum : total + blocks;
     }
     return total;
+}
+
+
+std::uint64_t planCheckpointBlocks(
+    const checkpoint::CheckpointResumePlan& plan,
+    const binary::ParallelSplitOptions& options,
+    std::size_t workerCount,
+    bool checkpointWritingEnabled
+)
+{
+    if (!checkpointWritingEnabled)
+    {
+        return plan.acceptedBlocks.size();
+    }
+    return planFrontierNodes(plan, options, workerCount);
 }
 
 
@@ -133,13 +147,10 @@ bool ResumeProgressRestorer::restore(
         hasPrevious = true;
     }
 
-    if (!tracker.addCompletedTerms(completedTerms)
-        || !tracker.publishCheckpointProgress(CheckpointProgressUpdate{
+    if (!tracker.restoreCompletedWork(
+            completedTerms,
             accepted.size(),
-            accepted.size(),
-            checkpointBytes,
-            std::nullopt
-        }))
+            checkpointBytes))
     {
         return false;
     }

@@ -2,6 +2,7 @@
 
 #include "progress/ProgressSnapshot.hpp"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -19,6 +20,9 @@ struct ProgressWorkPlan
     std::uint64_t targetDigits;
     std::uint64_t totalTerms;
     std::uint64_t totalCheckpointBlocks;
+    /// Normalized end-to-end cost of each work phase. Disabled or unplanned
+    /// phases keep zero and never contribute to the total estimate.
+    ProgressPhaseCosts phaseCosts{};
 };
 
 
@@ -47,7 +51,8 @@ class ProgressTracker
 public:
     /// Creates a tracker for a fixed work plan.
     ///
-    /// Time complexity: O(1). Memory complexity: O(1).
+    /// Throws std::invalid_argument for zero digits or terms, or a non-zero
+    /// cost on a non-work phase. Time complexity: O(1). Memory: O(1).
     explicit ProgressTracker(ProgressWorkPlan plan);
 
     ProgressTracker(const ProgressTracker&) = delete;
@@ -55,7 +60,10 @@ public:
 
     /// Applies a legal, idempotent phase transition.
     ///
-    /// Returns false for an illegal transition. Time and memory: O(1).
+    /// Entering a different phase restarts the phase clock and records the
+    /// phase's already completed units as its baseline, so phase rates count
+    /// only work done inside the phase. Returns false for an illegal
+    /// transition. Time and memory: O(1).
     [[nodiscard]] bool transitionTo(ProgressPhase next);
 
     /// Atomically adds completed terms without exceeding the fixed total.
@@ -63,6 +71,38 @@ public:
     /// Returns false after termination or if the addition exceeds the total.
     /// Lock-free when the platform provides lock-free 64-bit atomics.
     [[nodiscard]] bool addCompletedTerms(std::uint64_t count) noexcept;
+
+    /// Publishes resume-restored terms and checkpoint blocks once.
+    ///
+    /// Restored work counts as completed but never as newly completed work,
+    /// so it cannot inflate observed rates. Valid only before splitting
+    /// starts and before any term or checkpoint work was published. The
+    /// durable gauge and bytes are replaced. Returns false without mutation
+    /// otherwise or when a count exceeds its fixed total. Time/memory: O(1).
+    [[nodiscard]]
+    bool restoreCompletedWork(
+        std::uint64_t terms,
+        std::uint64_t checkpointBlocks,
+        std::uint64_t checkpointBytes
+    );
+
+    /// Declares the raw unit total of a current or future work phase once.
+    ///
+    /// Splitting is measured by terms and cannot be declared. A zero total
+    /// removes the phase from the end-to-end plan by clearing its cost.
+    /// Returns false after termination, for splitting or a non-work phase, a
+    /// phase already left behind, or a repeated declaration. Time and
+    /// memory: O(1).
+    [[nodiscard]]
+    bool declarePhaseUnits(ProgressPhase phase, std::uint64_t total);
+
+    /// Atomically adds completed units to a declared non-splitting phase.
+    ///
+    /// Returns false after termination, for an undeclared, splitting, or
+    /// non-work phase, or if the addition exceeds the declared total. Never
+    /// formats, allocates, or blocks; lock-free with lock-free 64-bit atomics.
+    [[nodiscard]]
+    bool addPhaseUnits(ProgressPhase phase, std::uint64_t count) noexcept;
 
     /// Publishes checkpoint work, durable gauge, bytes, and last commit as one
     /// coherent update on the low-frequency coordinating-thread path.
@@ -131,6 +171,8 @@ public:
 
 private:
     [[nodiscard]] bool isRunning() const noexcept;
+    [[nodiscard]]
+    std::uint64_t completedUnitsOf(ProgressPhase phase) const noexcept;
 
     const ProgressWorkPlan plan_;
     const std::chrono::steady_clock::time_point startedAt_;
@@ -151,10 +193,20 @@ private:
     std::atomic<std::uint64_t> storageActiveReads_{0};
     std::atomic<std::uint64_t> storageCompletedReads_{0};
     std::atomic<std::uint64_t> storageFailedReads_{0};
+    std::array<std::atomic<std::uint64_t>, PROGRESS_PHASE_COUNT>
+        phaseTotals_{};
+    std::array<std::atomic<std::uint64_t>, PROGRESS_PHASE_COUNT>
+        phaseCompleted_{};
 
     mutable std::mutex metadataMutex_;
     std::optional<std::uint32_t> currentMergeLevel_;
     std::uint64_t completedCheckpointBlocks_ = 0;
+    std::uint64_t restoredCheckpointBlocks_ = 0;
+    std::uint64_t restoredTerms_ = 0;
+    std::array<bool, PROGRESS_PHASE_COUNT> phaseDeclared_{};
+    ProgressPhaseCosts phaseCosts_{};
+    std::chrono::steady_clock::time_point phaseStartedAt_;
+    std::uint64_t phaseBaselineUnits_ = 0;
     std::uint64_t durableCheckpointBlocks_ = 0;
     std::uint64_t checkpointBytes_ = 0;
     std::optional<CheckpointRangeProgress> lastValidatedCheckpoint_;

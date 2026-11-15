@@ -60,7 +60,8 @@ CanonicalDecimalInspection FinalOutputInspector::inspectMemory(
 
 OutputFileInspection FinalOutputInspector::inspectFile(
     const std::filesystem::path& path,
-    std::uint64_t requestedDigits
+    std::uint64_t requestedDigits,
+    VerificationWorkObserver* observer
 )
 {
     const Clock::time_point started = Clock::now();
@@ -149,6 +150,10 @@ OutputFileInspection FinalOutputInspector::inspectFile(
                     offset
                 );
             }
+        }
+        if (observer != nullptr && count > 0)
+        {
+            observer->workCompleted(static_cast<std::uint64_t>(count));
         }
     }
 

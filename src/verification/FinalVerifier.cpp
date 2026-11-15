@@ -14,6 +14,38 @@ namespace pi::verification
 namespace
 {
 
+constexpr std::uint64_t HASH_UNITS_PER_BYTE = 4;
+constexpr std::uint64_t IMPORT_UNITS_PER_DIGIT = 8;
+constexpr std::uint64_t EXTRACTION_UNITS_PER_DIGIT = 8;
+constexpr std::uint64_t KNOWN_DIGITS_UNITS = 1;
+
+std::uint64_t saturatingAdd(std::uint64_t left, std::uint64_t right) noexcept
+{
+    return right > ~std::uint64_t{0} - left ? ~std::uint64_t{0} : left + right;
+}
+
+std::uint64_t saturatingMultiply(
+    std::uint64_t left,
+    std::uint64_t right
+) noexcept
+{
+    return left != 0 && right > ~std::uint64_t{0} / left
+        ? ~std::uint64_t{0}
+        : left * right;
+}
+
+/// Work of one BBP sample: series terms plus interval extraction.
+std::uint64_t sampleUnits(
+    std::uint64_t position,
+    std::uint64_t requestedDigits
+) noexcept
+{
+    return saturatingAdd(
+        saturatingAdd(position, 1),
+        saturatingMultiply(requestedDigits, EXTRACTION_UNITS_PER_DIGIT)
+    );
+}
+
 VerificationCheckResult skipped(VerificationStage stage)
 {
     return VerificationCheckResult(
@@ -47,7 +79,8 @@ struct BBPCheck
 BBPCheck verifySamples(
     const DecimalHexDigitExtractor& extractor,
     const VerificationIdentity& identity,
-    const BBPSamplePolicy& policy
+    const BBPSamplePolicy& policy,
+    VerificationWorkObserver* observer
 )
 {
     const auto started = std::chrono::steady_clock::now();
@@ -98,6 +131,12 @@ BBPCheck verifySamples(
             actual.digit,
             expected.errorBound
         });
+        if (observer != nullptr)
+        {
+            observer->workCompleted(
+                sampleUnits(position, identity.requestedDigits)
+            );
+        }
     }
     return {
         VerificationCheckResult(
@@ -130,6 +169,30 @@ FinalVerificationRun stoppedAfterStructure(
 
 } // namespace
 
+
+std::uint64_t FinalVerifier::plannedFileWork(
+    VerificationIdentity identity,
+    const BBPSamplePolicy& samplePolicy
+)
+{
+    const std::uint64_t digits = identity.requestedDigits;
+    std::uint64_t units = saturatingAdd(digits, 3);
+    units = saturatingAdd(units, KNOWN_DIGITS_UNITS);
+    units = saturatingAdd(
+        units,
+        saturatingMultiply(saturatingAdd(digits, 2), HASH_UNITS_PER_BYTE)
+    );
+    units = saturatingAdd(
+        units,
+        saturatingMultiply(digits, IMPORT_UNITS_PER_DIGIT)
+    );
+    for (const std::uint64_t position : samplePolicy.select(identity))
+    {
+        units = saturatingAdd(units, sampleUnits(position, digits));
+    }
+    return units;
+}
+
 FinalVerificationRun FinalVerifier::verifyMemory(
     std::string_view candidate,
     VerificationIdentity identity,
@@ -161,7 +224,8 @@ FinalVerificationRun FinalVerifier::verifyMemory(
     BBPCheck bbp = verifySamples(
         DecimalHexDigitExtractor(decimal),
         identity,
-        samplePolicy
+        samplePolicy,
+        nullptr
     );
     std::vector<VerificationCheckResult> checks;
     checks.push_back(std::move(inspection.verification));
@@ -179,12 +243,14 @@ FinalVerificationRun FinalVerifier::verifyMemory(
 FinalVerificationRun FinalVerifier::verifyFile(
     const std::filesystem::path& path,
     VerificationIdentity identity,
-    const BBPSamplePolicy& samplePolicy
+    const BBPSamplePolicy& samplePolicy,
+    VerificationWorkObserver* observer
 )
 {
     auto inspection = FinalOutputInspector::inspectFile(
         path,
-        identity.requestedDigits
+        identity.requestedDigits,
+        observer
     );
     if (!inspection.accepted())
     {
@@ -196,12 +262,21 @@ FinalVerificationRun FinalVerifier::verifyFile(
 
     const InspectedOutputFile& file = *inspection.file;
     auto known = KnownDigitsVerifier::verify(file);
+    if (observer != nullptr)
+    {
+        observer->workCompleted(KNOWN_DIGITS_UNITS);
+    }
     std::optional<SHA256Digest> digest;
     const auto hashStarted = std::chrono::steady_clock::now();
     VerificationCheckResult hashCheck = skipped(VerificationStage::hash);
     try
     {
-        digest = SHA256::hashFilePrefix(file.path, file.canonicalByteCount);
+        ScaledVerificationWork hashWork(observer, HASH_UNITS_PER_BYTE);
+        digest = SHA256::hashFilePrefix(
+            file.path,
+            file.canonicalByteCount,
+            &hashWork
+        );
         hashCheck = VerificationCheckResult(
             VerificationStage::hash,
             VerificationStatus::passed,
@@ -221,8 +296,9 @@ FinalVerificationRun FinalVerifier::verifyFile(
     BBPCheck bbp{skipped(VerificationStage::bbp), {}};
     try
     {
-        auto extractor = DecimalHexDigitExtractor::fromFile(file);
-        bbp = verifySamples(extractor, identity, samplePolicy);
+        ScaledVerificationWork importWork(observer, IMPORT_UNITS_PER_DIGIT);
+        auto extractor = DecimalHexDigitExtractor::fromFile(file, &importWork);
+        bbp = verifySamples(extractor, identity, samplePolicy, observer);
     }
     catch (const std::exception& error)
     {

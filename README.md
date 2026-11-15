@@ -150,9 +150,10 @@ RAM이 부족할 때 OS swap에 의존하지 않고 명시적인 out-of-core mer
 정책을 사용합니다. 진행 상태는 계산 로직이 문자열을 직접 출력하지 않고,
 thread-safe tracker가 immutable snapshot을 제공하는 구조로 확장합니다.
 
-snapshot에는 phase, 목표 자릿수, 완료 항 수와 블록 수, merge level,
-active/queued task, 처리 속도, ETA, 메모리, storage chunk와 I/O, checkpoint
-telemetry가 포함됩니다. CLI text와 JSON reporter는 같은 snapshot을 소비합니다.
+snapshot에는 phase, 목표 자릿수, 완료 항 수와 블록 수, pipeline·phase 작업량,
+merge level, active/queued task, 처리 속도, 전체 완료 ETA, 현재 단계 ETA,
+메모리, storage chunk와 I/O, checkpoint telemetry가 포함됩니다. CLI text와
+JSON reporter는 같은 snapshot을 소비합니다.
 
 Checkpoint telemetry는 서로 다른 네 가지 개념을 구분합니다.
 
@@ -171,7 +172,15 @@ Checkpoint telemetry는 서로 다른 네 가지 개념을 구분합니다.
 
 Checkpoint telemetry는 manifest 교체가 성공한 뒤 coordinating thread에서 한
 번에 게시됩니다. 실패했거나 interval 때문에 생략됐거나 내용이 같은 commit은
-telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 4입니다.
+telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 5입니다.
+
+Progress ETA는 기본적으로 output writing과 선택된 final verification까지 남은
+전체 시간을 표시합니다. `--eta-total`은 전체 ETA만, `--eta-phase`는 현재
+단계 ETA만 선택하며 두 옵션을 함께 주면 두 값을 모두 표시합니다. 충분한
+관측 표본이 생기기 전에는 선택된 ETA가 `unknown`/`null`이고, 완료 시 0,
+실패 시 `unknown`/`null`입니다. JSON progress schema version 5는
+`estimated_total_time_remaining_ns`와
+`estimated_phase_time_remaining_ns`를 독립적으로 제공합니다.
 
 ## 현재 구현 상태
 
@@ -189,7 +198,7 @@ telemetry를 바꾸지 않습니다. JSON progress `schema_version`은 4입니�
 | Chudnovsky finalization | 완료 | precision plan, integer sqrt/division, rounded decimal API |
 | Storage·out-of-core | 완료 | 동기·비동기 spill/reload, concurrent I/O, LZ4 |
 | Checkpoint·무결성 | 완료 | interval-gated merge frontier, atomic manifest, verified resume, quarantine, 자동 CLI 중단·resume 회귀 테스트 |
-| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v4, live checkpoint telemetry, 기본·resume 완료 증거 |
+| Progress reporting | 완료 | immutable snapshot, CLI text/JSON schema v5, 전체·단계 ETA 선택, live checkpoint telemetry, 기본·resume 완료 증거 |
 | 최종 결과 검증 | 완료 | streaming hash, BBP spot check, known digits, manifest |
 
 세부 구현 순서는 [Implementation Plan](docs/IMPLEMENTATION_PLAN.md), 완료 상태는

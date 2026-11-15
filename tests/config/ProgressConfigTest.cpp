@@ -129,6 +129,28 @@ int main()
     apply(disabled, {"pi-engine", "--no-progress"});
     assert(!disabled.progress_enabled);
 
+    // ETA selection: neither flag keeps total only; flags are independent.
+    Config defaultEta;
+    apply(defaultEta, {"pi-engine", "--progress"});
+    assert(defaultEta.progress_eta_total && !defaultEta.progress_eta_phase);
+    Config totalEta;
+    apply(totalEta, {"pi-engine", "--eta-total"});
+    assert(totalEta.progress_eta_total && !totalEta.progress_eta_phase);
+    Config phaseEta;
+    apply(phaseEta, {"pi-engine", "--eta-phase"});
+    assert(!phaseEta.progress_eta_total && phaseEta.progress_eta_phase);
+    Config bothEta;
+    apply(bothEta, {"pi-engine", "--eta-phase", "--eta-total"});
+    assert(bothEta.progress_eta_total && bothEta.progress_eta_phase);
+    Config repeatedEta;
+    apply(repeatedEta, {"pi-engine", "--eta-phase", "--eta-phase"});
+    assert(!repeatedEta.progress_eta_total && repeatedEta.progress_eta_phase);
+    assert(throws<std::runtime_error>([]() {
+        Config invalid;
+        invalid.progress_eta_total = false;
+        pi::config::validateConfig(invalid);
+    }));
+
     assert(throws<std::runtime_error>([]() {
         Config invalid;
         apply(invalid, {"pi-engine", "--progress-interval", "0"});

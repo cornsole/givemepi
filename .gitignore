@@ -47,6 +47,7 @@ config.toml
 
 # Checkpoint data (추후 사용)
 /checkpoint/
+/checkpoints/
 *.checkpoint
 
 # Logs

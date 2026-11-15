@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -8,7 +9,10 @@ namespace pi::progress
 {
 
 /// Version of the public progress snapshot and reporter schema.
-inline constexpr std::uint32_t PROGRESS_SCHEMA_VERSION = 4;
+///
+/// Version 5 replaces the single ETA with independently nullable total and
+/// current-phase ETA values and adds raw current-phase work counters.
+inline constexpr std::uint32_t PROGRESS_SCHEMA_VERSION = 5;
 
 
 /// High-level phase of one pi computation.
@@ -24,6 +28,37 @@ enum class ProgressPhase
     completed,
     failed
 };
+
+
+/// Number of ProgressPhase enumerators; phases are declared in lifecycle
+/// order so their ordinal also orders the end-to-end pipeline.
+inline constexpr std::size_t PROGRESS_PHASE_COUNT = 9;
+
+
+/// Returns the zero-based ordinal of a phase.
+///
+/// Time complexity: O(1).
+/// Memory complexity: O(1).
+[[nodiscard]]
+constexpr std::size_t phaseIndex(ProgressPhase phase) noexcept
+{
+    return static_cast<std::size_t>(phase);
+}
+
+
+/// Returns whether a phase can carry measurable pipeline work.
+///
+/// Initialization and the terminal phases carry no work units; every phase
+/// from checkpoint validation through output verification may.
+/// Time complexity: O(1).
+/// Memory complexity: O(1).
+[[nodiscard]]
+constexpr bool isWorkPhase(ProgressPhase phase) noexcept
+{
+    return phase != ProgressPhase::initializing
+        && phase != ProgressPhase::completed
+        && phase != ProgressPhase::failed;
+}
 
 
 /// Terminal state derived from a progress phase.
