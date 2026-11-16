@@ -168,6 +168,7 @@ Verification
 [x] Versioned Verification Manifest (PR-0024)
 [x] CLI and Progress Integration (PR-0024)
 [x] Bounded-Memory and Release Performance Validation (PR-0024)
+[x] Divide-and-Conquer Decimal Import and Parallel BBP Samples (PR-0048)
 
 ----------------------
 

@@ -1,12 +1,67 @@
 #include "verification/DecimalHexDigit.hpp"
 
 #include <cassert>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unistd.h>
+#include <vector>
+
+namespace
+{
+
+class RecordingWork final
+    : public pi::verification::VerificationWorkObserver
+{
+public:
+    void workCompleted(std::uint64_t units) noexcept override
+    {
+        assert(units != 0);
+        total += units;
+        ++calls;
+    }
+
+    std::uint64_t total = 0;
+    std::uint64_t calls = 0;
+};
+
+std::string testDigits(std::size_t count)
+{
+    std::string digits;
+    digits.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        digits.push_back(static_cast<char>('0' + (index * 7) % 10));
+    }
+    return digits;
+}
+
+void assertBalancedImport(std::size_t count)
+{
+    const std::string digits = testDigits(count);
+    std::istringstream input(digits);
+    const auto actual = pi::verification::importDecimalDigits(
+        input,
+        count,
+        8
+    );
+    pi::bigint::GMPInteger expected;
+    if (digits.empty())
+    {
+        assert(actual.isZero());
+        return;
+    }
+    assert(mpz_set_str(*expected.raw(), digits.c_str(), 10) == 0);
+    assert(actual.compare(expected) == 0);
+}
+
+} // namespace
+
 
 int main()
 {
@@ -46,6 +101,62 @@ int main()
     auto fileExtractor = DecimalHexDigitExtractor::fromFile(*file.file);
     assert(fileExtractor.extract(31).digit == extractor.extract(31).digit);
     std::filesystem::remove(path);
+    for (const std::size_t count : std::vector<std::size_t>{
+            0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65
+        })
+    {
+        assertBalancedImport(count);
+    }
+
+    RecordingWork work;
+    std::istringstream balancedInput(testDigits(33));
+    const auto balanced = importDecimalDigits(balancedInput, 33, 8, &work);
+    assert(!balanced.isZero());
+    // Five parsed leaves (33 units), two 16-digit merges, one 32-digit
+    // merge, and the final 33-digit merge.
+    assert(work.total == 130);
+    assert(work.calls == 9);
+
+    bool invalidLeafRejected = false;
+    try
+    {
+        std::istringstream input("1");
+        (void)importDecimalDigits(input, 1, 0);
+    }
+    catch (const std::invalid_argument&)
+    {
+        invalidLeafRejected = true;
+    }
+    assert(invalidLeafRejected);
+
+    bool truncatedRejected = false;
+    try
+    {
+        std::istringstream input("123");
+        (void)importDecimalDigits(input, 5, 8);
+    }
+    catch (const std::runtime_error& error)
+    {
+        truncatedRejected =
+            std::string_view(error.what())
+            == "Output ended during decimal conversion";
+    }
+    assert(truncatedRejected);
+
+    bool nonDigitRejected = false;
+    try
+    {
+        std::istringstream input("12x45");
+        (void)importDecimalDigits(input, 5, 8);
+    }
+    catch (const std::runtime_error& error)
+    {
+        nonDigitRejected =
+            std::string_view(error.what())
+            == "Output changed after inspection";
+    }
+    assert(nonDigitRejected);
+
 
     bool rejected = false;
     try

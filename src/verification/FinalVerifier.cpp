@@ -1,11 +1,14 @@
 #include "verification/FinalVerifier.hpp"
 
+#include "scheduler/Scheduler.hpp"
+#include "scheduler/Task.hpp"
+
 #include "verification/DecimalHexDigit.hpp"
 #include "verification/FinalOutputInspector.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -15,9 +18,6 @@ namespace
 {
 
 constexpr std::uint64_t HASH_UNITS_PER_BYTE = 4;
-constexpr std::uint64_t IMPORT_UNITS_PER_DIGIT = 8;
-/// Divisor of the digits^2 term of the quadratic decimal import cost.
-constexpr long double IMPORT_QUADRATIC_DIVISOR = 256.0L;
 constexpr std::uint64_t EXTRACTION_UNITS_PER_DIGIT = 8;
 constexpr std::uint64_t KNOWN_DIGITS_UNITS = 1;
 
@@ -36,49 +36,22 @@ std::uint64_t saturatingMultiply(
         : left * right;
 }
 
-/// Work of one BBP sample: series terms plus interval extraction.
+/// Work of one BBP sample: series terms plus interval extraction, divided by
+/// the effective parallel sample count.
 std::uint64_t sampleUnits(
     std::uint64_t position,
-    std::uint64_t requestedDigits
+    std::uint64_t requestedDigits,
+    std::size_t parallelism
 ) noexcept
 {
-    return saturatingAdd(
+    const std::uint64_t sequential = saturatingAdd(
         saturatingAdd(position, 1),
         saturatingMultiply(requestedDigits, EXTRACTION_UNITS_PER_DIGIT)
     );
+    const std::uint64_t divisor = std::max<std::size_t>(1, parallelism);
+    return sequential / divisor + (sequential % divisor != 0 ? 1 : 0);
 }
 
-/// Converts raw imported digit counts into quadratic import units.
-///
-/// Publishes importWorkUnits(after) - importWorkUnits(before) per batch, so
-/// the published sum telescopes to importWorkUnits(total digits).
-class QuadraticImportWork final : public VerificationWorkObserver
-{
-public:
-    explicit QuadraticImportWork(VerificationWorkObserver* target) noexcept
-        : target_(target)
-    {
-    }
-
-    void workCompleted(std::uint64_t digits) noexcept override
-    {
-        if (target_ == nullptr || digits == 0)
-        {
-            return;
-        }
-        const std::uint64_t before = FinalVerifier::importWorkUnits(imported_);
-        imported_ = saturatingAdd(imported_, digits);
-        const std::uint64_t after = FinalVerifier::importWorkUnits(imported_);
-        if (after > before)
-        {
-            target_->workCompleted(after - before);
-        }
-    }
-
-private:
-    VerificationWorkObserver* target_;
-    std::uint64_t imported_ = 0;
-};
 
 VerificationCheckResult skipped(VerificationStage stage)
 {
@@ -109,12 +82,19 @@ struct BBPCheck
     VerificationCheckResult check;
     std::vector<BBPSampleVerification> samples;
 };
+struct ComputedSample
+{
+    BBPHexDigit expected;
+    DecimalHexDigit actual;
+};
+
 
 BBPCheck verifySamples(
     const DecimalHexDigitExtractor& extractor,
     const VerificationIdentity& identity,
     const BBPSamplePolicy& policy,
-    VerificationWorkObserver* observer
+    VerificationWorkObserver* observer,
+    pi::scheduler::Scheduler* executor
 )
 {
     const auto started = std::chrono::steady_clock::now();
@@ -123,15 +103,60 @@ BBPCheck verifySamples(
     {
         return {skipped(VerificationStage::bbp), {}};
     }
+    const std::size_t parallelism =
+        executor != nullptr && executor->running()
+        ? std::max<std::size_t>(
+            1,
+            std::min(executor->workerCount(), positions.size())
+        )
+        : 1;
+
+    std::vector<std::optional<ComputedSample>> computed(positions.size());
+    std::vector<pi::scheduler::TaskHandle> handles;
+    handles.reserve(positions.size());
+    for (std::size_t index = 0; index < positions.size(); ++index)
+    {
+        const auto calculate = [&computed, &extractor, &positions, index]()
+        {
+            const std::uint64_t position = positions[index];
+            computed[index] = ComputedSample{
+                BBPHexDigitCalculator::calculate(position),
+                extractor.extract(position)
+            };
+        };
+
+        pi::scheduler::TaskHandle handle;
+        if (executor != nullptr)
+        {
+            handle = executor->submit(pi::scheduler::Task(calculate));
+        }
+        if (handle.valid())
+        {
+            handles.push_back(std::move(handle));
+        }
+        else
+        {
+            calculate();
+        }
+    }
+    for (const pi::scheduler::TaskHandle& handle : handles)
+    {
+        handle.wait();
+    }
+    for (const pi::scheduler::TaskHandle& handle : handles)
+    {
+        handle.rethrowIfFailed();
+    }
 
     std::vector<BBPSampleVerification> samples;
     std::vector<VerificationDiagnostic> diagnostics;
     samples.reserve(positions.size());
     VerificationStatus aggregate = VerificationStatus::passed;
-    for (const std::uint64_t position : positions)
+    for (std::size_t index = 0; index < positions.size(); ++index)
     {
-        const auto expected = BBPHexDigitCalculator::calculate(position);
-        const auto actual = extractor.extract(position);
+        const std::uint64_t position = positions[index];
+        const auto& expected = computed[index]->expected;
+        const auto& actual = computed[index]->actual;
         VerificationStatus status = VerificationStatus::passed;
         if (!expected.resolved() || !actual.resolved())
         {
@@ -168,7 +193,11 @@ BBPCheck verifySamples(
         if (observer != nullptr)
         {
             observer->workCompleted(
-                sampleUnits(position, identity.requestedDigits)
+                sampleUnits(
+                    position,
+                    identity.requestedDigits,
+                    parallelism
+                )
             );
         }
     }
@@ -206,7 +235,8 @@ FinalVerificationRun stoppedAfterStructure(
 
 std::uint64_t FinalVerifier::plannedFileWork(
     VerificationIdentity identity,
-    const BBPSamplePolicy& samplePolicy
+    const BBPSamplePolicy& samplePolicy,
+    std::size_t sampleParallelism
 )
 {
     const std::uint64_t digits = identity.requestedDigits;
@@ -217,25 +247,65 @@ std::uint64_t FinalVerifier::plannedFileWork(
         saturatingMultiply(saturatingAdd(digits, 2), HASH_UNITS_PER_BYTE)
     );
     units = saturatingAdd(units, importWorkUnits(digits));
-    for (const std::uint64_t position : samplePolicy.select(identity))
+    const auto positions = samplePolicy.select(identity);
+    const std::size_t parallelism = positions.empty()
+        ? 1
+        : std::max<std::size_t>(
+            1,
+            std::min(sampleParallelism, positions.size())
+        );
+    for (const std::uint64_t position : positions)
     {
-        units = saturatingAdd(units, sampleUnits(position, digits));
+        units = saturatingAdd(
+            units,
+            sampleUnits(position, digits, parallelism)
+        );
     }
     return units;
 }
 
 std::uint64_t FinalVerifier::importWorkUnits(std::uint64_t digits) noexcept
 {
-    const auto value = static_cast<long double>(digits);
-    const long double quadratic = value * value / IMPORT_QUADRATIC_DIVISOR;
-    constexpr long double maximum = 18446744073709551615.0L;
-    const std::uint64_t square = quadratic >= maximum
-        ? ~std::uint64_t{0}
-        : static_cast<std::uint64_t>(quadratic);
-    return saturatingAdd(
-        saturatingMultiply(digits, IMPORT_UNITS_PER_DIGIT),
-        square
-    );
+    constexpr std::uint64_t leaf =
+        DecimalHexDigitExtractor::DEFAULT_IMPORT_LEAF_DIGITS;
+    std::uint64_t units = digits;
+    const std::uint64_t fullLeaves = digits / leaf;
+
+    std::uint64_t groups = fullLeaves;
+    std::uint64_t mergedDigits = leaf;
+    while (groups >= 2)
+    {
+        groups /= 2;
+        mergedDigits = saturatingMultiply(mergedDigits, 2);
+        units = saturatingAdd(
+            units,
+            saturatingMultiply(groups, mergedDigits)
+        );
+    }
+
+    std::uint64_t accumulated = digits % leaf;
+    bool hasAccumulated = accumulated != 0;
+    std::uint64_t leafGroupDigits = leaf;
+    for (std::uint64_t remaining = fullLeaves;
+         remaining != 0;
+         remaining >>= 1)
+    {
+        if ((remaining & 1U) != 0)
+        {
+            if (!hasAccumulated)
+            {
+                accumulated = leafGroupDigits;
+                hasAccumulated = true;
+            }
+            else
+            {
+                accumulated = saturatingAdd(accumulated, leafGroupDigits);
+                units = saturatingAdd(units, accumulated);
+            }
+        }
+        leafGroupDigits = saturatingMultiply(leafGroupDigits, 2);
+    }
+    return units;
 }
 
 FinalVerificationRun FinalVerifier::verifyMemory(
@@ -270,6 +340,7 @@ FinalVerificationRun FinalVerifier::verifyMemory(
         DecimalHexDigitExtractor(decimal),
         identity,
         samplePolicy,
+        nullptr,
         nullptr
     );
     std::vector<VerificationCheckResult> checks;
@@ -289,7 +360,8 @@ FinalVerificationRun FinalVerifier::verifyFile(
     const std::filesystem::path& path,
     VerificationIdentity identity,
     const BBPSamplePolicy& samplePolicy,
-    VerificationWorkObserver* observer
+    VerificationWorkObserver* observer,
+    pi::scheduler::Scheduler* executor
 )
 {
     auto inspection = FinalOutputInspector::inspectFile(
@@ -341,9 +413,14 @@ FinalVerificationRun FinalVerifier::verifyFile(
     BBPCheck bbp{skipped(VerificationStage::bbp), {}};
     try
     {
-        QuadraticImportWork importWork(observer);
-        auto extractor = DecimalHexDigitExtractor::fromFile(file, &importWork);
-        bbp = verifySamples(extractor, identity, samplePolicy, observer);
+        auto extractor = DecimalHexDigitExtractor::fromFile(file, observer);
+        bbp = verifySamples(
+            extractor,
+            identity,
+            samplePolicy,
+            observer,
+            executor
+        );
     }
     catch (const std::exception& error)
     {
@@ -373,10 +450,17 @@ FinalVerificationRun FinalVerifier::verifyFile(
     const std::filesystem::path& path,
     VerificationIdentity identity,
     const SHA256Digest& expectedSha256,
-    const BBPSamplePolicy& samplePolicy
+    const BBPSamplePolicy& samplePolicy,
+    pi::scheduler::Scheduler* executor
 )
 {
-    FinalVerificationRun run = verifyFile(path, identity, samplePolicy);
+    FinalVerificationRun run = verifyFile(
+        path,
+        identity,
+        samplePolicy,
+        nullptr,
+        executor
+    );
     if (!run.sha256 || *run.sha256 == expectedSha256)
     {
         return run;

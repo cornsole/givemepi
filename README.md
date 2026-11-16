@@ -187,9 +187,10 @@ PR-0038부터 ETA는 관측 증거로만 계산합니다. 현재 단계 속도�
 단계는 이미 끝난 단계의 실제 소요 시간을 그 단계들의 계획 비용으로 나눈
 보정값으로 환산하며, 끝난 단계가 없으면 현재 단계의 측정 속도를 씁니다.
 resume으로 복원된 작업은 보정에서 제외됩니다. Merge 작업 단위는 level마다
-`min(workers, pairs)`로 나누어 넓은 level과 직렬 root level의 속도가 같게
-보이며, verification의 decimal import 단위는 실제 비용처럼 자릿수의 제곱에
-비례합니다. JSON progress schema version 6은
+`min(workers, pairs)`로 나눕니다. Verification decimal import는 1,048,576자리
+leaf를 GMP로 변환한 뒤 균형 트리로 합치는 실제 leaf/merge 비용을 사용하고,
+독립 BBP sample 비용은 `min(workers, samples)`로 나눕니다. JSON progress
+schema version 6은
 `estimated_total_time_remaining_ns`, `estimated_phase_time_remaining_ns`와 함께
 `eta_total_basis`(`measured`, `calibrated_plan`, `overdue`, `unknown`)와
 `eta_phase_overdue`를 제공하며, 선택되지 않은 ETA의 두 field는 `null`입니다.
@@ -303,6 +304,13 @@ thread 수를 자동 선택합니다.
 
 `--no-verify`로 최종 검증을 끌 수 있습니다. `--bbp-samples`는 1~32이며 기본값은
 8입니다.
+
+PR-0048부터 파일의 10진 fraction은 1,048,576자리 leaf로 나눠 GMP
+`mpz_set_str`로 변환하고 이진 트리로 합칩니다. 계산이 끝나 정지한 scheduler는
+BBP 단계에서 다시 시작되며, 독립 sample을 최대
+`min(--threads, --bbp-samples)`개 동시에 검증합니다. 결과와 diagnostic 순서,
+progress 게시 순서는 sample 위치 순서로 결정되므로 worker 완료 순서와
+무관합니다.
 
 ### 도움말과 종료 상태
 
@@ -511,6 +519,10 @@ cmake --build build-benchmark --parallel
 ./build-benchmark/chudnovsky-benchmark --quick
 ./build-benchmark/final-verification-benchmark --quick
 ```
+
+`final-verification-benchmark --import-file <path> <digits> <leaf-digits>`는
+파일 import만 측정하고, `--verify-file <path> <digits> <guard> <working>
+<terms>`는 13-worker scheduler를 사용한 전체 파일 검증을 측정합니다.
 
 ### Source release
 

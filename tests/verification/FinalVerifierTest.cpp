@@ -1,3 +1,6 @@
+#include "scheduler/Scheduler.hpp"
+
+#include "verification/DecimalHexDigit.hpp"
 #include "verification/FinalVerifier.hpp"
 
 #include <cassert>
@@ -77,17 +80,52 @@ int main()
     assert(file.report.status() == VerificationStatus::passed);
     assert(file.sha256 == memory.sha256);
     assert(file.bbpSamples.size() == memory.bbpSamples.size());
+    pi::scheduler::Scheduler verificationScheduler(4, 32);
+    verificationScheduler.start();
+    RecordingWork parallelWork;
+    const BBPSamplePolicy parallelPolicy;
+    const auto parallelFile = FinalVerifier::verifyFile(
+        path,
+        identity,
+        parallelPolicy,
+        &parallelWork,
+        &verificationScheduler
+    );
+    verificationScheduler.stop();
+    assert(parallelFile.report.status() == VerificationStatus::passed);
+    assert(parallelFile.sha256 == file.sha256);
+    assert(parallelFile.bbpSamples.size() == file.bbpSamples.size());
+    for (std::size_t index = 0; index < file.bbpSamples.size(); ++index)
+    {
+        assert(parallelFile.bbpSamples[index].position
+            == file.bbpSamples[index].position);
+        assert(parallelFile.bbpSamples[index].status
+            == file.bbpSamples[index].status);
+        assert(parallelFile.bbpSamples[index].bbpDigit
+            == file.bbpSamples[index].bbpDigit);
+        assert(parallelFile.bbpSamples[index].outputDigit
+            == file.bbpSamples[index].outputDigit);
+    }
+    assert(parallelWork.total
+        == FinalVerifier::plannedFileWork(identity, parallelPolicy, 4));
+    assert(parallelWork.total
+        < FinalVerifier::plannedFileWork(identity, parallelPolicy));
+
 
     // Progress units of a complete run sum exactly to the planned work:
     // 103 inspected bytes, 1 known-digit unit, 4 * 102 hashed bytes, the
-    // quadratic import of 100 digits (8 * 100 + 100^2 / 256 = 839), and per
-    // sample (position + 1) + 8 * 100.
+    // balanced import of 100 digits, and per sample
+    // (position + 1) + 8 * 100.
+    constexpr std::uint64_t leaf =
+        DecimalHexDigitExtractor::DEFAULT_IMPORT_LEAF_DIGITS;
     assert(FinalVerifier::importWorkUnits(0) == 0);
-    assert(FinalVerifier::importWorkUnits(100) == 839);
-    // Ten times the digits costs about a hundred times the import work.
-    assert(FinalVerifier::importWorkUnits(1'000'000) == 3'914'250'000ULL);
-    assert(FinalVerifier::importWorkUnits(10'000'000)
-        == 390'705'000'000ULL);
+    assert(FinalVerifier::importWorkUnits(100) == 100);
+    assert(FinalVerifier::importWorkUnits(leaf - 1) == leaf - 1);
+    assert(FinalVerifier::importWorkUnits(leaf) == leaf);
+    assert(FinalVerifier::importWorkUnits(leaf + 1) == 2 * leaf + 2);
+    assert(FinalVerifier::importWorkUnits(2 * leaf) == 4 * leaf);
+    assert(FinalVerifier::importWorkUnits(1'000'000) == 1'000'000);
+    assert(FinalVerifier::importWorkUnits(10'000'000) == 46'777'216);
     assert(FinalVerifier::importWorkUnits(~std::uint64_t{0})
         == ~std::uint64_t{0});
     RecordingWork work;
@@ -99,7 +137,7 @@ int main()
         &work
     );
     assert(observed.report.status() == VerificationStatus::passed);
-    std::uint64_t expected = 103 + 1 + 4 * 102 + 839;
+    std::uint64_t expected = 103 + 1 + 4 * 102 + 100;
     for (const std::uint64_t position : policy.select(identity))
     {
         expected += position + 1 + 8 * 100;

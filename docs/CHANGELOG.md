@@ -47,6 +47,14 @@
   median span is carried instead of being merged with a much smaller
   neighbour. Uniform levels keep the previous (0,1), (2,3), ... pairing, so
   cold-run tree shape is unchanged. Merge-work planning replays the same plan.
+- Added PR-0048 `importDecimalDigits`: fixed-size decimal leaves are parsed
+  with GMP and combined by a binary-counter tree with cached powers of ten.
+  Boundary tests compare the imported integer directly with GMP parsing.
+- Added optional scheduler-backed final verification. Independent BBP samples
+  run concurrently, while result aggregation, diagnostics, and observer
+  publication remain deterministic on the coordinating thread.
+- Extended `final-verification-benchmark` with generated-file verification,
+  `--import-file`, and `--verify-file` modes.
 
 
 ### Changed
@@ -65,6 +73,11 @@
   levels report the same rate.
 - Changed verification decimal-import units to the quadratic import cost,
   `8 * d + d^2 / 256` cumulative over `d` imported digits.
+- Changed PR-0048 verification progress to balanced import leaf/merge units
+  and divided BBP sample units by effective scheduler parallelism. Planned and
+  published units remain exactly equal.
+- Updated the approved PR-0042 verification estimate to include balanced
+  import temporaries and concurrent per-sample scratch.
 - Changed PR-0039 text `eta_total=` and `eta_phase=` values from one-decimal
   seconds (`15.0s`) to fixed-point values with the configured precision and a
   `sec`, `min`, or `hour` suffix in the classic locale (default `15.00sec`) in
@@ -134,6 +147,20 @@
   alternating A/B samples gave median wall time 6.76 s promoted versus 7.58 s
   cold, and promoted merge 2.51 s with the size-aware merge plan versus
   3.86 s with the previous fixed pairing.
+- PR-0048: built every Debug target and passed all 71 CTest tests with 13 of
+  22 logical cores. At 10,000,000 digits, five-sample import medians for
+  65,536, 262,144, and 1,048,576-digit leaves were 0.745 s, 0.783 s, and
+  0.574 s, selecting 1,048,576. Final import measurements were 0.044 s /
+  8.9 MiB RSS at 1,000,000 digits, 0.891 s / 32.4 MiB at 10,000,000, and
+  11.682 s / 280.2 MiB at 100,000,000.
+- PR-0048: five 10,000,000-digit, 8-sample parallel file-verification runs
+  had an 8.617 s median; one measured run peaked at 275.7 MiB RSS. The
+  existing resume CLI path fell from 219.35 s before the change to 27.83 s
+  in the final measured run and peaked at 498.8 MiB. Canonical output
+  SHA-256 remained
+  `000ef6ea6a6996252017f7a7698d386bfb5fe9539493c7667cc99a6d6e96b6f1`;
+  verification SHA-256 remained
+  `46059c61a4de67d6c916fa958168789da324a03ee8a85c30e9ca292c3712eb25`.
 
 ## [0.13.0] - PR-0036
 

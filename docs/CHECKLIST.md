@@ -620,6 +620,12 @@ directory.
 
 [x] Final Verification Release Benchmark
 
+[x] PR-0048 Balanced GMP Decimal File Import
+
+[x] PR-0048 Scheduler-Parallel Deterministic BBP Samples
+
+[x] PR-0048 1M/10M/100M Import and 10M Full-Verification Release Benchmark
+
 -----------------
 
 ## SIMD

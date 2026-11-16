@@ -450,12 +450,19 @@ add_executable(final-verifier-test
     src/verification/CanonicalDecimal.cpp
     src/verification/FinalVerification.cpp
     src/bigint/GMPInteger.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
 )
 
 add_test(NAME FinalVerifierTest COMMAND final-verifier-test)
 
 target_include_directories(final-verifier-test PRIVATE include)
-target_link_libraries(final-verifier-test PRIVATE gmp)
+target_link_libraries(final-verifier-test PRIVATE gmp Threads::Threads)
 
 add_executable(verification-manifest-test
     tests/verification/VerificationManifestTest.cpp
@@ -472,12 +479,19 @@ add_executable(verification-manifest-test
     src/checkpoint/AtomicFileCommit.cpp
     src/checkpoint/CRC32C.cpp
     src/bigint/GMPInteger.cpp
+    src/scheduler/Task.cpp
+    src/scheduler/TaskHandle.cpp
+    src/scheduler/ThreadPool.cpp
+    src/scheduler/LockFreeQueue.cpp
+    src/scheduler/WorkStealingQueue.cpp
+    src/scheduler/Worker.cpp
+    src/scheduler/Scheduler.cpp
 )
 
 add_test(NAME VerificationManifestTest COMMAND verification-manifest-test)
 
 target_include_directories(verification-manifest-test PRIVATE include)
-target_link_libraries(verification-manifest-test PRIVATE gmp)
+target_link_libraries(verification-manifest-test PRIVATE gmp Threads::Threads)
 
 add_executable(final-verification-integration-test
     tests/verification/FinalVerificationIntegrationTest.cpp

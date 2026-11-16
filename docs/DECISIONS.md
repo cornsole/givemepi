@@ -3101,3 +3101,56 @@ Checkpoint block and manifest format version 1, computation identity, and
 ordinary resume are unchanged. Promotion and accepted target checkpoints are
 mutually exclusive in one invocation. The source frontier is held in memory
 while planning; memory admission for that load belongs to PR-0042.
+
+## ADR-0064
+
+Date
+
+2026-11-16
+
+Status
+
+Accepted
+
+Title
+
+Balanced Decimal Import and Scheduler-Parallel BBP Verification
+
+Decision
+
+PR-0048 replaces the nine-digit append loop in stored-output verification with
+fixed 1,048,576-digit leaves parsed by GMP `mpz_set_str`. A binary-counter
+stack merges adjacent leaves as `left * 10^digits(right) + right`; powers of
+ten for regular levels are cached. The leaf size is the fastest of 65,536,
+262,144, and 1,048,576 in the required Release benchmark.
+
+After import, independent BBP samples are submitted to the existing project
+scheduler, capped at `min(workers, samples)`. Worker tasks write distinct
+result slots only. The coordinating thread waits for all tasks, then publishes
+progress and aggregates diagnostics in selected-position order. The scheduler
+is restarted after calculation and stopped immediately after verification; no
+verification algorithm creates threads.
+
+Import progress is one unit per parsed digit plus every completed merge span.
+BBP sample work is divided by effective parallelism in both the plan and
+publication. PR-0042 verification memory is
+`(D + 2) + max(7 * n, (2 + 8 * C_v) * n)`, excluding the common process base,
+where `C_v = min(workers, bbp_sample_count)`.
+
+Reason
+
+Appending nine decimal digits repeatedly multiplies a growing integer and is
+quadratic. At 10,000,000 digits it dominated verification. Balanced GMP
+conversion reduced import to under one second, but sequential BBP extraction
+still left complete verification above the approved ten-second target. The
+samples are mathematically independent, and the existing scheduler provides
+the required thread-pool, lock-free-queue, and work-stealing execution path.
+
+Consequences
+
+Canonical output, verification SHA-256, BBP policy, diagnostics, manifest
+format, and sample order are unchanged. Complete 10,000,000-digit file
+verification has an 8.617-second five-sample median. Parallel extraction raises
+peak memory: the measured full CLI path reached 498.8 MiB, so memory admission
+must account for every concurrent sample. Callers without a running scheduler
+retain deterministic sequential verification.

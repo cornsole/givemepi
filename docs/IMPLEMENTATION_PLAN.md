@@ -2243,7 +2243,8 @@ in `include/memory/MemoryPlan.hpp`:
 - `processBaseBytes = 256 MiB`, added to every stage.
 - `D = requestedDigits`, `W = workingDigits`, `R = nodeBytes(0, termCount)`,
   `q = R / 3`, `S = decimalIntegerBytes(2 * W + 5)`,
-  `s = decimalIntegerBytes(W + 3)`, `n = decimalIntegerBytes(D)`.
+  `s = decimalIntegerBytes(W + 3)`, `n = decimalIntegerBytes(D)`, and
+  `C_v = min(workers, bbp_sample_count)`.
 
 #### D4. Stage Peaks
 
@@ -2263,7 +2264,10 @@ Stages are evaluated in this order; each value is `processBaseBytes` plus:
 3. `finalization`: `R + max(2 * S, S + 3 * (s + q))`.
 4. `decimal_format`: `R + 2 * (s + q) + 2 * (D + 2)`.
 5. `output_write`: `D + 2`.
-6. `verification`, only when enabled: `(D + 2) + 6 * n`.
+6. `verification`, only when enabled:
+   `(D + 2) + max(7 * n, (2 + 8 * C_v) * n)`. The first term inside `max`
+   covers the balanced import tree; the second covers the retained numerator
+   and denominator plus concurrent BBP extraction scratch.
 
 `ioExtra(set) = max(checkpoint_enabled ? maxNode : 0, out_of_core_enabled ? 2 * maxNode : 0)`,
 where `maxNode` is the largest `nodeBytes` in the set.
@@ -2284,8 +2288,8 @@ executed layout cannot diverge. `ProgressCostModel` is unchanged.
   `main` catch prints it as `pi-engine: <what>` and exits 1.
 - `pi::memory::MemoryPlan::create(const MemoryPlanInput&)` computes all stage
   peaks. `MemoryPlanInput` holds `PrecisionPlan`, the frontier spans, the
-  worker count, `checkpoint_enabled`, `out_of_core_enabled`, and
-  `verification_enabled`.
+  worker count, BBP sample count, `checkpoint_enabled`,
+  `out_of_core_enabled`, and `verification_enabled`.
 - `MemoryPlan::enforce(std::uint64_t budget)` throws for the first stage in D4
   order whose peak exceeds `budget`. A successful check prints nothing.
 - `pi::binary::BinaryMemoryGuard` in `BinarySplitter.hpp`:
@@ -2395,6 +2399,82 @@ record the new values here; never remove a term.
 
 Begin after PR-0041 is complete. Start with step 1; new files require a
 user-run creation script first.
+
+## PR-0048: Divide-and-Conquer Decimal Import
+
+### Status
+
+Complete on 2026-11-16. The user approved scheduler-parallel BBP samples after
+the first import-only result left complete file verification above 10 seconds.
+
+### Goal
+
+Replace the quadratic file-to-GMP decimal import used by final BBP
+verification with a bounded-leaf divide-and-conquer import. Preserve the
+canonical output, verification result, SHA-256, BBP policy, and manifest
+formats.
+
+### Fixed Design
+
+- Read fixed-size decimal leaves and parse each with GMP `mpz_set_str`.
+- Combine adjacent leaves as `left * 10^digits(right) + right` through a
+  binary-counter stack. Cache powers of ten by level.
+- Benchmark leaf sizes 65,536, 262,144, and 1,048,576 digits; use the fastest
+  measured size, 1,048,576.
+- Keep decimal import single-threaded. Reuse the project scheduler for
+  independent BBP samples, capped at `min(workers, samples)`; aggregate
+  results, diagnostics, and observer calls on the coordinating thread.
+- Replace quadratic progress accounting with units replaying the same
+  leaf/merge structure. Divide BBP sample work by effective parallelism;
+  published units must equal planned units.
+- Hash changes are out of scope. Add no source files.
+
+### Work Sequence
+
+1. Record a Release baseline for the existing file import.
+2. Update `include/verification/DecimalHexDigit.hpp` and
+   `src/verification/DecimalHexDigit.cpp` with the divide-and-conquer import.
+3. Update `include/verification/FinalVerifier.hpp` and
+   `src/verification/FinalVerifier.cpp` with matching import progress units
+   and scheduler-parallel BBP samples.
+4. Extend `DecimalHexDigitTest` across leaf and merge boundaries and
+   `FinalVerifierTest` for exact sequential/parallel planned and published
+   progress.
+5. Extend `FinalVerificationBenchmark` to measure import and complete file
+   verification paths.
+6. Build and run CTest with 13 jobs.
+7. Benchmark Release imports at 1,000,000, 10,000,000, and 100,000,000
+   digits; benchmark complete 10,000,000-digit file verification. Compare
+   result identity and peak RSS.
+8. Update README, CHECKLIST, CHANGELOG, DECISIONS, ROADMAP, and this plan.
+9. Commit as PR-0048 and push to `origin/main`.
+
+### Acceptance
+
+- Imported integers and final verification results match the prior
+  implementation.
+- File mutation and malformed-file failures preserve their existing behavior.
+- The 10,000,000-digit file-verification target is under 10 seconds.
+- Measured peak RSS is recorded and the PR-0042 verification formula is
+  corrected if required.
+- All tests pass.
+
+### Verification Results
+
+- Debug build and 71/71 CTest passed with 13 jobs.
+- Five-sample 10,000,000-digit import medians selected 1,048,576-digit
+  leaves: 0.574 s versus 0.745 s (65,536) and 0.783 s (262,144).
+- Import time / peak RSS: 0.044 s / 8.9 MiB at 1,000,000 digits, 0.891 s /
+  32.4 MiB at 10,000,000, and 11.682 s / 280.2 MiB at 100,000,000.
+- Five complete 10,000,000-digit file-verification samples had an 8.617 s
+  median. A measured sample peaked at 275.7 MiB RSS; the full CLI path peaked
+  at 498.8 MiB, requiring the revised PR-0042 formula above.
+- Canonical and verification SHA-256 values matched the pre-change run.
+
+### Next Contributor TODO
+
+Begin PR-0042 at its Work Sequence step 1 using the revised verification
+formula and `bbp_sample_count` input.
 
 ## Future Plan: Bounded-Memory Large Calculation (PR-0043 to PR-0047)
 

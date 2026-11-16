@@ -592,7 +592,8 @@ int main(int argc, char* argv[])
                 const std::uint64_t fileWork =
                     pi::verification::FinalVerifier::plannedFileWork(
                         identity,
-                        samplePolicy
+                        samplePolicy,
+                        workerCount
                     );
                 if (!tracker.declarePhaseUnits(
                         pi::progress::ProgressPhase::verifyingOutput,
@@ -606,14 +607,17 @@ int main(int argc, char* argv[])
                         "Cannot enter output verification phase"
                     );
                 }
+                scheduler.start();
                 TrackerVerificationObserver verificationProgress(tracker);
                 const auto verification =
                     pi::verification::FinalVerifier::verifyFile(
                         config.output_file,
                         identity,
                         samplePolicy,
-                        &verificationProgress
+                        &verificationProgress,
+                        &scheduler
                     );
+                scheduler.stop();
                 if (verification.report.status()
                     != pi::verification::VerificationStatus::passed)
                 {

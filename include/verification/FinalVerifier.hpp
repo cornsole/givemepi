@@ -6,10 +6,17 @@
 #include "verification/KnownDigitsVerifier.hpp"
 #include "verification/SHA256.hpp"
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <string_view>
 #include <vector>
+
+namespace pi::scheduler
+{
+class Scheduler;
+}
+
 
 namespace pi::verification
 {
@@ -46,24 +53,24 @@ public:
     ///
     /// Units approximate sequential byte passes: one per inspected file byte,
     /// one for the known-digit comparison, four per hashed canonical byte,
-    /// importWorkUnits(requestedDigits) for the BBP decimal import, and for
-    /// each selected BBP position (position + 1) series units plus eight per
-    /// fractional digit for interval extraction. Saturates at UINT64_MAX.
-    /// Time complexity: O(s) for s selected samples. Memory: O(s).
+    /// importWorkUnits(requestedDigits) for the BBP decimal import, and each
+    /// selected BBP sample's work divided by the effective sample parallelism.
+    /// A zero parallelism is treated as one; parallelism is capped at the
+    /// selected sample count. Saturates at UINT64_MAX.
+    /// Time complexity: O(s + log D) for s samples and D digits. Memory: O(s).
     [[nodiscard]] static std::uint64_t plannedFileWork(
         VerificationIdentity identity,
-        const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{}
+        const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{},
+        std::size_t sampleParallelism = 1
     );
 
-    /// Returns the cumulative work units of importing the first `digits`
-    /// fractional digits into the BBP extractor.
+    /// Returns the work units of the balanced decimal import.
     ///
-    /// The import multiplies a growing integer by each nine-digit chunk, so
-    /// its cost is quadratic: eight units per digit plus digits^2 / 256.
-    /// verifyFile publishes the difference of this function across each
-    /// import batch, so published import units sum to importWorkUnits(D) and
-    /// grow in proportion to wall time. Monotonic; saturates at UINT64_MAX.
-    /// Time and memory complexity: O(1).
+    /// Units are one per parsed digit plus one per digit in each completed
+    /// merge. The calculation replays the default leaf tree without allocating
+    /// it, exactly matching successful fromFile() publications. Monotonic;
+    /// saturates at UINT64_MAX.
+    /// Time complexity: O(log D). Memory complexity: O(1).
     [[nodiscard]] static std::uint64_t importWorkUnits(std::uint64_t digits)
         noexcept;
 
@@ -71,20 +78,23 @@ public:
     ///
     /// An optional observer receives completed units as structure, known
     /// digits, hash, BBP import, and each BBP sample finish; their sum
-    /// equals plannedFileWork() when every stage runs to completion. Units
-    /// are published on the calling thread only.
+    /// equals plannedFileWork() when every stage runs to completion. When a
+    /// running scheduler is supplied, independent BBP samples run concurrently;
+    /// observer calls and result aggregation remain on the calling thread.
     [[nodiscard]] static FinalVerificationRun verifyFile(
         const std::filesystem::path& path,
         VerificationIdentity identity,
         const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{},
-        VerificationWorkObserver* observer = nullptr
+        VerificationWorkObserver* observer = nullptr,
+        pi::scheduler::Scheduler* executor = nullptr
     );
 
     [[nodiscard]] static FinalVerificationRun verifyFile(
         const std::filesystem::path& path,
         VerificationIdentity identity,
         const SHA256Digest& expectedSha256,
-        const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{}
+        const BBPSamplePolicy& samplePolicy = BBPSamplePolicy{},
+        pi::scheduler::Scheduler* executor = nullptr
     );
 };
 

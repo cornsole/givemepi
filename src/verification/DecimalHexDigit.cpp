@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace pi::verification
 {
@@ -24,30 +25,162 @@ pi::bigint::GMPInteger parseFraction(const CanonicalDecimal& decimal)
     return value;
 }
 
-void appendDecimalChunk(
-    pi::bigint::GMPInteger& value,
-    std::string_view digits
+struct ImportNode
+{
+    pi::bigint::GMPInteger value;
+    std::uint64_t digits;
+    std::size_t level;
+    bool regular;
+};
+
+void publishImportWork(
+    VerificationWorkObserver* observer,
+    std::uint64_t units
+) noexcept
+{
+    if (observer != nullptr && units != 0)
+    {
+        observer->workCompleted(units);
+    }
+}
+
+const pi::bigint::GMPInteger& powerForLevel(
+    std::vector<pi::bigint::GMPInteger>& powers,
+    std::size_t level,
+    std::size_t leafDigits
 )
 {
-    unsigned long chunk = 0;
-    for (const char digit : digits)
+    while (powers.size() <= level)
     {
-        if (digit < '0' || digit > '9')
+        pi::bigint::GMPInteger power;
+        if (powers.empty())
         {
-            throw std::runtime_error("Output changed after inspection");
+            power.setPowerOfTen(static_cast<std::uint64_t>(leafDigits));
         }
-        chunk = chunk * 10UL + static_cast<unsigned long>(digit - '0');
+        else
+        {
+            power.set(powers.back());
+            power.mul(powers.back());
+        }
+        powers.push_back(std::move(power));
     }
-    unsigned long scale = 1;
-    for (std::size_t index = 0; index < digits.size(); ++index)
-    {
-        scale *= 10UL;
-    }
-    mpz_mul_ui(*value.raw(), *value.raw(), scale);
-    mpz_add_ui(*value.raw(), *value.raw(), chunk);
+    return powers[level];
+}
+
+ImportNode mergeRegularNodes(
+    ImportNode left,
+    ImportNode right,
+    std::vector<pi::bigint::GMPInteger>& powers,
+    std::size_t leafDigits,
+    VerificationWorkObserver* observer
+)
+{
+    left.value.mul(powerForLevel(powers, left.level, leafDigits));
+    left.value.add(right.value);
+    left.digits += right.digits;
+    ++left.level;
+    publishImportWork(observer, left.digits);
+    return left;
 }
 
 } // namespace
+pi::bigint::GMPInteger importDecimalDigits(
+    std::istream& input,
+    std::uint64_t digitCount,
+    std::size_t leafDigits,
+    VerificationWorkObserver* observer
+)
+{
+    constexpr auto maxRead = static_cast<std::uintmax_t>(
+        std::numeric_limits<std::streamsize>::max()
+    );
+    if (leafDigits == 0
+        || leafDigits == std::numeric_limits<std::size_t>::max()
+        || static_cast<std::uintmax_t>(leafDigits) > maxRead)
+    {
+        throw std::invalid_argument("Decimal import leaf size is invalid");
+    }
+
+    std::string buffer(leafDigits + 1, '\0');
+    std::vector<ImportNode> nodes;
+    std::vector<pi::bigint::GMPInteger> powers;
+    std::uint64_t remaining = digitCount;
+    while (remaining != 0)
+    {
+        const auto count = static_cast<std::size_t>(
+            std::min<std::uint64_t>(remaining, leafDigits)
+        );
+        input.read(buffer.data(), static_cast<std::streamsize>(count));
+        if (input.gcount() != static_cast<std::streamsize>(count))
+        {
+            throw std::runtime_error("Output ended during decimal conversion");
+        }
+        if (!std::all_of(
+                buffer.begin(),
+                buffer.begin() + static_cast<std::ptrdiff_t>(count),
+                [](char digit) { return digit >= '0' && digit <= '9'; }
+            ))
+        {
+            throw std::runtime_error("Output changed after inspection");
+        }
+        buffer[count] = '\0';
+
+        pi::bigint::GMPInteger value;
+        if (mpz_set_str(*value.raw(), buffer.data(), 10) != 0)
+        {
+            throw std::runtime_error("Output changed after inspection");
+        }
+        nodes.push_back({
+            std::move(value),
+            static_cast<std::uint64_t>(count),
+            0,
+            count == leafDigits
+        });
+        publishImportWork(observer, static_cast<std::uint64_t>(count));
+        remaining -= count;
+
+        while (nodes.size() >= 2
+            && nodes[nodes.size() - 2].regular
+            && nodes.back().regular
+            && nodes[nodes.size() - 2].level == nodes.back().level)
+        {
+            ImportNode right = std::move(nodes.back());
+            nodes.pop_back();
+            ImportNode left = std::move(nodes.back());
+            nodes.pop_back();
+            nodes.push_back(mergeRegularNodes(
+                std::move(left),
+                std::move(right),
+                powers,
+                leafDigits,
+                observer
+            ));
+        }
+    }
+
+    if (nodes.empty())
+    {
+        return pi::bigint::GMPInteger{};
+    }
+    ImportNode right = std::move(nodes.back());
+    nodes.pop_back();
+    while (!nodes.empty())
+    {
+        ImportNode left = std::move(nodes.back());
+        nodes.pop_back();
+        pi::bigint::GMPInteger scale;
+        scale.setPowerOfTen(right.digits);
+        left.value.mul(scale);
+        left.value.add(right.value);
+        left.digits += right.digits;
+        left.regular = false;
+        publishImportWork(observer, left.digits);
+        right = std::move(left);
+    }
+    return std::move(right.value);
+}
+
+
 
 bool DecimalHexDigit::resolved() const noexcept
 {
@@ -100,31 +233,12 @@ DecimalHexDigitExtractor DecimalHexDigitExtractor::fromFile(
         throw std::runtime_error("Output changed after inspection");
     }
 
-    pi::bigint::GMPInteger numerator;
-    std::uint64_t remaining = file.requestedDigits;
-    constexpr std::uint64_t publishBatch = 64 * 1024;
-    std::uint64_t unpublished = 0;
-    std::string chunk(9, '\0');
-    while (remaining != 0)
-    {
-        const auto count = static_cast<std::size_t>(
-            std::min<std::uint64_t>(remaining, chunk.size())
-        );
-        input.read(chunk.data(), static_cast<std::streamsize>(count));
-        if (input.gcount() != static_cast<std::streamsize>(count))
-        {
-            throw std::runtime_error("Output ended during decimal conversion");
-        }
-        appendDecimalChunk(numerator, std::string_view(chunk.data(), count));
-        remaining -= count;
-        unpublished += count;
-        if (observer != nullptr
-            && (unpublished >= publishBatch || remaining == 0))
-        {
-            observer->workCompleted(unpublished);
-            unpublished = 0;
-        }
-    }
+    auto numerator = importDecimalDigits(
+        input,
+        file.requestedDigits,
+        DEFAULT_IMPORT_LEAF_DIGITS,
+        observer
+    );
     char newline = '\0';
     input.get(newline);
     if (newline != '\n' || input.peek() != std::char_traits<char>::eof())
