@@ -55,6 +55,7 @@ public:
     [[nodiscard]] const ChunkIndex& index() const noexcept { return index_; }
 
 private:
+    friend struct StorageManagerTestAccess;
     static std::filesystem::path makeIndexPath(const StoragePolicy& policy);
     void publishIndex(const ChunkIndex& next);
 

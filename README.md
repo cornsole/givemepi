@@ -195,6 +195,30 @@ resume으로 복원된 작업은 보정에서 제외됩니다. Merge 작업 단�
 `eta_phase_overdue`를 제공하며, 선택되지 않은 ETA의 두 field는 `null`입니다.
 Text 출력은 `eta_total=overdue`, `eta_phase=overdue`로 표시합니다.
 
+#### FAQ: 대규모 계산에서 `eta_total=unknown`이 오래 표시되는 이유
+
+`unknown`은 전체 작업량을 모른다는 의미가 아니라 ETA를 계산할 만큼 완료된
+작업 표본이 아직 없다는 의미입니다. 현재 단계에서 새 작업 단위가 1개 이상
+완료되고, 단계 진입부터 마지막 완료 단위까지 측정 구간이 1초 이상이어야
+현재 단계의 속도 표본을 사용합니다.
+
+Binary Splitting 진행량은 각 term이 아니라 leaf block 전체가 완료될 때
+게시됩니다. leaf block 수는 최대 `worker 수 * tasksPerWorker`이고 기본
+`tasksPerWorker`는 4입니다. 따라서 수백억 자리 계산에서는 첫 block이
+완료될 때까지 `terms=0/...`과 `eta_total=unknown`이 오래 유지될 수 있습니다.
+
+| 관측 상태 | 의미 |
+| --- | --- |
+| `phase=splitting`, `terms=0/...` | 첫 leaf block 완료 대기 |
+| `phase=splitting`, `terms>0` | 측정 구간 조건까지 충족되면 ETA 표시 |
+| `phase=initializing` 또는 `phase=validating_checkpoints` | 현재 단계의 ETA 표본이 아직 없음 |
+| `phase=failed` | 실패한 계산에는 ETA를 제공하지 않음 |
+| CPU 사용률과 `active_tasks`가 유지됨 | 작업이 계속 실행 중이라는 보조 증거 |
+
+`unknown`은 관측 증거가 부족한 상태이고, `overdue`는 기존 예측 시간을
+초과한 상태이므로 서로 다릅니다. ETA는 관측 기반 추정값이며 완료 시각을
+보장하지 않습니다.
+
 ## 현재 구현 상태
 
 | 영역 | 상태 | 현재 범위 |
@@ -404,6 +428,13 @@ PR-0032 기준 동작은 다음과 같습니다.
 
 Out-of-core 저장은 기본 활성화되어 `storage/`를 사용합니다. 기본 memory budget은
 512 MiB, 목표 chunk 크기는 64 MiB, 최대 동시 I/O는 1, compression은 LZ4입니다.
+프로덕션 실행은 설정된 디렉터리의 `.pi-engine-runtime.lock`을 실행 동안
+배타적으로 유지하고, 실제 임시 chunk와 index는 매 실행마다 새로 만드는
+`.pi-engine-active/` 아래에 둡니다. 이전 비정상 종료의 runtime chunk는 다음
+실행에서 제거되며 checkpoint 또는 resume 근거로 사용되지 않습니다. 같은
+storage 디렉터리를 동시에 사용하는 두 번째 프로세스는 명확한 오류로
+거부됩니다. Checkpoint 디렉터리와 파일은 이 정리 대상에 포함되지 않습니다.
+
 
 ```bash
 ./build/pi-engine \

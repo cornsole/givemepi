@@ -106,6 +106,8 @@ Storage
 [x] PR-0027 Asynchronous Storage Pipeline
 [x] PR-0028 Concurrent Storage Pipeline Implementation
 [x] PR-0029 Measurement and Bottleneck Optimization
+[x] PR-0040 Runtime Storage Run Isolation
+
 
 ----------------------
 
@@ -126,6 +128,8 @@ Checkpoint
 [x] Production Checkpoint Emission and Verified Resume (PR-0030)
 [x] Live Checkpoint Telemetry and Automated CLI Resume Regression (PR-0031)
 [x] Default Checkpoint Files and Resume-Only 0/0 Checkpoint Plan (PR-0032)
+[ ] PR-0041 Cross-Precision Checkpoint Promotion (after PR-0040)
+
 
 
 ----------------------

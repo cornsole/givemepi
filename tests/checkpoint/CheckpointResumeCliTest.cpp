@@ -108,6 +108,9 @@ std::vector<std::string> jsonResumeOptions(const RunPaths& paths, bool resume)
         "--checkpoint-quarantine-directory", paths.quarantine.string(),
         "--checkpoint-interval", "3600",
         "--storage-directory", paths.storage.string(),
+        "--storage-memory-budget-bytes", "1048576",
+        "--storage-chunk-size-bytes", "524288",
+        "--storage-max-concurrent-io", "1",
         "--progress",
         "--progress-interval", "1",
         "--progress-format", "json",
@@ -212,7 +215,10 @@ bool hasPublishedManifest(const std::filesystem::path& directory)
     return countNonEmptyFiles(directory, ".manifest") > 0;
 }
 
-void interruptAfterFirstManifest(ChildProcess& child, const RunPaths& paths)
+void interruptAfterFirstRuntimeSpill(
+    ChildProcess& child,
+    const RunPaths& paths
+)
 {
     const auto deadline = std::chrono::steady_clock::now() + 120s;
     while (std::chrono::steady_clock::now() < deadline)
@@ -223,7 +229,9 @@ void interruptAfterFirstManifest(ChildProcess& child, const RunPaths& paths)
                 "pi-engine exited before interruption, status="
                 + std::to_string(*status));
         }
-        if (hasPublishedManifest(paths.checkpoints))
+        if (hasPublishedManifest(paths.checkpoints)
+            && countNonEmptyFiles(
+                paths.storage / ".pi-engine-active", ".chunk") > 0)
         {
             if (::kill(child.pid, SIGTERM) != 0)
                 throw std::runtime_error("failed to terminate pi-engine");
@@ -238,7 +246,8 @@ void interruptAfterFirstManifest(ChildProcess& child, const RunPaths& paths)
         }
         std::this_thread::sleep_for(1ms);
     }
-    throw std::runtime_error("checkpoint manifest was not published in time");
+    throw std::runtime_error(
+        "checkpoint manifest and runtime spill were not published in time");
 }
 
 std::string readFile(const std::filesystem::path& path)
@@ -709,7 +718,7 @@ int main(int argc, char* argv[])
         const RunPaths resumed = makePaths(temporary.path(), "resumed");
         ChildProcess interrupted = startProcess(
             executable, jsonResumeOptions(resumed, false), resumed);
-        interruptAfterFirstManifest(interrupted, resumed);
+        interruptAfterFirstRuntimeSpill(interrupted, resumed);
 
         requireSuccessfulRun(
             executable, jsonResumeOptions(resumed, true), resumed, 180s);

@@ -3000,3 +3000,51 @@ redraws at high precision, compact output drops checkpoint counts first and
 then the term fraction when the record would reach 80 columns. JSON consumers,
 ETA calculation, checkpoint, output, and verification-manifest formats are
 unaffected.
+
+## ADR-0062
+
+Date
+
+2026-11-16
+
+Status
+
+Accepted
+
+Title
+
+Production Runtime Storage Uses an Exclusive Ephemeral Session
+
+Decision
+
+PR-0040 treats the configured runtime-storage directory as a base owned by one
+production process at a time. `RuntimeStorageSession` opens and exclusively
+locks the persistent `.pi-engine-runtime.lock` inode for the complete lifetime
+of `StorageManager` and its asynchronous readers and writers. After acquiring
+the lock, it removes and recreates only `.pi-engine-active`; production chunk
+files and `chunk-index-v1.bin` are stored below that active namespace.
+
+The lock file is never replaced or unlinked. Session destruction removes only
+the active namespace without throwing, then releases the lock. Direct
+`StorageManager` construction retains its restart and integrity semantics for
+tests, benchmarks, and lower-level consumers. Indexed duplicate identities and
+already in-flight stores produce distinct diagnostics.
+
+Reason
+
+Runtime chunks are temporary memory-pressure artifacts, not validated resume
+evidence. Loading an index left by an interrupted process can collide with the
+same deterministic chunk identities regenerated from a checkpoint frontier.
+Holding one stable lock inode prevents concurrent processes from publishing
+into the same namespace, while a fixed clean active child makes crash recovery
+deterministic without deleting checkpoint or unrelated sibling files.
+
+Consequences
+
+Only one production process may use a configured runtime-storage base at a
+time. A new process discards stale active runtime data after it acquires the
+lock and resumes exclusively from validated checkpoints. Linux advisory
+`flock` semantics are required, consistent with the project's existing POSIX
+file synchronization and terminal APIs. Checkpoint bytes, manifest format,
+computation identity, and direct storage-manager restart contracts do not
+change.

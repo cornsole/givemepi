@@ -13,6 +13,7 @@
 #include "scheduler/Scheduler.hpp"
 #include "storage/StorageMergeCoordinator.hpp"
 #include "storage/StorageManager.hpp"
+#include "storage/RuntimeStorageSession.hpp"
 #include "verification/BBPSamplePolicy.hpp"
 #include "verification/FinalVerifier.hpp"
 #include "verification/VerificationManifest.hpp"
@@ -339,6 +340,7 @@ int main(int argc, char* argv[])
             );
         }
 
+        std::unique_ptr<pi::storage::RuntimeStorageSession> storageSession;
         std::unique_ptr<pi::storage::StorageManager> storageManager;
         std::unique_ptr<pi::storage::AsyncChunkWriter> asyncWriter;
         std::unique_ptr<pi::storage::AsyncChunkReader> asyncReader;
@@ -346,8 +348,11 @@ int main(int argc, char* argv[])
             mergeCoordinator;
         if (config.out_of_core_enabled)
         {
-            const auto storagePolicy =
-                pi::config::makeStoragePolicy(config);
+            auto storagePolicy = pi::config::makeStoragePolicy(config);
+            storageSession = std::make_unique<
+                pi::storage::RuntimeStorageSession
+            >(storagePolicy.directory);
+            storagePolicy.directory = storageSession->activeDirectory();
             storageManager = std::make_unique<pi::storage::StorageManager>(
                 storagePolicy);
             const auto ioWorkers = std::max<std::uint32_t>(

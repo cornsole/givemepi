@@ -35,9 +35,16 @@ ChunkId StorageManager::store(const Chunk& chunk)
     const ChunkId id = identity.deterministicFilename();
     {
         std::lock_guard lock(indexMutex_);
-        if (index_.contains(identity) || !inFlightStores_.insert(id).second)
+        if (index_.contains(identity))
+        {
             throw std::invalid_argument(
-                "duplicate chunk identity in storage manager");
+                "chunk identity already exists in runtime storage index");
+        }
+        if (!inFlightStores_.insert(id).second)
+        {
+            throw std::invalid_argument(
+                "chunk identity already has an in-flight runtime store");
+        }
     }
 
     try

@@ -34,6 +34,12 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0034 | Logger foundation and resume diagnostics | Complete |
 | PR-0035 | Informational benchmark workflow | Complete |
 | PR-0036 | Tag-gated source release workflow | Complete |
+| PR-0037 | End-to-end and current-phase ETA | Complete |
+| PR-0038 | Evidence-driven total and phase ETA | Complete |
+| PR-0039 | Configurable text ETA units and precision | Complete |
+| PR-0040 | Runtime storage run isolation | Complete |
+| PR-0041 | Cross-precision checkpoint promotion | Planned after PR-0040 |
+| PR-0042 | Computation memory budget and fail-fast admission | Approved; planned after PR-0041 |
 
 ---
 
@@ -1918,3 +1924,200 @@ developer commit and push remain. Keep ETA unit and precision as
 command-line-only presentation policy in the shared `EtaFormat` type: do not
 change JSON nanosecond values or schema version 6 for display needs, and add
 TOML keys only through a separately approved plan.
+
+---
+
+## PR-0040: Runtime Storage Run Isolation
+
+### Goal
+
+Isolate production runtime storage by calculation run so a fresh or resumed
+process cannot consume stale runtime chunks and two processes cannot share one
+active runtime-storage namespace.
+
+PR-0039 must be committed and pushed before PR-0040 begins. PR-0040 must be
+completed before PR-0041 begins.
+
+### Architecture Contract
+
+- Acquire a production runtime-storage base lock before creating or opening the
+  active namespace, and hold it for the complete runtime-storage lifetime.
+- Start each calculation with a clean active runtime-storage namespace. Runtime
+  chunks remain temporary working data and never become checkpoint or resume
+  evidence.
+- Report indexed duplicate identities separately from identities already
+  protected as in-flight operations. Diagnostics must identify which condition
+  rejected the operation.
+- Leave checkpoint blocks, manifests, computation identity, format version 1,
+  checkpoint-before-spill ordering, and verified-resume behavior unchanged.
+
+### Work Sequence
+
+1. Define ownership and lifetime for the production runtime-storage base lock.
+2. Clean and initialize one active namespace only while that lock is held.
+3. Route production runtime chunk and index paths through the isolated active
+   namespace.
+4. Split duplicate diagnostics into indexed and in-flight identity failures.
+5. Add regression coverage for an interrupted run resumed after runtime spill;
+   only checkpoint evidence may seed the resumed frontier.
+6. Add concurrent-use coverage proving a second process cannot use the same
+   runtime-storage base while the first holds it.
+7. Run the focused regressions, complete build and test gates, then update
+   completion documentation without changing checkpoint contracts.
+
+### Acceptance
+
+- A production run holds the runtime-storage base lock for the complete
+  runtime-storage lifetime.
+- A new active namespace is clean and cannot expose stale chunks or an old
+  runtime index to the calculation.
+- Indexed duplicates and in-flight duplicates produce distinct, precise
+  diagnostics.
+- An interrupted post-spill run resumes from its checkpoint frontier without
+  treating runtime chunks as resume evidence.
+- Concurrent use of one runtime-storage base is rejected deterministically.
+- Checkpoint files and format version 1 bytes are unchanged.
+
+### Verification Results
+
+- Built every Debug target with 13 of 22 logical CPUs.
+- Passed all 70 CTest tests, including the focused
+  `RuntimeStorageSessionTest`, `StorageManagerTest`, and
+  `CheckpointResumeCliTest` regressions.
+- Verified an interrupted post-spill run resumes from checkpoint evidence while
+  the stale runtime namespace is discarded.
+
+### Next Contributor TODO
+
+PR-0040 is complete. Preserve the stable base lock, ephemeral active namespace,
+and checkpoint/runtime-storage separation while implementing PR-0041.
+
+### Out of Scope
+
+- checkpoint promotion across precision identities;
+- checkpoint or manifest format changes;
+- making runtime chunks resumable;
+- unrelated storage performance optimization.
+
+---
+
+## PR-0041: Cross-Precision Checkpoint Promotion
+
+### Goal
+
+Promote a compatible, explicitly selected lower-precision checkpoint frontier
+into a higher-precision target calculation without weakening checkpoint
+validation or mutating the source checkpoint set.
+
+### Architecture Contract
+
+- Promotion requires an explicit source manifest. Discovery or implicit
+  selection of a source checkpoint population is not allowed.
+- Source validation is read-only and all-or-nothing. Any incompatible,
+  structurally invalid, checksum-invalid, manifest-inconsistent, or
+  mathematically invalid source entry rejects the complete promotion; source
+  files are never quarantined, rewritten, renamed, or removed.
+- Compatible lower-precision P/Q/T blocks are imported as the target
+  calculation's initial frontier. Uncovered target ranges are calculated under
+  the target identity.
+- Checkpoint block and manifest format version 1 is retained.
+- The first complete target frontier commit re-encodes imported P/Q/T blocks
+  under the target computation identity before publishing the target manifest.
+  No target manifest may reference source-identity blocks.
+- Existing planner-accepted blocks in the target checkpoint population conflict
+  with promotion. The run must reject the mixed authority rather than merge
+  accepted target blocks with the promoted source frontier.
+
+### Work Sequence
+
+1. Add an explicit source-manifest input and keep it separate from the target
+   checkpoint and quarantine paths.
+2. Validate the complete source manifest and every referenced block through a
+   read-only, all-or-nothing promotion path.
+3. Check lower-to-higher precision compatibility and construct the target
+   initial frontier from compatible source P/Q/T plus uncovered target ranges.
+4. Reject promotion when the target resume planner has accepted any existing
+   target block.
+5. On the first complete target frontier commit, re-encode imported blocks with
+   the target identity and atomically publish a format-version-1 target
+   manifest.
+6. Add source immutability, validation failure, target-conflict, mixed-frontier,
+   and first-target-commit regression coverage.
+7. Run a Release cold-versus-promoted benchmark gate and accept promotion only
+   with identical target output and verification evidence plus a measured
+   benefit.
+
+### Acceptance
+
+- Promotion cannot begin without an explicit source manifest.
+- Source validation either accepts the complete compatible source frontier or
+  imports none of it, and all source bytes remain unchanged on success and
+  failure.
+- Compatible lower-precision P/Q/T becomes the target initial frontier while
+  uncovered ranges are calculated for the target.
+- Any planner-accepted target block conflicts with promotion and rejects the
+  run before frontier mixing.
+- The first complete target frontier commit contains only target-identity,
+  format-version-1 blocks and a target-identity manifest.
+- A Release cold-versus-promoted benchmark demonstrates identical target
+  decimal output and final verification evidence; performance acceptance is
+  based on the measured comparison.
+
+### Out of Scope
+
+- checkpoint or manifest format version 2;
+- source checkpoint mutation or quarantine;
+- implicit source discovery;
+- combining promotion with existing accepted target blocks;
+- runtime-storage reuse as checkpoint evidence.
+
+---
+
+## ETA `unknown` Operator FAQ
+
+### Goal
+
+Explain why a large calculation can continue to report `eta_total=unknown`
+before the first usable progress sample, without changing ETA behavior.
+
+### Approved Scope and Work Sequence
+
+1. Add an operator-facing FAQ immediately after the existing README ETA
+   contract.
+2. Define the minimum sample conditions and the leaf-block publication
+   boundary.
+3. Explain the `worker count * tasksPerWorker` block-count cap, including the
+   default `tasksPerWorker` value of 4.
+4. Add a phase and counter diagnostic table, distinguish `unknown` from
+   `overdue`, and identify CPU utilization plus active tasks as supporting
+   evidence that work is continuing.
+5. Update the checklist and changelog, then verify the statements against the
+   implementation and build the project.
+
+### Out of Scope
+
+- ETA calculation, sampling thresholds, and progress publication changes;
+- new configuration or command-line options;
+- a separate troubleshooting document;
+- architecture or roadmap changes.
+
+### Acceptance
+
+- The FAQ appears between the ETA contract and current implementation status.
+- Every numeric default and condition matches the implementation.
+- The existing project build succeeds.
+
+### Verification Results
+
+- Confirmed the one-unit and one-second sample thresholds in
+  `ProgressMetrics`, leaf-block completion publication in `BinarySplitter`,
+  and the default `tasksPerWorker` value of 4.
+- Confirmed the FAQ is directly between the ETA contract and current
+  implementation status.
+- Built every existing target successfully with 13 of 22 logical cores.
+
+### Next Contributor TODO
+
+Keep this FAQ synchronized if ETA sampling thresholds, split block sizing, or
+progress publication boundaries change. No follow-up is required for this
+documentation task.

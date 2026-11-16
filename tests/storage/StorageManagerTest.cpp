@@ -7,6 +7,28 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+
+namespace pi::storage
+{
+
+struct StorageManagerTestAccess
+{
+    static void reserve(StorageManager& manager, const ChunkId& id)
+    {
+        std::lock_guard lock(manager.indexMutex_);
+        manager.inFlightStores_.insert(id);
+    }
+
+    static void release(StorageManager& manager, const ChunkId& id)
+    {
+        std::lock_guard lock(manager.indexMutex_);
+        manager.inFlightStores_.erase(id);
+    }
+};
+
+} // namespace pi::storage
+
 
 namespace
 {
@@ -39,6 +61,22 @@ void flipLastByte(const std::filesystem::path& path)
     file.write(&value, 1);
 }
 
+bool storeRejectsWith(
+    pi::storage::StorageManager& manager,
+    const pi::storage::Chunk& chunk,
+    const std::string& expected)
+{
+    try
+    {
+        static_cast<void>(manager.store(chunk));
+    }
+    catch (const std::invalid_argument& error)
+    {
+        return error.what() == expected;
+    }
+    return false;
+}
+
 } // namespace
 
 int main()
@@ -67,6 +105,14 @@ int main()
             std::cerr << "StorageManager initial publish failed\n";
             return 1;
         }
+        if (!storeRejectsWith(
+                manager,
+                chunk,
+                "chunk identity already exists in runtime storage index"))
+        {
+            std::cerr << "Indexed duplicate diagnostic mismatch\n";
+            return 1;
+        }
     }
 
     {
@@ -83,6 +129,22 @@ int main()
             || restarted.snapshot().indexedChunks != 0)
         {
             std::cerr << "StorageManager removal failed\n";
+            return 1;
+        }
+    }
+
+    {
+        StorageManager manager(policy);
+        const ChunkId id = identity.deterministicFilename();
+        StorageManagerTestAccess::reserve(manager, id);
+        const bool rejected = storeRejectsWith(
+            manager,
+            chunk,
+            "chunk identity already has an in-flight runtime store");
+        StorageManagerTestAccess::release(manager, id);
+        if (!rejected)
+        {
+            std::cerr << "In-flight duplicate diagnostic mismatch\n";
             return 1;
         }
     }

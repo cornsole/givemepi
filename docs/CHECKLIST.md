@@ -387,6 +387,18 @@
 [x] PR-0029 Measurement Environment and Acceptance Contract
 
 [x] PR-0029 Workload Matrix Baseline (multi-chunk)
+[x] PR-0039 Developer Commit and Push Completed before PR-0040 Begins
+
+[x] Production Runtime Storage Base Lock Held for the Complete Active Namespace Lifetime (PR-0040)
+
+[x] Clean Active Runtime-Storage Namespace per Calculation Run; Stale Runtime Chunks and Indexes Are Ineligible (PR-0040)
+
+[x] Indexed-Duplicate and In-Flight-Duplicate Rejections Produce Distinct Diagnostics (PR-0040)
+
+[x] Interrupted Post-Spill Resume Uses Checkpoint Evidence Only, with Checkpoint Files and Format Unchanged (PR-0040)
+
+[x] Concurrent Use of One Runtime-Storage Base Is Rejected (PR-0040)
+
 
 -----------------
 
@@ -433,6 +445,18 @@
 [x] Default No-Config Run Leaves Manifest and Root Checkpoint Block under `checkpoints/` (PR-0032)
 
 [x] Resume-Only Mode Plans No Recalculated Checkpoint Work; Empty Accepted Plan Reports `checkpoints=0/0` and Writes No Files (PR-0032)
+[ ] Explicit Source Manifest Required for Cross-Precision Promotion (PR-0041)
+
+[ ] Source Checkpoint Validation Is Read-Only and All-or-Nothing (PR-0041)
+
+[ ] Compatible Lower-Precision P/Q/T Imported as the Target Initial Frontier (PR-0041)
+
+[ ] Checkpoint Format Version 1 Retained; Imported Blocks Re-Encoded with Target Identity on the First Complete Target Frontier Commit (PR-0041)
+
+[ ] Existing Planner-Accepted Target Blocks Conflict with Promotion (PR-0041)
+
+[ ] Release Cold-versus-Promoted Benchmark Gate with Identical Target Output and Verification Evidence (PR-0041)
+
 
 [x] CRC
 
@@ -525,6 +549,8 @@
 [x] Exact `auto` Boundaries (`sec` below 60 s, `min` below 60 min, `hour` otherwise); Fixed Units Never Switch; `unknown`/`overdue` and JSON Nanoseconds Unchanged (PR-0039)
 
 [x] PR-0039 ETA Format Verification Gate (69/69 Debug CTest at 13 jobs; live 5,000,000-digit text runs with default auto, fixed `min`, and fixed `hour` at precision 4)
+
+[x] README Large-Calculation `eta_total=unknown` Sampling and Leaf-Block Publication FAQ
 
 [x] PR-0032 Verification Gate (7/7 changed-path ASan/UBSan tests, complete Debug build, 66/66 CTest)
 

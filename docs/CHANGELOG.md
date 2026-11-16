@@ -18,6 +18,18 @@
   text ETA, backed by the shared `pi::progress::EtaFormat` type. `auto` uses
   `sec` below 60 seconds, `min` below 60 minutes, and `hour` otherwise,
   compared on the exact duration; fixed `min` and `hour` never switch.
+- Added a README operator FAQ explaining prolonged `eta_total=unknown` during
+  large calculations, including minimum sampling evidence, leaf-block progress
+  publication, block-count limits, phase diagnostics, and the distinction from
+  `overdue`.
+- Added PR-0040 production runtime-storage session ownership: an advisory
+  base-directory lock is held for the complete storage lifetime, and each run
+  receives a clean `.pi-engine-active` chunk/index namespace without touching
+  checkpoint or unrelated sibling files.
+- Added deterministic runtime-session coverage for concurrent-owner rejection,
+  stale-active cleanup, reacquisition, sibling preservation, and no-throw
+  teardown, plus an interrupted post-spill CLI resume regression.
+
 
 ### Changed
 - Extended progress instrumentation through splitting, weighted merging,
@@ -52,11 +64,19 @@
   progress counters were unchanged between coarse publications. Stalls now
   reduce both estimates by exactly the elapsed time, and an overrun reports
   overdue instead of zero.
+- Fixed stale runtime chunk indexes being reloaded as if they belonged to a
+  resumed calculation. Runtime chunks remain temporary and only validated
+  checkpoint blocks seed resume.
+- Split runtime-storage duplicate failures into precise indexed-identity and
+  in-flight-store diagnostics.
+
 
 ### Verification
 
 - Built all Debug targets with 13 of 22 logical cores and passed all 69 CTest
   tests.
+- Verified the ETA FAQ against the metric thresholds and Binary Splitting
+  publication boundary, then built all targets with 13 of 22 logical cores.
 - Parsed live schema-version-5 JSONL from a 5,000,000-digit, 13-thread run:
   total and phase ETA were available in merging, finalizing, and
   `verifying_output`, and both selected estimates reached zero on completion.
@@ -80,6 +100,9 @@
   minutes (`eta_total=0.75min eta_phase=0.75min` through `0.00min`); and
   `--eta-unit hour --eta-precision 4` rendered `eta_total=0.0159hour` through
   `eta_total=0.0000hour`. No record used the old seconds suffix.
+- PR-0040: built every Debug target and passed all 70 CTest tests with 13 of 22
+  logical cores. Focused `RuntimeStorageSessionTest`, `StorageManagerTest`, and
+  the post-spill `CheckpointResumeCliTest` passed.
 
 ## [0.13.0] - PR-0036
 

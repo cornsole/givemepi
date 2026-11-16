@@ -218,6 +218,7 @@ set(PI_ENGINE_SOURCES
     src/storage/AsyncWriter.cpp
     src/storage/AsyncReader.cpp
     src/storage/StorageManager.cpp
+    src/storage/RuntimeStorageSession.cpp
     src/storage/ChunkStore.cpp
     src/storage/ChunkIndex.cpp
     src/storage/ChunkCodec.cpp
@@ -964,6 +965,18 @@ add_test(NAME StorageManagerTest COMMAND storage-manager-test)
 
 target_include_directories(storage-manager-test PRIVATE include)
 target_link_libraries(storage-manager-test PRIVATE gmp)
+
+add_executable(runtime-storage-session-test
+    tests/storage/RuntimeStorageSessionTest.cpp
+    src/storage/RuntimeStorageSession.cpp
+)
+
+add_test(
+    NAME RuntimeStorageSessionTest
+    COMMAND runtime-storage-session-test
+)
+
+target_include_directories(runtime-storage-session-test PRIVATE include)
 
 add_executable(binary-node-chunk-adapter-test
     tests/storage/BinaryNodeChunkAdapterTest.cpp
