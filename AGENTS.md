@@ -38,6 +38,7 @@ High Performance Pi Calculator
 Goal
 
 Create one of the fastest CPU-based π calculators written in modern C++20.
+When necessary, low-level implementation may be used only within the Assembly scope defined below.
 
 The project targets billions of digits while keeping the code maintainable.
 
@@ -414,9 +415,8 @@ DO NOT create them manually in explanations.
 
 Instead:
 
-1. Provide a shell script (bash) that creates every required directory and empty file.
-2. The user executes the script.
-3. Continue implementation afterwards.
+1. Outline the plan for creating all necessary directories and empty files—specifying the names of the files and folders, as well as their intended purpose—and obtain the user's approval.
+2. Continue implementation afterwards.
 
 --------------------------------------------------
 
