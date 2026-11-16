@@ -33,6 +33,20 @@
 - Added deterministic runtime-session coverage for concurrent-owner rejection,
   stale-active cleanup, reacquisition, sibling preservation, and no-throw
   teardown, plus an interrupted post-spill CLI resume regression.
+- Added PR-0041 command-line-only `--promote-checkpoint-manifest <path>`: a
+  complete, verified lower-precision checkpoint frontier seeds a
+  higher-precision target, and only the remaining term range is calculated.
+  Source files are read-only and validation is all-or-nothing; the first
+  target commit re-encodes imported blocks with the target identity in
+  checkpoint format version 1.
+- Added the real-process `CheckpointPromotionCliTest`: cold-identical output,
+  source byte immutability, target-only checkpoint identity, accepted-target
+  conflict, same-directory, bare-filename, corrupt-source, and
+  non-lower-precision coverage.
+- Added `BinarySplitter::planMergeLevel`: a node more than twice the level's
+  median span is carried instead of being merged with a much smaller
+  neighbour. Uniform levels keep the previous (0,1), (2,3), ... pairing, so
+  cold-run tree shape is unchanged. Merge-work planning replays the same plan.
 
 
 ### Changed
@@ -73,6 +87,10 @@
   checkpoint blocks seed resume.
 - Split runtime-storage duplicate failures into precise indexed-identity and
   in-flight-store diagnostics.
+- Fixed PR-0041 promotion review defects before completion: a bare manifest
+  filename now resolves to the working directory instead of failing with a
+  filesystem error, and a source in the target checkpoint directory is
+  rejected before target resume validation could quarantine source files.
 
 
 ### Verification
@@ -107,6 +125,15 @@
 - PR-0040: built every Debug target and passed all 70 CTest tests with 13 of 22
   logical cores. Focused `RuntimeStorageSessionTest`, `StorageManagerTest`, and
   the post-spill `CheckpointResumeCliTest` passed.
+- PR-0041: built every Debug target and passed all 71 CTest tests with 13 of
+  22 logical cores, including `CheckpointPromotionCliTest`. Release, 13
+  threads, 5,000,000-digit source promoted to 10,000,000 digits: output and
+  verification SHA-256 matched cold runs in every sample, and the source
+  manifest bytes were unchanged. With verification, cold and promoted runs
+  both took 171-173 s (verification dominates). Without verification, five
+  alternating A/B samples gave median wall time 6.76 s promoted versus 7.58 s
+  cold, and promoted merge 2.51 s with the size-aware merge plan versus
+  3.86 s with the previous fixed pairing.
 
 ## [0.13.0] - PR-0036
 

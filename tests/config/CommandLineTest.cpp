@@ -52,8 +52,8 @@ constexpr SupportedOption supportedOptions[] = {
     {"--no-verify", nullptr},
     {"--bbp-samples", "4"},
     {"--verification-manifest", "out.verify"},
+    {"--promote-checkpoint-manifest", "cp/manifest.bin"},
 };
-
 
 CommandLineOptions parse(std::initializer_list<const char*> values)
 {

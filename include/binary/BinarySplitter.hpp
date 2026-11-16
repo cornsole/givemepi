@@ -205,6 +205,38 @@ public:
         std::size_t workers
     ) noexcept;
 
+    /// One output position of a merge level.
+    struct MergeSlot
+    {
+        /// Index of the first input node of this slot.
+        std::size_t left;
+        /// True: merge inputs left and left + 1. False: carry input left.
+        bool merge;
+    };
+
+    /**
+     * Plans one merge level over adjacent node term spans.
+     *
+     * Purpose: keep the merge tree balanced when node sizes differ, for
+     * example a large promoted or resumed seed next to small leaf blocks.
+     * A node whose span exceeds twice the level's median span is carried to
+     * the next level unchanged; the other nodes pair left to right with an
+     * adjacent non-carried neighbour. When no pair forms, the adjacent pair
+     * with the smallest combined span merges, so every level of two or more
+     * nodes makes progress. A level without oversized nodes pairs exactly as
+     * (0,1), (2,3), ... with an odd tail carried, as before PR-0041.
+     *
+     * Input: spans of the current level in term order; zero or one span
+     * yields an empty plan. Output: slots in term order covering every
+     * input exactly once. The result depends only on the spans.
+     *
+     * Time complexity: O(n). Memory complexity: O(n).
+     */
+    [[nodiscard]]
+    static std::vector<MergeSlot> planMergeLevel(
+        std::span<const std::size_t> spans
+    );
+
 };
 
 

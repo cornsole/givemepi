@@ -38,7 +38,7 @@ Agent-authored plans are added or changed here only after user approval.
 | PR-0038 | Evidence-driven total and phase ETA | Complete |
 | PR-0039 | Configurable text ETA units and precision | Complete |
 | PR-0040 | Runtime storage run isolation | Complete |
-| PR-0041 | Cross-precision checkpoint promotion | Planned after PR-0040 |
+| PR-0041 | Cross-precision checkpoint promotion | Complete |
 | PR-0042 | Computation memory budget and fail-fast admission | Approved; planned after PR-0041 |
 
 ---
@@ -2071,6 +2071,34 @@ validation or mutating the source checkpoint set.
 - combining promotion with existing accepted target blocks;
 - runtime-storage reuse as checkpoint evidence.
 
+### Verification Results
+
+- Built every Debug target and passed all 71 CTest tests with 13 of 22
+  logical cores. `CheckpointPromotionCliTest` covers cold-identical output,
+  promoted-term seeding, source byte immutability, target-only identity,
+  accepted-target conflict, same-directory, bare-filename, corrupt-source, and
+  non-lower-precision rejection.
+- Review fixes: bare manifest filenames resolve to the working directory; a
+  source in the target checkpoint directory is rejected before the target
+  resume planner can quarantine it; validation messages use the
+  `Config validation failed:` style.
+- The first Release benchmark showed no benefit: the large seed was merged
+  with small blocks at every level. The approved fix adds
+  `BinarySplitter::planMergeLevel`, which carries nodes larger than twice the
+  level median and keeps the previous pairing on uniform levels.
+- Release, 13 threads, 5,000,000 to 10,000,000 digits, five alternating A/B
+  samples without verification: median wall 6.76 s promoted versus 7.58 s
+  cold; promoted merge 2.51 s versus 3.86 s with the previous pairing. Output
+  and verification SHA-256 matched in every sample. With verification both
+  took 171-173 s because verification dominates.
+
+### Next Contributor TODO
+
+PR-0041 is complete. An interrupted promoted run resumes without
+`--promote-checkpoint-manifest`. Promotion benefit is bounded by the seeded
+share of splitting and merge work; finalization and verification are
+unchanged.
+
 ---
 
 ## ETA `unknown` Operator FAQ
@@ -2225,11 +2253,11 @@ Stages are evaluated in this order; each value is `processBaseBytes` plus:
    `C = min(workers, pending blocks)`.
    `Σ nodeBytes(all entries) + Σ over the C largest pending blocks of 2 * nodeBytes(block)`.
    Then `max(that, Σ nodeBytes(entries) + ioExtra(entries))`.
-2. `merge_level_<L>` for every level produced by replaying the
-   `BinarySplitter` pairing (adjacent pairs, odd tail carried). With inputs
-   `I`, parents `P`, `C = min(workers, |P|)`:
+2. `merge_level_<L>` for every level produced by replaying
+   `BinarySplitter::planMergeLevel` (size-aware adjacent pairs, carried
+   nodes; PR-0041). With inputs `I`, parents `P`, `C = min(workers, |P|)`:
    `Σ nodeBytes(I) + Σ nodeBytes(P) + Σ over the C largest parents of nodeBytes(parent)`.
-   Then `max(that, Σ nodeBytes(P plus carried tail) + ioExtra(outputs))`.
+   Then `max(that, Σ nodeBytes(P plus carried nodes) + ioExtra(outputs))`.
    The storage budget earns no reduction, because `prepareMergeNodes` reloads
    the whole level.
 3. `finalization`: `R + max(2 * S, S + 3 * (s + q))`.

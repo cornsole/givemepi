@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -34,6 +35,8 @@ struct Config
         std::string(defaults::CHECKPOINT_DIRECTORY);
     std::string checkpoint_quarantine_directory =
         std::string(defaults::CHECKPOINT_QUARANTINE_DIRECTORY);
+    /// Explicit lower-precision manifest; command-line only.
+    std::optional<std::string> checkpoint_promotion_manifest;
 
     // Memory
     bool huge_pages_enabled = defaults::HUGE_PAGES_ENABLED;

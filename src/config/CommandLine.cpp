@@ -167,6 +167,11 @@ CommandLineOptions CommandLine::parse(int argc, const char* const argv[])
             options.checkpoint_quarantine_directory =
                 std::string(requireValue(arg, i, argc, argv));
         }
+        else if (arg == "--promote-checkpoint-manifest")
+        {
+            options.checkpoint_promotion_manifest =
+                std::string(requireValue(arg, i, argc, argv));
+        }
         else if (arg == "--resume")
         {
             options.resume_enabled = true;
@@ -280,6 +285,10 @@ void CommandLine::applyOverrides(
         config.checkpoint_quarantine_directory
     );
     applyIfSet(options.resume_enabled, config.resume_enabled);
+    applyIfSet(
+        options.checkpoint_promotion_manifest,
+        config.checkpoint_promotion_manifest
+    );
     applyIfSet(options.progress_enabled, config.progress_enabled);
     applyIfSet(options.progress_interval_ms, config.progress_interval_ms);
     applyIfSet(options.progress_format, config.progress_format);
@@ -357,6 +366,9 @@ void CommandLine::writeHelp(std::ostream& output)
         << "  --resume | --no-resume\n"
         << "      Reuse verified checkpoint blocks of the same computation.\n"
         << "      Default: " << enabledText(defaults::RESUME_ENABLED) << ".\n"
+        << "  --promote-checkpoint-manifest <path>\n"
+        << "      Import one complete, verified lower-precision frontier.\n"
+        << "      Requires checkpoint and resume; command-line only.\n"
         << "\n"
         << "Progress:\n"
         << "  --progress | --no-progress\n"

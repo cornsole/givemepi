@@ -47,6 +47,7 @@ struct CommandLineOptions
     std::optional<std::string> checkpoint_directory;
     std::optional<std::string> checkpoint_quarantine_directory;
     std::optional<bool> resume_enabled;
+    std::optional<std::string> checkpoint_promotion_manifest;
 
     // Progress
     std::optional<bool> progress_enabled;

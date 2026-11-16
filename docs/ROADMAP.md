@@ -128,7 +128,7 @@ Checkpoint
 [x] Production Checkpoint Emission and Verified Resume (PR-0030)
 [x] Live Checkpoint Telemetry and Automated CLI Resume Regression (PR-0031)
 [x] Default Checkpoint Files and Resume-Only 0/0 Checkpoint Plan (PR-0032)
-[ ] PR-0041 Cross-Precision Checkpoint Promotion (after PR-0040)
+[x] PR-0041 Cross-Precision Checkpoint Promotion
 
 
 

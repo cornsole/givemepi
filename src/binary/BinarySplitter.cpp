@@ -288,6 +288,76 @@ std::uint64_t BinarySplitter::mergeLevelWorkUnits(
 }
 
 
+std::vector<BinarySplitter::MergeSlot> BinarySplitter::planMergeLevel(
+    std::span<const std::size_t> spans
+)
+{
+    std::vector<MergeSlot> slots;
+    if (spans.size() < 2)
+    {
+        return slots;
+    }
+    slots.reserve(spans.size());
+
+    // A node more than twice the level's median span is carried so it is
+    // not merged with a much smaller neighbour level after level. Uniform
+    // levels have no oversized node and keep (0,1), (2,3), ... pairing.
+    std::vector<std::size_t> sorted(spans.begin(), spans.end());
+    const auto middle =
+        sorted.begin() + static_cast<std::ptrdiff_t>(sorted.size() / 2);
+    std::nth_element(sorted.begin(), middle, sorted.end());
+    const std::size_t median = *middle;
+    const auto oversized = [&spans, median](std::size_t index) noexcept
+    {
+        return spans[index] / 2 > median;
+    };
+
+    bool merged = false;
+    std::size_t index = 0;
+    while (index < spans.size())
+    {
+        if (index + 1 < spans.size()
+            && !oversized(index)
+            && !oversized(index + 1))
+        {
+            slots.push_back({index, true});
+            merged = true;
+            index += 2;
+        }
+        else
+        {
+            slots.push_back({index, false});
+            ++index;
+        }
+    }
+    if (merged)
+    {
+        return slots;
+    }
+
+    // No pair formed: merge the adjacent pair with the smallest total.
+    std::size_t best = 0;
+    for (std::size_t candidate = 1; candidate + 1 < spans.size(); ++candidate)
+    {
+        if (spans[candidate] + spans[candidate + 1]
+            < spans[best] + spans[best + 1])
+        {
+            best = candidate;
+        }
+    }
+    slots.clear();
+    for (index = 0; index < spans.size(); ++index)
+    {
+        slots.push_back({index, index == best});
+        if (index == best)
+        {
+            ++index;
+        }
+    }
+    return slots;
+}
+
+
 BinaryNode BinarySplitter::merge(
     const BinaryNode& left,
     const BinaryNode& right
@@ -599,35 +669,51 @@ BinaryNode BinarySplitter::splitParallel(
     const std::size_t mergeWorkers =
         parallelExecution ? executor.workerCount() : 1;
 
-    if (observer != nullptr)
+    const auto spansOf = [](const std::vector<BinaryNode>& level)
     {
-        // Replay the pairing below on term spans to plan exact merge work.
         std::vector<std::size_t> spans;
-        spans.reserve(nodes.size());
-        for (const BinaryNode& node : nodes)
+        spans.reserve(level.size());
+        for (const BinaryNode& node : level)
         {
             spans.push_back(node.end() - node.start());
         }
+        return spans;
+    };
+    const auto mergeCount = [](const std::vector<MergeSlot>& slots)
+    {
+        return static_cast<std::size_t>(std::count_if(
+            slots.begin(), slots.end(),
+            [](const MergeSlot& slot) { return slot.merge; }));
+    };
+
+    if (observer != nullptr)
+    {
+        // Replay planMergeLevel() on term spans to plan exact merge work.
+        std::vector<std::size_t> spans = spansOf(nodes);
         std::uint64_t plannedUnits = 0;
         while (spans.size() > 1)
         {
-            const std::size_t pairs = spans.size() / 2;
-            for (std::size_t pair = 0; pair < pairs; ++pair)
+            const std::vector<MergeSlot> slots = planMergeLevel(spans);
+            const std::size_t pairs = mergeCount(slots);
+            std::vector<std::size_t> next;
+            next.reserve(slots.size());
+            for (const MergeSlot& slot : slots)
             {
-                spans[pair] = spans[pair * 2] + spans[pair * 2 + 1];
+                if (!slot.merge)
+                {
+                    next.push_back(spans[slot.left]);
+                    continue;
+                }
+                next.push_back(spans[slot.left] + spans[slot.left + 1]);
                 const std::uint64_t units =
-                    mergeLevelWorkUnits(spans[pair], pairs, mergeWorkers);
+                    mergeLevelWorkUnits(next.back(), pairs, mergeWorkers);
                 plannedUnits =
                     units > std::numeric_limits<std::uint64_t>::max()
                             - plannedUnits
                         ? std::numeric_limits<std::uint64_t>::max()
                         : plannedUnits + units;
             }
-            if (spans.size() % 2 != 0)
-            {
-                spans[pairs] = spans.back();
-            }
-            spans.resize(pairs + spans.size() % 2);
+            spans = std::move(next);
         }
         observer->mergeWorkPlanned(plannedUnits);
     }
@@ -644,21 +730,24 @@ BinaryNode BinarySplitter::splitParallel(
             observer->mergeLevelStarted(mergeLevel);
         }
         ++mergeLevel;
-        const std::size_t pairCount = nodes.size() / 2;
+        const std::vector<MergeSlot> slots = planMergeLevel(spansOf(nodes));
+        const std::size_t pairCount = mergeCount(slots);
 
-        std::vector<std::optional<BinaryNode>> mergeResults(
-            pairCount
-        );
+        std::vector<std::optional<BinaryNode>> mergeResults(slots.size());
         handles.clear();
         handles.reserve(pairCount);
 
-        for (std::size_t pair = 0; pair < pairCount; ++pair)
+        for (std::size_t slot = 0; slot < slots.size(); ++slot)
         {
-            const std::size_t leftIndex = pair * 2;
-            const auto mergePair = [&nodes, &mergeResults, pair, leftIndex,
+            if (!slots[slot].merge)
+            {
+                continue;
+            }
+            const std::size_t leftIndex = slots[slot].left;
+            const auto mergePair = [&nodes, &mergeResults, slot, leftIndex,
                                     pairCount, mergeWorkers, observer]()
             {
-                mergeResults[pair].emplace(
+                mergeResults[slot].emplace(
                     BinarySplitter::merge(
                         nodes[leftIndex],
                         nodes[leftIndex + 1]
@@ -695,14 +784,21 @@ BinaryNode BinarySplitter::splitParallel(
 
         std::vector<BinaryNode> nextLevel;
         std::vector<std::uint32_t> nextTreeLevels;
-        nextLevel.reserve(pairCount + nodes.size() % 2);
-        nextTreeLevels.reserve(pairCount + nodes.size() % 2);
+        nextLevel.reserve(slots.size());
+        nextTreeLevels.reserve(slots.size());
 
-        for (std::size_t pair = 0; pair < pairCount; ++pair)
+        for (std::size_t slot = 0; slot < slots.size(); ++slot)
         {
-            nextLevel.push_back(std::move(mergeResults[pair].value()));
+            const std::size_t left = slots[slot].left;
+            if (!slots[slot].merge)
+            {
+                nextLevel.push_back(std::move(nodes[left]));
+                nextTreeLevels.push_back(treeLevels[left]);
+                continue;
+            }
+            nextLevel.push_back(std::move(mergeResults[slot].value()));
             const std::uint32_t childLevel =
-                std::max(treeLevels[pair * 2], treeLevels[pair * 2 + 1]);
+                std::max(treeLevels[left], treeLevels[left + 1]);
             nextTreeLevels.push_back(
                 std::min(
                     childLevel == std::numeric_limits<std::uint32_t>::max()
@@ -711,12 +807,6 @@ BinaryNode BinarySplitter::splitParallel(
                     maximumTreeLevel(termCount)
                 )
             );
-        }
-
-        if (nodes.size() % 2 != 0)
-        {
-            nextLevel.push_back(std::move(nodes.back()));
-            nextTreeLevels.push_back(treeLevels.back());
         }
 
         nodes = std::move(nextLevel);

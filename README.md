@@ -389,6 +389,34 @@ PR-0032부터 checkpoint 작업 계획은 checkpoint writer가 있을 때만
 ./build/pi-engine --no-checkpoint --no-resume --digits 1000000
 ```
 
+#### 낮은 정밀도 checkpoint 승격 (PR-0041)
+
+`--promote-checkpoint-manifest <path>`는 더 낮은 자릿수로 완료한 계산의
+manifest를 명시적으로 지정해, 그 P/Q/T frontier를 더 높은 자릿수 계산의 초기
+frontier로 가져옵니다. 남은 term 범위만 새로 계산하며 출력은 처음부터 계산한
+결과와 바이트 단위로 같습니다. 명령줄 전용이며 checkpoint와 resume이 모두
+켜져 있어야 합니다.
+
+```bash
+./build/pi-engine --digits 10000000 \
+  --checkpoint-directory checkpoints-10m \
+  --promote-checkpoint-manifest checkpoints-5m/manifest-v1-...-d5000000-....manifest
+```
+
+- source manifest와 block은 읽기만 합니다. 하나라도 구조·checksum·수학 검증에
+  실패하거나 source 자릿수와 term 수가 대상보다 작지 않으면 전체 승격을
+  거부하고 종료 상태 1로 끝납니다. source 파일은 quarantine되거나 바뀌지
+  않습니다.
+- source와 대상 checkpoint 디렉터리는 달라야 합니다. 같으면 대상 resume
+  검증이 source 파일을 격리하기 전에 거부합니다. manifest를 파일명만으로
+  지정하면 현재 작업 디렉터리 기준으로 해석합니다.
+- 첫 대상 checkpoint commit은 가져온 block을 대상 identity로 다시 기록하며,
+  대상 manifest는 source identity block을 참조하지 않습니다. 형식은 version
+  1 그대로입니다.
+- 대상 디렉터리에 이미 검증된 대상 checkpoint가 있으면 승격은 충돌로
+  거부됩니다. 승격 실행이 중단된 뒤에는 `--promote-checkpoint-manifest` 없이
+  같은 명령으로 다시 실행해 일반 resume으로 이어갑니다.
+
 ### Progress 출력
 
 진행 상태는 기본으로 500 ms마다 text 형식으로 **stderr**에 출력됩니다. JSON

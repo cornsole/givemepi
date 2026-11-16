@@ -3048,3 +3048,56 @@ lock and resumes exclusively from validated checkpoints. Linux advisory
 file synchronization and terminal APIs. Checkpoint bytes, manifest format,
 computation identity, and direct storage-manager restart contracts do not
 change.
+
+## ADR-0063
+
+Date
+
+2026-11-16
+
+Status
+
+Accepted
+
+Title
+
+Explicit, Read-Only Promotion of Lower-Precision Checkpoint Frontiers
+
+Decision
+
+PR-0041 adds the command-line-only `--promote-checkpoint-manifest <path>`.
+`CheckpointPromotionPlanner` decodes the explicit source manifest, requires
+the same algorithm, arithmetic, and formula versions and strictly fewer digits
+and terms than the target, and accepts the source only when every entry is
+present, structurally valid, checksum-valid, consistent with its manifest
+entry, and passes modular P/Q/T verification, and the entries cover exactly
+`[0, sourceTermCount)`. Any failure rejects the whole promotion. Accepted
+blocks become the target's initial frontier, and only
+`[sourceTermCount, targetTermCount)` is calculated.
+
+The source directory must differ from the target checkpoint directory. This
+is checked before the target resume planner runs, because that planner
+quarantines files of other identities in the target directory. Promotion is
+rejected when the target already has planner-accepted blocks; an interrupted
+promoted run resumes without the promotion option. The frontier writer
+re-encodes imported nodes under the target identity at the first commit.
+
+Merge levels follow `BinarySplitter::planMergeLevel`: a node whose span
+exceeds twice the level median is carried to the next level, so a large seed
+is merged once with a comparably sized subtree instead of with small blocks
+at every level. Levels without oversized nodes keep the previous pairing.
+
+Reason
+
+Chudnovsky P/Q/T values of a term range depend only on term indices, not on
+the requested precision, so a verified lower-precision frontier is exact work
+for a higher target. Explicit selection, all-or-nothing validation, and source
+immutability keep checkpoint authority unambiguous, and target-identity
+re-encoding keeps every manifest single-identity.
+
+Consequences
+
+Checkpoint block and manifest format version 1, computation identity, and
+ordinary resume are unchanged. Promotion and accepted target checkpoints are
+mutually exclusive in one invocation. The source frontier is held in memory
+while planning; memory admission for that load belongs to PR-0042.

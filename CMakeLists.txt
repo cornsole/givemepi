@@ -266,6 +266,7 @@ set(PI_ENGINE_SOURCES
     src/checkpoint/CheckpointQuarantine.cpp
     src/checkpoint/CheckpointResumePlanner.cpp
     src/checkpoint/CheckpointFrontierWriter.cpp
+    src/checkpoint/CheckpointPromotionPlanner.cpp
 
     src/progress/ProgressState.cpp
     src/progress/ProgressSnapshot.cpp
@@ -1608,6 +1609,22 @@ add_test(
 
 set_tests_properties(
     CheckpointResumeCliTest
+    PROPERTIES
+        LABELS "integration"
+        TIMEOUT 900
+)
+
+add_executable(checkpoint-promotion-cli-test
+    tests/checkpoint/CheckpointPromotionCliTest.cpp
+)
+
+add_test(
+    NAME CheckpointPromotionCliTest
+    COMMAND checkpoint-promotion-cli-test $<TARGET_FILE:pi-engine>
+)
+
+set_tests_properties(
+    CheckpointPromotionCliTest
     PROPERTIES
         LABELS "integration"
         TIMEOUT 900

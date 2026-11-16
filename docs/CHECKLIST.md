@@ -445,17 +445,24 @@
 [x] Default No-Config Run Leaves Manifest and Root Checkpoint Block under `checkpoints/` (PR-0032)
 
 [x] Resume-Only Mode Plans No Recalculated Checkpoint Work; Empty Accepted Plan Reports `checkpoints=0/0` and Writes No Files (PR-0032)
-[ ] Explicit Source Manifest Required for Cross-Precision Promotion (PR-0041)
 
-[ ] Source Checkpoint Validation Is Read-Only and All-or-Nothing (PR-0041)
+[x] Explicit Source Manifest Required for Cross-Precision Promotion (PR-0041)
 
-[ ] Compatible Lower-Precision P/Q/T Imported as the Target Initial Frontier (PR-0041)
+[x] Source Checkpoint Validation Is Read-Only and All-or-Nothing (PR-0041)
 
-[ ] Checkpoint Format Version 1 Retained; Imported Blocks Re-Encoded with Target Identity on the First Complete Target Frontier Commit (PR-0041)
+[x] Compatible Lower-Precision P/Q/T Imported as the Target Initial Frontier (PR-0041)
 
-[ ] Existing Planner-Accepted Target Blocks Conflict with Promotion (PR-0041)
+[x] Checkpoint Format Version 1 Retained; Imported Blocks Re-Encoded with Target Identity on the First Complete Target Frontier Commit (PR-0041)
 
-[ ] Release Cold-versus-Promoted Benchmark Gate with Identical Target Output and Verification Evidence (PR-0041)
+[x] Existing Planner-Accepted Target Blocks Conflict with Promotion (PR-0041)
+
+[x] Same-Directory Source Rejected Before Target Resume Validation Can Quarantine Source Files; Bare Manifest Filenames Resolve to the Working Directory (PR-0041)
+
+[x] Real-Process `CheckpointPromotionCliTest` (PR-0041)
+
+[x] Release Cold-versus-Promoted Benchmark Gate with Identical Target Output and Verification Evidence (PR-0041)
+
+[x] Size-Aware Merge Level Plan Carries Oversized Seed Nodes; Uniform Levels Keep Previous Pairing (PR-0041)
 
 
 [x] CRC

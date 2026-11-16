@@ -1155,6 +1155,50 @@ int main()
         return 1;
     }
 
+    {
+        using Slots = std::vector<BinarySplitter::MergeSlot>;
+        const auto plan = [](std::vector<std::size_t> spans)
+        {
+            return BinarySplitter::planMergeLevel(spans);
+        };
+        const auto same = [](const Slots& actual, const Slots& expected)
+        {
+            if (actual.size() != expected.size()) return false;
+            for (std::size_t i = 0; i < actual.size(); ++i)
+            {
+                if (actual[i].left != expected[i].left
+                    || actual[i].merge != expected[i].merge)
+                {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        if (!plan({}).empty()
+            || !plan({7}).empty()
+            // Equal spans pair left to right; an odd tail is carried.
+            || !same(plan({4, 4, 4, 4, 5}),
+                     Slots{{0, true}, {2, true}, {4, false}})
+            // A large seed is carried while small blocks pair up.
+            || !same(plan({100, 5, 5, 6, 5}),
+                     Slots{{0, false}, {1, true}, {3, true}})
+            // A smaller odd carry does not change uniform pairing.
+            || !same(plan({16, 16, 16, 4}), Slots{{0, true}, {2, true}})
+            // Exactly twice the median still pairs.
+            || !same(plan({8, 4}), Slots{{0, true}})
+            // An oversized left node is carried; the small tail pairs.
+            || !same(plan({100, 10, 1}), Slots{{0, false}, {1, true}})
+            || !same(plan({100, 1}), Slots{{0, true}})
+            // No adjacent pair forms: the smallest adjacent total merges.
+            || !same(plan({1, 100, 1, 100, 1}),
+                     Slots{{0, true}, {2, false}, {3, false}, {4, false}}))
+        {
+            std::cerr << "Merge level plan failed\n";
+            return 1;
+        }
+    }
+
 
     std::vector<StageEvent> partialEvents;
     RecordingMergeCoordinator partialMerge(partialEvents);

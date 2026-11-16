@@ -64,6 +64,19 @@ void validateConfig(Config& config)
             "Config validation failed: checkpoint directories must not be empty."
         );
     }
+    if (config.checkpoint_promotion_manifest)
+    {
+        if (config.checkpoint_promotion_manifest->empty())
+        {
+            throw std::runtime_error(
+                "Config validation failed: checkpoint promotion manifest path must not be empty.");
+        }
+        if (!config.checkpoint_enabled || !config.resume_enabled)
+        {
+            throw std::runtime_error(
+                "Config validation failed: checkpoint promotion requires checkpoint and resume.");
+        }
+    }
     if (config.progress_interval_ms == 0)
     {
         throw std::runtime_error(

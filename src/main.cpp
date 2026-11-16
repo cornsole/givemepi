@@ -1,4 +1,5 @@
 #include "checkpoint/CheckpointFrontierWriter.hpp"
+#include "checkpoint/CheckpointPromotionPlanner.hpp"
 #include "checkpoint/CheckpointResumePlanner.hpp"
 #include "chudnovsky/ChudnovskyCalculator.hpp"
 #include "chudnovsky/PrecisionPolicy.hpp"
@@ -28,6 +29,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <limits>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -123,6 +125,23 @@ private:
     pi::progress::ProgressTracker& tracker_;
 };
 
+std::uint64_t saturatingAdd(
+    std::uint64_t left,
+    std::uint64_t right) noexcept
+{
+    const auto maximum = std::numeric_limits<std::uint64_t>::max();
+    return left > maximum - right ? maximum : left + right;
+}
+
+
+std::filesystem::path normalizedAbsolute(
+    const std::filesystem::path& path)
+{
+    return std::filesystem::weakly_canonical(
+        std::filesystem::absolute(path));
+}
+
+
 } // namespace
 
 
@@ -182,6 +201,27 @@ int main(int argc, char* argv[])
             ? hardwareThreads
             : config.threads;
         const pi::binary::ParallelSplitOptions splitOptions{32, 4};
+
+        // The target resume planner quarantines foreign files in the target
+        // directory, so a source living there must be rejected before it runs.
+        std::optional<std::filesystem::path> promotionManifest;
+        if (config.checkpoint_promotion_manifest)
+        {
+            std::filesystem::path sourceManifest =
+                *config.checkpoint_promotion_manifest;
+            std::filesystem::path sourceDirectory = sourceManifest.parent_path();
+            if (sourceDirectory.empty())
+            {
+                sourceDirectory = ".";
+            }
+            if (normalizedAbsolute(sourceDirectory)
+                == normalizedAbsolute(config.checkpoint_directory))
+            {
+                throw std::runtime_error(
+                    "promotion source and target checkpoint directories must differ");
+            }
+            promotionManifest = std::move(sourceManifest);
+        }
 
         pi::checkpoint::CheckpointResumePlan resumePlan;
         if (config.resume_enabled)
@@ -250,6 +290,25 @@ int main(int argc, char* argv[])
                 checkpointIdentity.termCount
             });
         }
+        std::optional<pi::checkpoint::CheckpointPromotionPlan> promotionPlan;
+        if (promotionManifest)
+        {
+            if (!resumePlan.acceptedBlocks.empty())
+            {
+                throw std::runtime_error(
+                    "checkpoint promotion conflicts with accepted target checkpoints; "
+                    "resume without --promote-checkpoint-manifest");
+            }
+            promotionPlan.emplace(
+                pi::checkpoint::CheckpointPromotionPlanner(
+                    *promotionManifest).create(checkpointIdentity));
+            resumePlan.rangesToRecalculate.clear();
+            resumePlan.rangesToRecalculate.push_back({
+                promotionPlan->sourceIdentity.termCount,
+                checkpointIdentity.termCount
+            });
+        }
+
 
         const std::uint64_t outputBytes = precision.requestedDigits + 3;
         std::uint64_t verificationUnits = 0;
@@ -267,19 +326,25 @@ int main(int argc, char* argv[])
         pi::progress::ProgressTracker tracker({
             precision.requestedDigits,
             precision.termCount,
-            pi::progress::planCheckpointBlocks(
-                resumePlan,
-                splitOptions,
-                workerCount,
-                config.checkpoint_enabled
+            saturatingAdd(
+                pi::progress::planCheckpointBlocks(
+                    resumePlan,
+                    splitOptions,
+                    workerCount,
+                    config.checkpoint_enabled
+                ),
+                promotionPlan ? promotionPlan->promotedBlocks.size() : 0
             ),
             pi::progress::planPipelineCosts({
                 precision.workingDigits,
                 precision.termCount,
-                pi::progress::planFrontierNodes(
-                    resumePlan,
-                    splitOptions,
-                    workerCount
+                saturatingAdd(
+                    pi::progress::planFrontierNodes(
+                        resumePlan,
+                        splitOptions,
+                        workerCount
+                    ),
+                    promotionPlan ? promotionPlan->promotedBlocks.size() : 0
                 ),
                 workerCount,
                 outputBytes,
@@ -295,7 +360,10 @@ int main(int argc, char* argv[])
             if (!tracker.transitionTo(
                     pi::progress::ProgressPhase::validatingCheckpoints)
                 || !pi::progress::ResumeProgressRestorer::restore(
-                    resumePlan, tracker))
+                    resumePlan, tracker)
+                || (promotionPlan
+                    && !tracker.restoreCompletedWork(
+                        promotionPlan->promotedTerms, 0, 0)))
             {
                 throw std::runtime_error(
                     "Validated checkpoint progress could not be restored"
@@ -305,7 +373,11 @@ int main(int argc, char* argv[])
 
         std::vector<pi::binary::BinaryFrontierNode> initialFrontier;
         std::vector<pi::checkpoint::ManifestEntry> acceptedEntries;
-        initialFrontier.reserve(resumePlan.acceptedBlocks.size());
+        const std::size_t promotedBlockCount = promotionPlan
+            ? promotionPlan->promotedBlocks.size()
+            : 0;
+        initialFrontier.reserve(
+            resumePlan.acceptedBlocks.size() + promotedBlockCount);
         acceptedEntries.reserve(resumePlan.acceptedBlocks.size());
         for (pi::checkpoint::AcceptedCheckpoint& accepted
              : resumePlan.acceptedBlocks)
@@ -323,6 +395,25 @@ int main(int argc, char* argv[])
             });
             acceptedEntries.push_back(std::move(accepted.manifestEntry));
         }
+        if (promotionPlan)
+        {
+            for (pi::checkpoint::PromotedCheckpoint& promoted
+                 : promotionPlan->promotedBlocks)
+            {
+                pi::binary::BinaryNode node(
+                    static_cast<std::size_t>(promoted.block.location.start),
+                    static_cast<std::size_t>(promoted.block.location.end)
+                );
+                node.P() = std::move(promoted.block.p);
+                node.Q() = std::move(promoted.block.q);
+                node.T() = std::move(promoted.block.t);
+                initialFrontier.push_back({
+                    std::move(node),
+                    promoted.block.location.treeLevel
+                });
+            }
+        }
+
 
         std::unique_ptr<pi::checkpoint::CheckpointFrontierWriter>
             checkpointWriter;
