@@ -22,6 +22,10 @@
   large calculations, including minimum sampling evidence, leaf-block progress
   publication, block-count limits, phase diagnostics, and the distinction from
   `overdue`.
+- Recorded the approved PR-0042 computation memory budget and fail-fast
+  admission plan, and PR-0043 to PR-0047 bounded-memory work as an unapproved
+  future plan, after a 50,000,000,000-digit run was killed by the kernel
+  global OOM killer.
 - Added PR-0040 production runtime-storage session ownership: an advisory
   base-directory lock is held for the complete storage lifetime, and each run
   receives a clean `.pi-engine-active` chunk/index namespace without touching

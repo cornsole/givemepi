@@ -646,3 +646,19 @@ directory.
 [x] Manually Dispatched Informational Benchmark Workflow (PR-0035)
 
 [ ] Dedicated Memory Allocator Benchmark
+
+-----------------
+
+## Memory Safety
+
+[x] Root-Cause Analysis of 50,000,000,000-Digit Global OOM Kill (unbudgeted leaf working set)
+
+[x] PR-0042 Plan Approved and Recorded; PR-0043 to PR-0047 Recorded as Unapproved Future Plan
+
+[ ] PR-0042 Computation Memory Budget Configuration and CLI Option
+
+[ ] PR-0042 Per-Stage MemoryPlan Estimation
+
+[ ] PR-0042 Fail-Fast Startup Admission and Phase-Transition Recheck
+
+[ ] PR-0042 Over-Budget Regression and Estimated-versus-Measured Peak RSS

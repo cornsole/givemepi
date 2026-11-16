@@ -2121,3 +2121,300 @@ before the first usable progress sample, without changing ETA behavior.
 Keep this FAQ synchronized if ETA sampling thresholds, split block sizing, or
 progress publication boundaries change. No follow-up is required for this
 documentation task.
+
+## PR-0042: Computation Memory Budget and Fail-Fast Admission
+
+### Status
+
+Approved on 2026-11-16. Not started. Numbered after the already planned
+PR-0040 and PR-0041.
+
+### Background
+
+A 50,000,000,000-digit run (22 workers, 88 leaf blocks of about 40 million
+terms) was killed by the kernel global OOM killer after 14 minutes in
+`splitting` with `terms=0`: about 1.4 GiB RSS plus 27.4 GiB zram swap, with
+swap exhausted. `storage_memory_budget_bytes` only governs resident merge
+nodes after the leaf stage; leaf GMP working sets, finalization, the decimal
+output string, and verification are unbudgeted. At this size finalization
+alone needs `10^(2W)` (38.67 GiB) and the decimal string 46.57 GiB, above the
+30 GiB of physical RAM.
+
+### Goal
+
+Never let a calculation drive the host into OOM. Estimate every stage's peak
+resident memory before work starts, and reject a run whose required minimum
+exceeds a computation memory budget with a precise diagnostic and exit
+status 1 instead of a SIGKILL.
+
+### Scope
+
+- New computation memory budget option.
+- Deterministic per-stage peak-memory estimate (`MemoryPlan`).
+- Fail-fast admission at startup, before execution, and before each merge
+  level and finalization.
+- No change to arithmetic, checkpoint format, storage format, or output.
+
+### Fixed Design Decisions
+
+Every value below is binding. A contributor must not substitute another
+constant, formula, name, or check point without a recorded plan change.
+
+#### D1. Configuration and CLI
+
+- `Config::memory_budget_bytes` (`std::uint64_t`), default
+  `defaults::MEMORY_BUDGET_BYTES = 0`. `0` means automatic.
+- TOML key `memory_budget_bytes`, loaded with `load_value` next to the
+  storage keys in `ConfigLoader.cpp`.
+- CLI `--memory-budget-bytes <bytes>`, parsed with
+  `parseUnsigned<std::uint64_t>` into
+  `CommandLineOptions::memory_budget_bytes`; malformed value is a
+  `CommandLineUsageError` (exit 2).
+- Help line in the "Out-of-core storage" group:
+  `--memory-budget-bytes <bytes>  computation memory limit; 0 = automatic`
+  with the default shown as `0 (automatic)`.
+- `config.toml.example` documents the key under a new "Memory budget" comment
+  in the Memory section.
+- `validateConfig`: when `memory_budget_bytes != 0`, `out_of_core_enabled`,
+  and `storage_memory_budget_bytes > memory_budget_bytes`, throw
+  `std::runtime_error("Config validation failed: storage memory budget must not exceed the computation memory budget.")`.
+
+#### D2. Budget Resolution
+
+Implemented in `pi::memory::ComputationMemoryBudget`
+(`include/memory/ComputationMemoryBudget.hpp`,
+`src/memory/ComputationMemoryBudget.cpp`):
+
+- `detectedMemoryBytes()`:
+  1. `physical = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGE_SIZE)`.
+  2. Read `/proc/self/cgroup`; take the line starting with `0::`; read
+     `/sys/fs/cgroup<path>/memory.max`. If it parses as a decimal integer,
+     `detected = min(physical, value)`; if it is `max`, missing, or unreadable,
+     `detected = physical`. cgroup v1 is not consulted.
+  3. Swap and `MemAvailable` are never used.
+- `resolve(configured, detected)` (pure, unit-tested):
+  - `configured > detected`: throw `std::runtime_error("memory budget exceeds detected memory: budget=<B> bytes detected=<D> bytes")`.
+  - `configured != 0`: return `configured`.
+  - Otherwise `reserve = max(2 GiB, ceil(detected / 10))`; if
+    `reserve > detected / 2` then `reserve = detected / 2`; return
+    `detected - reserve`.
+- Reference: this 31.4 GiB host resolves to about 28.3 GiB.
+- In automatic mode, if `out_of_core_enabled` and
+  `storage_memory_budget_bytes` exceeds the resolved budget, admission throws
+  `MemoryBudgetExceeded` with stage `storage_budget`.
+
+#### D3. Size Formulas
+
+All arithmetic is saturating `std::uint64_t`. Implemented as public functions
+in `include/memory/MemoryPlan.hpp`:
+
+- `limbBytes(bits) = 8 * ceil(bits / 64) + 16`.
+- `decimalIntegerBytes(d) = limbBytes(ceil(d * 3322 / 1000) + 64)`.
+- `nodeIntegerBits(start, end) = (end - start) * (3 * bit_width(end) + 64) + 128`.
+- `nodeBytes(start, end) = 3 * limbBytes(nodeIntegerBits(start, end))`.
+- `processBaseBytes = 256 MiB`, added to every stage.
+- `D = requestedDigits`, `W = workingDigits`, `R = nodeBytes(0, termCount)`,
+  `q = R / 3`, `S = decimalIntegerBytes(2 * W + 5)`,
+  `s = decimalIntegerBytes(W + 3)`, `n = decimalIntegerBytes(D)`.
+
+#### D4. Stage Peaks
+
+Stages are evaluated in this order; each value is `processBaseBytes` plus:
+
+1. `leaf_split`: frontier entries are the seeds plus the pending leaf blocks.
+   `C = min(workers, pending blocks)`.
+   `Σ nodeBytes(all entries) + Σ over the C largest pending blocks of 2 * nodeBytes(block)`.
+   Then `max(that, Σ nodeBytes(entries) + ioExtra(entries))`.
+2. `merge_level_<L>` for every level produced by replaying the
+   `BinarySplitter` pairing (adjacent pairs, odd tail carried). With inputs
+   `I`, parents `P`, `C = min(workers, |P|)`:
+   `Σ nodeBytes(I) + Σ nodeBytes(P) + Σ over the C largest parents of nodeBytes(parent)`.
+   Then `max(that, Σ nodeBytes(P plus carried tail) + ioExtra(outputs))`.
+   The storage budget earns no reduction, because `prepareMergeNodes` reloads
+   the whole level.
+3. `finalization`: `R + max(2 * S, S + 3 * (s + q))`.
+4. `decimal_format`: `R + 2 * (s + q) + 2 * (D + 2)`.
+5. `output_write`: `D + 2`.
+6. `verification`, only when enabled: `(D + 2) + 6 * n`.
+
+`ioExtra(set) = max(checkpoint_enabled ? maxNode : 0, out_of_core_enabled ? 2 * maxNode : 0)`,
+where `maxNode` is the largest `nodeBytes` in the set.
+
+#### D5. Leaf Layout Single Source
+
+Add `static std::vector<BinaryFrontierSpan> BinarySplitter::planFrontier(std::size_t start, std::size_t end, std::size_t workers, const ParallelSplitOptions&, std::span<const BinaryFrontierSpan> seeds)`
+with `struct BinaryFrontierSpan { std::size_t start; std::size_t end; bool seeded; }`.
+`splitParallel` must use it for its gap/block layout, so the estimate and the
+executed layout cannot diverge. `ProgressCostModel` is unchanged.
+
+#### D6. Admission API and Errors
+
+- `pi::memory::MemoryBudgetExceeded : std::runtime_error`.
+  `what()` is exactly
+  `memory budget exceeded: stage=<stage> required=<R> bytes (<r> GiB) budget=<B> bytes (<b> GiB)`,
+  with GiB in classic-locale fixed notation, two decimals. The existing
+  `main` catch prints it as `pi-engine: <what>` and exits 1.
+- `pi::memory::MemoryPlan::create(const MemoryPlanInput&)` computes all stage
+  peaks. `MemoryPlanInput` holds `PrecisionPlan`, the frontier spans, the
+  worker count, `checkpoint_enabled`, `out_of_core_enabled`, and
+  `verification_enabled`.
+- `MemoryPlan::enforce(std::uint64_t budget)` throws for the first stage in D4
+  order whose peak exceeds `budget`. A successful check prints nothing.
+- `pi::binary::BinaryMemoryGuard` in `BinarySplitter.hpp`:
+  `virtual void admitMergeLevel(std::span<const BinaryNode> nodes, std::uint32_t level) = 0;`
+  New trailing `BinaryMemoryGuard* memoryGuard = nullptr` on the full
+  `splitParallel` overload, called before `prepareMergeNodes` each level.
+  Resident nodes use actual size (`8 * (|size(P)| + |size(Q)| + |size(T)|) + 48`);
+  nodes without values and planned parents use `nodeBytes`.
+- `pi::chudnovsky::CalculationMemoryGuard : binary::BinaryMemoryGuard` in
+  `ChudnovskyCalculator.hpp` adds
+  `virtual void admitFinalization(const binary::BinaryNode& root) = 0;`.
+  New trailing `CalculationMemoryGuard* memoryGuard = nullptr` on
+  `calculateParallel`, called after the split and before `makeResult`.
+  `R` and `q` then use the root's actual size.
+- `pi::memory::MemoryAdmission` implements `CalculationMemoryGuard` from the
+  resolved budget and the planning inputs.
+- Run LSP references before changing the exported signatures; migrate every
+  caller.
+
+#### D7. Check Points in `main`
+
+1. Startup: right after `applyOverrides` and `PrecisionPolicy::create`,
+   before `CheckpointResumePlanner`. Uses a fresh full-range frontier
+   (no seeds) and the resolved worker count. No file is read or written
+   before this check.
+2. Pre-execution: after resume and promotion planning, before
+   `ProgressTracker`, runtime-storage session, checkpoint writer, and
+   scheduler creation. Uses the actual seeds and gaps.
+3. Merge levels and finalization: through `MemoryAdmission`. A rejection here
+   follows the existing failure path (scheduler stop, progress failed,
+   exit 1); durable checkpoints remain for resume with a larger budget.
+4. `output_write` and `verification` depend only on `D`, so the startup check
+   is final for them; no runtime recheck.
+5. No runtime RSS polling.
+
+#### D8. Calibration Rule
+
+Step 10 measures peak RSS (`getrusage(RUSAGE_CHILDREN).ru_maxrss`) of a Release
+build at 1,000,000, 10,000,000, and 100,000,000 digits with 13 threads.
+Required: `measured <= estimated peak` and `estimated peak <= 4 * measured`.
+If an estimate is too low, raise only the multiplier constants in D3/D4 and
+record the new values here; never remove a term.
+
+### Work Sequence
+
+1. File check: `include/config/Defaults.hpp`, `include/config/Config.hpp`,
+   `src/config/Config.cpp`, `src/config/ConfigLoader.cpp`,
+   `include/config/CommandLine.hpp`, `src/config/CommandLine.cpp`.
+2. File check: `src/main.cpp`, `src/chudnovsky/ChudnovskyCalculator.cpp`,
+   `src/chudnovsky/PrecisionPolicy.cpp`, `src/binary/BinarySplitter.cpp`,
+   and the PR-0040/PR-0041 changes to these files.
+3. Provide a user-run script creating `include/memory/MemoryPlan.hpp`,
+   `src/memory/MemoryPlan.cpp`, `include/memory/ComputationMemoryBudget.hpp`,
+   `src/memory/ComputationMemoryBudget.cpp`, and
+   `tests/memory/MemoryPlanTest.cpp`.
+4. D1: configuration key, CLI option, help, example, validation.
+5. D2: budget resolution.
+6. D3/D4: formulas and `MemoryPlan`.
+7. D5: `BinarySplitter::planFrontier` and its use in `splitParallel`.
+8. D6/D7: guards, `MemoryAdmission`, and `main` check points.
+9. Tests (below); add sources to `PI_ENGINE_SOURCES` and a `memory-plan-test`
+   target with CTest name `MemoryPlanTest`; build and run CTest with
+   `max(1, floor(nproc * 0.60))` jobs.
+10. D8 calibration.
+11. Update README, `config.toml.example`, CHECKLIST, CHANGELOG, and a new ADR
+    in DECISIONS.
+
+### Tests
+
+- `MemoryPlanTest`:
+  - `nodeBytes(start, end)` is at least the actual
+    `8 * (|size(P)| + |size(Q)| + |size(T)|)` of
+    `BinarySplitter::splitSequential(start, end)` for every
+    `n in {1, 2, 31, 32, 1000, 10000}` and `start in {0, 1, 1000000}`.
+  - Hand-computed exact values of `limbBytes`, `decimalIntegerBytes`, and
+    `nodeBytes` for fixed inputs.
+  - `resolve`: automatic reserve at 4 GiB, 16 GiB, 31.4 GiB, and 64 GiB;
+    explicit budget returned unchanged; explicit budget above detected throws.
+  - `planFrontier` equals the layout `splitParallel` executes, with and
+    without seeds.
+  - `enforce` reports the first exceeding stage in D4 order and the exact
+    D6 message.
+- `CommandLineTest`: `--memory-budget-bytes` parsing, malformed value as a
+  usage error, help line and default present.
+- `CommandLineCliTest`: `--digits 1000000 --memory-budget-bytes 1048576`
+  exits 1, stderr contains `memory budget exceeded: stage=leaf_split`, and the
+  working directory has no `pi.txt`, `checkpoints/`, `checkpoint-quarantine/`,
+  or `storage/`; a budget above detected memory exits 1 with the D2 message.
+- Manual: `--digits 50000000000` on this host exits 1 within 1 second.
+
+### Out of Scope
+
+- Changing Binary Splitting, merge, checkpoint, finalization, output, or
+  verification algorithms (PR-0043 through PR-0047).
+- Making 50,000,000,000 digits complete on a 30 GiB host.
+- Runtime RSS polling, huge pages, NUMA.
+
+### Acceptance
+
+- An over-budget run exits 1 before creating output, storage, or checkpoint
+  files, with the exact D6 message.
+- No SIGKILL, abort, or core dump in the over-budget regression.
+- D8 calibration holds at all three sizes.
+- Existing results, checkpoint format, and all existing tests are unchanged.
+
+### Next Contributor TODO
+
+Begin after PR-0041 is complete. Start with step 1; new files require a
+user-run creation script first.
+
+## Future Plan: Bounded-Memory Large Calculation (PR-0043 to PR-0047)
+
+### Status
+
+Recorded on 2026-11-16 for reference only. Not approved for implementation.
+Re-scope with PR-0042 measurements and get user approval before each PR.
+
+### PR-0043: Streaming Checkpoint Serialization
+
+Write header and P/Q/T magnitudes directly to the temporary block file with
+incremental CRC32C, removing the payload-sized `std::vector`. Keep the
+version-1 byte format, atomic rename, and existing-manifest preservation on
+failure.
+
+### PR-0044: Memory-Bounded Leaf Computation
+
+Size leaf ranges by estimated working set instead of `workers * 4`. Gate leaf
+tasks with a byte-permit admission controller decoupled from worker count.
+Persist and release each completed leaf immediately; extend the frontier
+writer to publish non-overlapping partial ranges so resume recalculates only
+the complement. Publish `termsCompleted` per leaf.
+
+### PR-0045: Pair-at-a-Time External Merge
+
+Keep the frontier as metadata. For each admitted pair: reload only its two
+operands, merge with GMP, durably write the parent, replace the manifest,
+then delete children. Concurrency is bounded by byte permits. Level barriers,
+adjacency, and result order stay unchanged.
+
+### PR-0046: Bounded Finalization and Streaming Output
+
+Remove `PiCalculationResult::decimal` and stream decimal output to a temporary
+file with atomic rename. Replace the `10^(2W)` square-root construction with a
+result-sized scaled integer square root using GMP only, preserving floor,
+guard-digit, and rounding contracts.
+
+### PR-0047: Verification Memory Planning
+
+Include BBP decimal import numerator, denominator, and per-sample scratch in
+the memory plan and reject over-budget verification before it starts. Keep
+known-digits and SHA-256 streaming. Do not weaken or skip BBP without a
+proven exact bounded-memory replacement and benchmark.
+
+### Shared Verification Requirements
+
+- Peak RSS, throughput, storage use, and total time before and after each PR
+  at fixed workloads, budgets, worker counts, and compression settings.
+- Kill-and-resume at every durable boundary matches an uninterrupted run's
+  SHA-256.
+- Version-1 checkpoints from earlier releases still resume.
